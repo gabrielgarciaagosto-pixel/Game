@@ -1,0 +1,22 @@
+@import 'tailwindcss';
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #0f172a;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+/* Keep touch gestures on the WebGL canvas only — not global UI buttons */
+canvas {
+  touch-action: none;
+}
