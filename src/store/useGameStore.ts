@@ -432,10 +432,11 @@ export const useGameStore = create<GameState>((set, get) => ({
 
       const preferredMatch = flower === active.preferredFlowers ? 15 : 5;
 
+      // Reputation is awarded only on finalize (via serviceRatingBonus),
+      // so switching cooler cases cannot farm rep by re-placing sprays.
       return {
         placedFlowers: [...state.placedFlowers, flower],
         serviceRatingBonus: state.serviceRatingBonus + preferredMatch,
-        reputation: state.reputation + (preferredMatch === 15 ? 8 : 2),
         showroomInventory: state.showroomInventory.map((i) =>
           i.id === itemId ? { ...i, ownedCount: i.ownedCount - 1 } : i
         ),
