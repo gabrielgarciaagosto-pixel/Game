@@ -9,6 +9,21 @@ import {
 
 type FluidType = 'WATER' | 'FORMALDEHYDE' | 'SOFTENER';
 
+function maxFlowForFluid(fluid: FluidType): number {
+  return fluid === 'WATER' ? 95 : 32;
+}
+
+function updateProximityFromEvent(
+  e: React.PointerEvent,
+  container: HTMLDivElement | null,
+  setProximity: (v: number) => void
+) {
+  if (!container) return;
+  const rect = container.getBoundingClientRect();
+  const normX = (e.clientX - rect.left) / rect.width;
+  setProximity(Math.max(0.05, Math.min(1, normX)));
+}
+
 export const EmbalmingMiniGame: React.FC = () => {
   const { currentCase, completeEmbalming, setActiveStation } = useGameStore();
   const targets = calculateEmbalmingTargets(
@@ -27,7 +42,18 @@ export const EmbalmingMiniGame: React.FC = () => {
   const [proximity, setProximity] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastGlugHaptic = useRef(0);
+  const proximityRef = useRef(0);
+  const selectedFluidRef = useRef<FluidType>(selectedFluid);
 
+  useEffect(() => {
+    proximityRef.current = proximity;
+  }, [proximity]);
+
+  useEffect(() => {
+    selectedFluidRef.current = selectedFluid;
+  }, [selectedFluid]);
+
+  // Keep a single pour interval while holding; read live proximity/fluid via refs
   useEffect(() => {
     if (!isPouring) return;
     let lastTime = performance.now();
@@ -36,10 +62,11 @@ export const EmbalmingMiniGame: React.FC = () => {
       const dt = (now - lastTime) / 1000;
       lastTime = now;
 
+      const fluid = selectedFluidRef.current;
       const { currentFlowOzPerSec, isGlugging } = calculatePourPhysics(
-        proximity,
+        proximityRef.current,
         now / 1000,
-        selectedFluid === 'WATER' ? 95 : 32
+        maxFlowForFluid(fluid)
       );
 
       if (isGlugging && now - lastGlugHaptic.current > 220) {
@@ -48,31 +75,33 @@ export const EmbalmingMiniGame: React.FC = () => {
       }
 
       const addedOz = currentFlowOzPerSec * dt;
+      if (addedOz <= 0) return;
 
+      // Accumulate at full precision; round only for display below
       setPoured((prev) => {
-        if (selectedFluid === 'WATER')
-          return { ...prev, waterOz: +(prev.waterOz + addedOz).toFixed(1) };
-        if (selectedFluid === 'FORMALDEHYDE')
-          return {
-            ...prev,
-            formaldehydeOz: +(prev.formaldehydeOz + addedOz).toFixed(1),
-          };
-        return { ...prev, softenerOz: +(prev.softenerOz + addedOz).toFixed(1) };
+        if (fluid === 'WATER')
+          return { ...prev, waterOz: prev.waterOz + addedOz };
+        if (fluid === 'FORMALDEHYDE')
+          return { ...prev, formaldehydeOz: prev.formaldehydeOz + addedOz };
+        return { ...prev, softenerOz: prev.softenerOz + addedOz };
       });
     }, 50);
 
     return () => clearInterval(interval);
-  }, [isPouring, proximity, selectedFluid]);
+  }, [isPouring]);
 
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isPouring || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const normX = (e.clientX - rect.left) / rect.width;
-    setProximity(Math.max(0.05, Math.min(1, normX)));
+  const displayedPoured = {
+    waterOz: +poured.waterOz.toFixed(1),
+    formaldehydeOz: +poured.formaldehydeOz.toFixed(1),
+    softenerOz: +poured.softenerOz.toFixed(1),
   };
 
-  const physics = calculatePourPhysics(proximity, performance.now() / 1000);
-  const evaluation = evaluateEmbalmingRank(poured, targets);
+  const physics = calculatePourPhysics(
+    proximity,
+    performance.now() / 1000,
+    maxFlowForFluid(selectedFluid)
+  );
+  const evaluation = evaluateEmbalmingRank(displayedPoured, targets);
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/95 text-slate-100 p-4 md:p-6 flex flex-col justify-between select-none">
@@ -108,7 +137,7 @@ export const EmbalmingMiniGame: React.FC = () => {
             20-Index Formaldehyde
           </div>
           <div className="text-xl md:text-2xl font-mono">
-            {poured.formaldehydeOz} / {targets.formaldehydeOz} oz
+            {displayedPoured.formaldehydeOz} / {targets.formaldehydeOz} oz
           </div>
         </div>
         <div className="bg-slate-900 p-3 rounded border border-slate-800">
@@ -116,7 +145,7 @@ export const EmbalmingMiniGame: React.FC = () => {
             Softener / Humectant
           </div>
           <div className="text-xl md:text-2xl font-mono">
-            {poured.softenerOz} / {targets.softenerOz} oz
+            {displayedPoured.softenerOz} / {targets.softenerOz} oz
           </div>
         </div>
         <div className="bg-slate-900 p-3 rounded border border-slate-800">
@@ -124,7 +153,7 @@ export const EmbalmingMiniGame: React.FC = () => {
             Water Dilution
           </div>
           <div className="text-xl md:text-2xl font-mono">
-            {poured.waterOz} / {targets.waterOz} oz
+            {displayedPoured.waterOz} / {targets.waterOz} oz
           </div>
         </div>
       </div>
@@ -132,12 +161,16 @@ export const EmbalmingMiniGame: React.FC = () => {
       <div
         ref={containerRef}
         onPointerDown={(e) => {
+          (e.currentTarget as HTMLDivElement).setPointerCapture?.(e.pointerId);
           setIsPouring(true);
-          handlePointerMove(e);
+          updateProximityFromEvent(e, containerRef.current, setProximity);
         }}
-        onPointerMove={handlePointerMove}
+        onPointerMove={(e) => {
+          if (!isPouring && e.buttons === 0) return;
+          updateProximityFromEvent(e, containerRef.current, setProximity);
+        }}
         onPointerUp={() => setIsPouring(false)}
-        onPointerLeave={() => setIsPouring(false)}
+        onPointerCancel={() => setIsPouring(false)}
         className="relative flex-1 bg-slate-900 rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-between px-6 md:px-12 overflow-hidden touch-none"
       >
         <div className="z-10 pointer-events-none max-w-[60%]">
@@ -161,7 +194,9 @@ export const EmbalmingMiniGame: React.FC = () => {
             style={{
               height: `${Math.min(
                 100,
-                ((poured.waterOz + poured.formaldehydeOz + poured.softenerOz) /
+                ((displayedPoured.waterOz +
+                  displayedPoured.formaldehydeOz +
+                  displayedPoured.softenerOz) /
                   targets.totalVolumeOz) *
                   100
               )}%`,

@@ -163,17 +163,30 @@ export const useGameStore = create<GameState>((set, get) => ({
   setActiveStation: (station) => set({ activeStation: station }),
 
   completeEmbalming: (rank, tipMultiplier) =>
-    set((state) => ({
-      currentCase: { ...state.currentCase, isEmbalmed: true, embalmRank: rank },
-      cash: Math.round(state.cash + 350 * tipMultiplier),
-      reputation:
-        state.reputation +
-        (rank === 'S+' ? 25 : rank === 'S' ? 15 : rank === 'F' ? -5 : 5),
-      activeStation: 'OVERVIEW',
-    })),
+    set((state) => {
+      if (state.currentCase.isEmbalmed) {
+        return { activeStation: 'OVERVIEW' };
+      }
+      return {
+        currentCase: {
+          ...state.currentCase,
+          isEmbalmed: true,
+          embalmRank: rank,
+        },
+        cash: Math.round(state.cash + 350 * tipMultiplier),
+        reputation:
+          state.reputation +
+          (rank === 'S+' ? 25 : rank === 'S' ? 15 : rank === 'F' ? -5 : 5),
+        activeStation: 'OVERVIEW',
+      };
+    }),
 
   completeCremation: (rank, boneAshGrams) => {
     const { currentCase } = get();
+    if (currentCase.isCremated) {
+      set({ activeStation: 'URN_FILLING' });
+      return;
+    }
     // Check if cremating a Burial-Only decedent -> LAWSUIT!
     if (currentCase.directive === 'BURIAL_VIEWING') {
       set((state) => ({
@@ -201,11 +214,16 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   completeUrnFilling: (bonusCash) =>
-    set((state) => ({
-      currentCase: { ...state.currentCase, isUrnFilled: true },
-      cash: state.cash + bonusCash,
-      activeStation: 'OVERVIEW',
-    })),
+    set((state) => {
+      if (state.currentCase.isUrnFilled) {
+        return { activeStation: 'OVERVIEW' };
+      }
+      return {
+        currentCase: { ...state.currentCase, isUrnFilled: true },
+        cash: state.cash + bonusCash,
+        activeStation: 'OVERVIEW',
+      };
+    }),
 
   buyShowroomItem: (itemId) =>
     set((state) => {
@@ -264,6 +282,13 @@ export const useGameStore = create<GameState>((set, get) => ({
       ) {
         fine = 800;
         alertMsg = `CONTRACT MISMATCH ($800): Family paid for direct cremation, not burial.`;
+      } else if (
+        c.directive === 'CREMATION_DIRECT' &&
+        chosenDisposition === 'CREMATION' &&
+        !c.isCremated
+      ) {
+        fine = 1200;
+        alertMsg = `COMPLIANCE FINE ($1,200): Direct cremation finalized without completing the retort burn!`;
       }
 
       const flowerBonus = Math.round(c.basePayout * (state.serviceRatingBonus / 100));
