@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
+import { displayCaseName } from '../types/game';
 import { useGameStore } from '../store/useGameStore';
 
 const FLOWER_TYPES = ['LILIES', 'ROSES', 'WREATH'] as const;
 
 export const ShowroomAndChapelModal: React.FC = () => {
   const {
-    currentCase,
+    coolerCases,
+    activeCaseId,
     showroomInventory,
     placedFlowers,
     serviceRatingBonus,
@@ -17,13 +19,30 @@ export const ShowroomAndChapelModal: React.FC = () => {
   } = useGameStore();
 
   const [tab, setTab] = useState<'BUY' | 'CHAPEL'>('BUY');
+  const currentCase =
+    coolerCases.find((c) => c.id === activeCaseId) ?? coolerCases[0] ?? null;
+
+  if (!currentCase) {
+    return (
+      <div className="fixed inset-0 z-50 bg-violet-950/95 text-violet-50 flex flex-col items-center justify-center gap-4 p-6">
+        <p>No body selected. Choose a cooler bay first.</p>
+        <button
+          type="button"
+          onPointerDown={() => setActiveStation('COOLER')}
+          className="px-4 py-2 bg-cyan-700 rounded font-semibold"
+        >
+          Open Cooler
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-violet-950/95 text-violet-50 p-4 md:p-6 flex flex-col select-none overflow-auto">
       <div className="flex justify-between items-center border-b border-violet-800 pb-3 gap-3">
         <div>
           <h2 className="text-lg md:text-xl font-bold text-violet-300">
-            SHOWROOM & CHAPEL — {currentCase.name}
+            SHOWROOM & CHAPEL — {displayCaseName(currentCase)}
           </h2>
           <p className="text-xs text-violet-300/70">
             Prefers {currentCase.preferredFlowers} | Directive:{' '}
@@ -36,7 +55,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
           onPointerDown={() => setActiveStation('OVERVIEW')}
           className="px-4 py-2 bg-violet-900 rounded text-sm active:bg-violet-800"
         >
-          Back
+          Main Menu
         </button>
       </div>
 

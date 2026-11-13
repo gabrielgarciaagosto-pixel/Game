@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
+import { displayCaseName } from '../types/game';
 import { useGameStore } from '../store/useGameStore';
 
 type Phase = 'MAGNET' | 'CREMULATOR' | 'POUR';
@@ -12,7 +13,10 @@ interface MetalFragment {
 }
 
 export const UrnFillingMiniGame: React.FC = () => {
-  const { currentCase, completeUrnFilling, setActiveStation } = useGameStore();
+  const { coolerCases, activeCaseId, completeUrnFilling, setActiveStation } =
+    useGameStore();
+  const currentCase =
+    coolerCases.find((c) => c.id === activeCaseId) ?? coolerCases[0] ?? null;
 
   const [phase, setPhase] = useState<Phase>('MAGNET');
   const [fragments, setFragments] = useState<MetalFragment[]>(() =>
@@ -101,12 +105,27 @@ export const UrnFillingMiniGame: React.FC = () => {
     completeUrnFilling(collectedBonus + pourBonus);
   };
 
+  if (!currentCase) {
+    return (
+      <div className="fixed inset-0 z-50 bg-zinc-950/95 text-zinc-100 flex flex-col items-center justify-center gap-4 p-6">
+        <p>No body selected. Choose a cooler bay first.</p>
+        <button
+          type="button"
+          onPointerDown={() => setActiveStation('COOLER')}
+          className="px-4 py-2 bg-cyan-700 rounded font-semibold"
+        >
+          Open Cooler
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 bg-zinc-950/95 text-zinc-100 p-4 md:p-6 flex flex-col select-none">
       <div className="flex justify-between items-center border-b border-zinc-800 pb-3 gap-3">
         <div>
           <h2 className="text-lg md:text-xl font-bold text-amber-300">
-            URN PROCESSOR — {currentCase.name}
+            URN PROCESSOR — {displayCaseName(currentCase)}
           </h2>
           <p className="text-xs text-zinc-400">
             Magnetic metals recovered: ${collectedBonus} | Phase: {phase}
@@ -117,7 +136,7 @@ export const UrnFillingMiniGame: React.FC = () => {
           onPointerDown={() => setActiveStation('OVERVIEW')}
           className="px-4 py-2 bg-zinc-800 rounded text-sm active:bg-zinc-700"
         >
-          Abort
+          Main Menu
         </button>
       </div>
 

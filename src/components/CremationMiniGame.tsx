@@ -1,29 +1,37 @@
 import React, { useEffect, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import type { SweepTool } from '../types/game';
+import { displayCaseName } from '../types/game';
 import { hapticIronRake } from '../utils/haptics';
 import { getCremationTargets } from '../utils/mortuaryMath';
 
 export const CremationMiniGame: React.FC = () => {
-  const { currentCase, completeCremation, setActiveStation } = useGameStore();
-  const targets = getCremationTargets(currentCase.weightLbs);
+  const { coolerCases, activeCaseId, completeCremation, setActiveStation } =
+    useGameStore();
+  const currentCase =
+    coolerCases.find((c) => c.id === activeCaseId) ?? coolerCases[0] ?? null;
 
   const [phase, setPhase] = useState<'BURNING' | 'SWEEPING'>('BURNING');
   const [tempF, setTempF] = useState(1100);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [stirCount, setStirCount] = useState(0);
   const [thermalWarnings, setThermalWarnings] = useState(0);
-
   const [activeTool, setActiveTool] = useState<SweepTool>('IRON_RAKE');
   const [largeBonesLeft, setLargeBonesLeft] = useState(100);
   const [mediumBonesLeft, setMediumBonesLeft] = useState(100);
   const [fineAshLeft, setFineAshLeft] = useState(100);
 
-  const progress = Math.min(1, elapsedSec / targets.targetDurationSec);
-  const maxSafeTemp = targets.getMaxSafeTempF(progress);
+  const targets = currentCase
+    ? getCremationTargets(currentCase.weightLbs)
+    : null;
+  const progress =
+    targets != null
+      ? Math.min(1, elapsedSec / targets.targetDurationSec)
+      : 0;
+  const maxSafeTemp = targets?.getMaxSafeTempF(progress) ?? 1600;
 
   useEffect(() => {
-    if (phase !== 'BURNING') return;
+    if (!targets || phase !== 'BURNING') return;
     const timer = setInterval(() => {
       setElapsedSec((prev) => {
         const burnRate = tempF / 1400;
@@ -36,7 +44,7 @@ export const CremationMiniGame: React.FC = () => {
     }, 300);
 
     return () => clearInterval(timer);
-  }, [phase, tempF, maxSafeTemp]);
+  }, [phase, tempF, maxSafeTemp, targets]);
 
   const handleStir = () => {
     setStirCount((s) => s + 1);
@@ -57,6 +65,21 @@ export const CremationMiniGame: React.FC = () => {
     }
   };
 
+  if (!currentCase || !targets) {
+    return (
+      <div className="fixed inset-0 z-50 bg-stone-950/95 text-stone-100 flex flex-col items-center justify-center gap-4 p-6">
+        <p>No body selected. Choose a cooler bay first.</p>
+        <button
+          type="button"
+          onPointerDown={() => setActiveStation('COOLER')}
+          className="px-4 py-2 bg-cyan-700 rounded font-semibold"
+        >
+          Open Cooler
+        </button>
+      </div>
+    );
+  }
+
   const finishRetortProcess = () => {
     const stirDiff = Math.abs(stirCount - targets.requiredStirs);
     const rank =
@@ -73,7 +96,8 @@ export const CremationMiniGame: React.FC = () => {
       <div className="flex justify-between items-center border-b border-stone-800 pb-3 gap-3">
         <div>
           <h2 className="text-lg md:text-xl font-bold text-orange-400">
-            RETORT CHAMBER — {currentCase.name} ({currentCase.weightLbs} lbs)
+            RETORT CHAMBER — {displayCaseName(currentCase)} (
+            {currentCase.weightLbs} lbs)
           </h2>
           <p className="text-xs text-stone-400">
             Directive:{' '}

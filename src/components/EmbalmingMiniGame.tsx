@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { displayCaseName } from '../types/game';
 import { useGameStore } from '../store/useGameStore';
 import { hapticGlug } from '../utils/haptics';
 import {
@@ -25,11 +26,10 @@ function updateProximityFromEvent(
 }
 
 export const EmbalmingMiniGame: React.FC = () => {
-  const { currentCase, completeEmbalming, setActiveStation } = useGameStore();
-  const targets = calculateEmbalmingTargets(
-    currentCase.weightLbs,
-    currentCase.dehydrationFactor
-  );
+  const { coolerCases, activeCaseId, completeEmbalming, setActiveStation } =
+    useGameStore();
+  const currentCase =
+    coolerCases.find((c) => c.id === activeCaseId) ?? coolerCases[0] ?? null;
 
   const [selectedFluid, setSelectedFluid] = useState<FluidType>('FORMALDEHYDE');
   const [poured, setPoured] = useState({
@@ -53,7 +53,6 @@ export const EmbalmingMiniGame: React.FC = () => {
     selectedFluidRef.current = selectedFluid;
   }, [selectedFluid]);
 
-  // Keep a single pour interval while holding; read live proximity/fluid via refs
   useEffect(() => {
     if (!isPouring) return;
     let lastTime = performance.now();
@@ -77,7 +76,6 @@ export const EmbalmingMiniGame: React.FC = () => {
       const addedOz = currentFlowOzPerSec * dt;
       if (addedOz <= 0) return;
 
-      // Accumulate at full precision; round only for display below
       setPoured((prev) => {
         if (fluid === 'WATER')
           return { ...prev, waterOz: prev.waterOz + addedOz };
@@ -89,6 +87,26 @@ export const EmbalmingMiniGame: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [isPouring]);
+
+  if (!currentCase) {
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-950/95 text-slate-100 flex flex-col items-center justify-center gap-4 p-6">
+        <p>No body selected. Choose a cooler bay first.</p>
+        <button
+          type="button"
+          onPointerDown={() => setActiveStation('COOLER')}
+          className="px-4 py-2 bg-cyan-700 rounded font-semibold"
+        >
+          Open Cooler
+        </button>
+      </div>
+    );
+  }
+
+  const targets = calculateEmbalmingTargets(
+    currentCase.weightLbs,
+    currentCase.dehydrationFactor
+  );
 
   const displayedPoured = {
     waterOz: +poured.waterOz.toFixed(1),
@@ -102,13 +120,14 @@ export const EmbalmingMiniGame: React.FC = () => {
     maxFlowForFluid(selectedFluid)
   );
   const evaluation = evaluateEmbalmingRank(displayedPoured, targets);
+  const label = displayCaseName(currentCase);
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/95 text-slate-100 p-4 md:p-6 flex flex-col justify-between select-none">
       <div className="flex justify-between items-center border-b border-slate-800 pb-3 gap-3">
         <div>
           <h2 className="text-lg md:text-xl font-bold text-emerald-400">
-            EMBALMING FLUID MIXER — {currentCase.name}
+            EMBALMING FLUID MIXER — {label}
           </h2>
           <p className="text-sm text-slate-400">
             Weight:{' '}
@@ -127,7 +146,7 @@ export const EmbalmingMiniGame: React.FC = () => {
           onPointerDown={() => setActiveStation('OVERVIEW')}
           className="px-4 py-2 bg-slate-800 rounded text-sm active:bg-slate-700"
         >
-          Back to Mortuary
+          Main Menu
         </button>
       </div>
 

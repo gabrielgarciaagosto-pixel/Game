@@ -9,6 +9,14 @@ export type DispositionDirective =
 
 export type SweepTool = 'IRON_RAKE' | 'BRISTLE_BRUSH' | 'HAND_BRUSH';
 
+export type StationId =
+  | 'OVERVIEW'
+  | 'COOLER'
+  | 'EMBALMING'
+  | 'CREMATION'
+  | 'URN_FILLING'
+  | 'SHOWROOM';
+
 export interface DecedentCase {
   id: string;
   name: string;
@@ -23,6 +31,22 @@ export interface DecedentCase {
   cremationRank?: Rank;
   isUrnFilled: boolean;
   basePayout: number;
+  /** Cooler toe-tag window */
+  arrivedAt: number;
+  tagExpiresAt: number;
+  isTagged: boolean;
+  nameExpired: boolean;
+}
+
+export interface CaseInboxFile {
+  id: string;
+  decedentName: string;
+  intakeTimestamp: number;
+  weightLbs: number;
+  tissueCondition: TissueCondition;
+  directive: DispositionDirective;
+  preferredFlowers: 'LILIES' | 'ROSES' | 'WREATH';
+  isRead: boolean;
 }
 
 export interface ShowroomItem {
@@ -33,4 +57,8 @@ export interface ShowroomItem {
   resaleValue: number;
   prestigeBonus: number;
   ownedCount: number;
+}
+
+export function displayCaseName(c: DecedentCase): string {
+  return c.isTagged ? c.name : 'UNIDENTIFIED REMAINS';
 }

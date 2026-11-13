@@ -1,22 +1,39 @@
 import { create } from 'zustand';
-import type { DecedentCase, Rank, ShowroomItem } from '../types/game';
+import type {
+  CaseInboxFile,
+  DecedentCase,
+  Rank,
+  ShowroomItem,
+  StationId,
+} from '../types/game';
+import { playIntakeBell } from '../utils/soundEffects';
+
+const MAX_COOLER_BAYS = 6;
+const TAG_WINDOW_MS = 60_000;
+const INTAKE_MIN_MS = 180_000;
+const INTAKE_MAX_MS = 300_000;
 
 interface GameState {
   cash: number;
   reputation: number;
   ossilegiumCommuneGrams: number;
-  activeStation:
-    | 'OVERVIEW'
-    | 'EMBALMING'
-    | 'CREMATION'
-    | 'URN_FILLING'
-    | 'SHOWROOM';
-  currentCase: DecedentCase;
+  activeStation: StationId;
+  coolerCases: DecedentCase[];
+  activeCaseId: string | null;
+  inboxFiles: CaseInboxFile[];
+  intakeToast: string | null;
   showroomInventory: ShowroomItem[];
   placedFlowers: Array<'LILIES' | 'ROSES' | 'WREATH'>;
   serviceRatingBonus: number;
   legalAlert: string | null;
-  setActiveStation: (station: GameState['activeStation']) => void;
+  setActiveStation: (station: StationId) => void;
+  selectActiveCase: (caseId: string) => void;
+  tagBodyInCooler: (caseId: string) => void;
+  markFileRead: (fileId: string) => void;
+  clearIntakeToast: () => void;
+  receiveNewIntake: () => boolean;
+  expireUntaggedNames: () => void;
+  getActiveCase: () => DecedentCase | null;
   completeEmbalming: (rank: Rank, tipMultiplier: number) => void;
   completeCremation: (rank: Rank, boneAshGrams: number) => void;
   completeUrnFilling: (bonusCash: number) => void;
@@ -26,7 +43,7 @@ interface GameState {
   clearLegalAlert: () => void;
 }
 
-const generateRandomCase = (): DecedentCase => {
+export function generateRandomCase(now = Date.now()): DecedentCase {
   const names = [
     'Arthur Pendelton',
     'Walter Vex',
@@ -67,8 +84,25 @@ const generateRandomCase = (): DecedentCase => {
     isCremated: false,
     isUrnFilled: false,
     basePayout: 1200,
+    arrivedAt: now,
+    tagExpiresAt: now + TAG_WINDOW_MS,
+    isTagged: false,
+    nameExpired: false,
   };
-};
+}
+
+function toInboxFile(c: DecedentCase): CaseInboxFile {
+  return {
+    id: c.id,
+    decedentName: c.name,
+    intakeTimestamp: c.arrivedAt,
+    weightLbs: c.weightLbs,
+    tissueCondition: c.tissueCondition,
+    directive: c.directive,
+    preferredFlowers: c.preferredFlowers,
+    isRead: false,
+  };
+}
 
 const flowerItemId: Record<'LILIES' | 'ROSES' | 'WREATH', string> = {
   LILIES: 'flower_lilies',
@@ -76,12 +110,41 @@ const flowerItemId: Record<'LILIES' | 'ROSES' | 'WREATH', string> = {
   WREATH: 'flower_wreath',
 };
 
+function updateActiveCase(
+  state: GameState,
+  updater: (c: DecedentCase) => DecedentCase
+): Partial<GameState> | null {
+  if (!state.activeCaseId) return null;
+  const idx = state.coolerCases.findIndex((c) => c.id === state.activeCaseId);
+  if (idx < 0) return null;
+  const next = [...state.coolerCases];
+  next[idx] = updater(next[idx]);
+  return { coolerCases: next };
+}
+
+function resolveActiveCase(state: GameState): DecedentCase | null {
+  if (!state.activeCaseId) return null;
+  return state.coolerCases.find((c) => c.id === state.activeCaseId) ?? null;
+}
+
+/** Random delay between 3–5 minutes for the next intake */
+export function nextIntakeDelayMs(): number {
+  return (
+    INTAKE_MIN_MS + Math.floor(Math.random() * (INTAKE_MAX_MS - INTAKE_MIN_MS + 1))
+  );
+}
+
+const seedCase = generateRandomCase();
+
 export const useGameStore = create<GameState>((set, get) => ({
   cash: 2500,
   reputation: 100,
   ossilegiumCommuneGrams: 0,
   activeStation: 'OVERVIEW',
-  currentCase: generateRandomCase(),
+  coolerCases: [seedCase],
+  activeCaseId: seedCase.id,
+  inboxFiles: [toInboxFile(seedCase)],
+  intakeToast: null,
   legalAlert: null,
   placedFlowers: [],
   serviceRatingBonus: 0,
@@ -162,17 +225,75 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   setActiveStation: (station) => set({ activeStation: station }),
 
+  selectActiveCase: (caseId) => {
+    if (!get().coolerCases.some((c) => c.id === caseId)) return;
+    set({ activeCaseId: caseId });
+  },
+
+  tagBodyInCooler: (caseId) =>
+    set((state) => {
+      const now = Date.now();
+      return {
+        coolerCases: state.coolerCases.map((c) => {
+          if (c.id !== caseId) return c;
+          if (c.isTagged || now >= c.tagExpiresAt) return c;
+          return { ...c, isTagged: true, nameExpired: false };
+        }),
+      };
+    }),
+
+  markFileRead: (fileId) =>
+    set((state) => ({
+      inboxFiles: state.inboxFiles.map((f) =>
+        f.id === fileId ? { ...f, isRead: true } : f
+      ),
+    })),
+
+  clearIntakeToast: () => set({ intakeToast: null }),
+
+  receiveNewIntake: () => {
+    const state = get();
+    if (state.coolerCases.length >= MAX_COOLER_BAYS) return false;
+    const next = generateRandomCase();
+    playIntakeBell();
+    set({
+      coolerCases: [...state.coolerCases, next],
+      inboxFiles: [toInboxFile(next), ...state.inboxFiles],
+      intakeToast: 'New Remains Received in Cooler',
+      activeCaseId: state.activeCaseId ?? next.id,
+    });
+    return true;
+  },
+
+  expireUntaggedNames: () =>
+    set((state) => {
+      const now = Date.now();
+      let changed = false;
+      const coolerCases = state.coolerCases.map((c) => {
+        if (!c.isTagged && !c.nameExpired && now >= c.tagExpiresAt) {
+          changed = true;
+          return { ...c, nameExpired: true };
+        }
+        return c;
+      });
+      return changed ? { coolerCases } : state;
+    }),
+
+  getActiveCase: () => resolveActiveCase(get()),
+
   completeEmbalming: (rank, tipMultiplier) =>
     set((state) => {
-      if (state.currentCase.isEmbalmed) {
-        return { activeStation: 'OVERVIEW' };
-      }
+      const active = resolveActiveCase(state);
+      if (!active) return { activeStation: 'OVERVIEW' };
+      if (active.isEmbalmed) return { activeStation: 'OVERVIEW' };
+      const patched = updateActiveCase(state, (c) => ({
+        ...c,
+        isEmbalmed: true,
+        embalmRank: rank,
+      }));
+      if (!patched) return { activeStation: 'OVERVIEW' };
       return {
-        currentCase: {
-          ...state.currentCase,
-          isEmbalmed: true,
-          embalmRank: rank,
-        },
+        ...patched,
         cash: Math.round(state.cash + 350 * tipMultiplier),
         reputation:
           state.reputation +
@@ -182,44 +303,57 @@ export const useGameStore = create<GameState>((set, get) => ({
     }),
 
   completeCremation: (rank, boneAshGrams) => {
-    const { currentCase } = get();
-    if (currentCase.isCremated) {
+    const state = get();
+    const active = resolveActiveCase(state);
+    if (!active) {
+      set({ activeStation: 'OVERVIEW' });
+      return;
+    }
+    if (active.isCremated) {
       set({ activeStation: 'URN_FILLING' });
       return;
     }
-    // Check if cremating a Burial-Only decedent -> LAWSUIT!
-    if (currentCase.directive === 'BURIAL_VIEWING') {
-      set((state) => ({
+    if (active.directive === 'BURIAL_VIEWING') {
+      set({
         cash: state.cash - 2500,
         reputation: Math.max(0, state.reputation - 40),
-        legalAlert: `LAWSUIT FILED! ${currentCase.name}'s contract specified Traditional Burial & Viewing Only. You were fined $2,500 for Wrongful Cremation!`,
-        currentCase: generateRandomCase(),
+        legalAlert: `LAWSUIT FILED! ${active.name}'s contract specified Traditional Burial & Viewing Only. You were fined $2,500 for Wrongful Cremation!`,
+        coolerCases: state.coolerCases.filter((c) => c.id !== active.id),
+        inboxFiles: state.inboxFiles.filter((f) => f.id !== active.id),
+        activeCaseId:
+          state.coolerCases.find((c) => c.id !== active.id)?.id ?? null,
         placedFlowers: [],
         serviceRatingBonus: 0,
         activeStation: 'OVERVIEW',
-      }));
+      });
       return;
     }
 
-    set((state) => ({
-      currentCase: {
-        ...state.currentCase,
-        isCremated: true,
-        cremationRank: rank,
-      },
+    const patched = updateActiveCase(state, (c) => ({
+      ...c,
+      isCremated: true,
+      cremationRank: rank,
+    }));
+    set({
+      ...(patched ?? {}),
       ossilegiumCommuneGrams:
         state.ossilegiumCommuneGrams + Math.round(boneAshGrams * 0.02),
       activeStation: 'URN_FILLING',
-    }));
+    });
   },
 
   completeUrnFilling: (bonusCash) =>
     set((state) => {
-      if (state.currentCase.isUrnFilled) {
-        return { activeStation: 'OVERVIEW' };
-      }
+      const active = resolveActiveCase(state);
+      if (!active) return { activeStation: 'OVERVIEW' };
+      if (active.isUrnFilled) return { activeStation: 'OVERVIEW' };
+      const patched = updateActiveCase(state, (c) => ({
+        ...c,
+        isUrnFilled: true,
+      }));
+      if (!patched) return { activeStation: 'OVERVIEW' };
       return {
-        currentCase: { ...state.currentCase, isUrnFilled: true },
+        ...patched,
         cash: state.cash + bonusCash,
         activeStation: 'OVERVIEW',
       };
@@ -240,13 +374,14 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   placeFloralSpray: (flower) =>
     set((state) => {
+      const active = resolveActiveCase(state);
+      if (!active) return state;
       const itemId = flowerItemId[flower];
       const item = state.showroomInventory.find((i) => i.id === itemId);
       if (!item || item.ownedCount <= 0) return state;
       if (state.placedFlowers.includes(flower)) return state;
 
-      const preferredMatch =
-        flower === state.currentCase.preferredFlowers ? 15 : 5;
+      const preferredMatch = flower === active.preferredFlowers ? 15 : 5;
 
       return {
         placedFlowers: [...state.placedFlowers, flower],
@@ -260,7 +395,9 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   finalizeServiceAndNextCase: (chosenDisposition) =>
     set((state) => {
-      const c = state.currentCase;
+      const c = resolveActiveCase(state);
+      if (!c) return { activeStation: 'OVERVIEW' };
+
       let fine = 0;
       let alertMsg: string | null = null;
 
@@ -291,18 +428,25 @@ export const useGameStore = create<GameState>((set, get) => ({
         alertMsg = `COMPLIANCE FINE ($1,200): Direct cremation finalized without completing the retort burn!`;
       }
 
-      const flowerBonus = Math.round(c.basePayout * (state.serviceRatingBonus / 100));
+      const flowerBonus = Math.round(
+        c.basePayout * (state.serviceRatingBonus / 100)
+      );
       const netPayout =
         fine > 0 ? -fine : c.basePayout + flowerBonus + (c.isUrnFilled ? 150 : 0);
+
+      const remaining = state.coolerCases.filter((x) => x.id !== c.id);
 
       return {
         cash: state.cash + netPayout,
         reputation:
           fine > 0
             ? Math.max(0, state.reputation - 15)
-            : state.reputation + Math.min(20, Math.floor(state.serviceRatingBonus / 5)),
+            : state.reputation +
+              Math.min(20, Math.floor(state.serviceRatingBonus / 5)),
         legalAlert: alertMsg,
-        currentCase: generateRandomCase(),
+        coolerCases: remaining,
+        inboxFiles: state.inboxFiles.filter((f) => f.id !== c.id),
+        activeCaseId: remaining[0]?.id ?? null,
         placedFlowers: [],
         serviceRatingBonus: 0,
         activeStation: 'OVERVIEW',
