@@ -3,8 +3,14 @@ import { displayCaseName } from '../types/game';
 import { useGameStore } from '../store/useGameStore';
 
 export const MainHubMenu: React.FC = () => {
-  const { setActiveStation, coolerCases, activeCaseId, cash, reputation } =
-    useGameStore();
+  const {
+    setActiveStation,
+    coolerCases,
+    activeCaseId,
+    cash,
+    reputation,
+    ossilegiumCommuneGrams,
+  } = useGameStore();
 
   const untaggedUrgentCount = coolerCases.filter(
     (c) => !c.isTagged && Date.now() < c.tagExpiresAt
@@ -66,7 +72,7 @@ export const MainHubMenu: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex gap-3 md:gap-6 font-mono text-sm">
+        <div className="flex flex-wrap justify-end gap-2 md:gap-4 font-mono text-sm">
           <div className="bg-slate-900 px-3 md:px-4 py-2 rounded border border-slate-800">
             CASH:{' '}
             <span className="text-emerald-400 font-bold">
@@ -75,6 +81,12 @@ export const MainHubMenu: React.FC = () => {
           </div>
           <div className="bg-slate-900 px-3 md:px-4 py-2 rounded border border-slate-800">
             REP: <span className="text-sky-400 font-bold">{reputation}</span>
+          </div>
+          <div className="bg-slate-900 px-3 md:px-4 py-2 rounded border border-slate-800">
+            OSS:{' '}
+            <span className="text-violet-300 font-bold">
+              {ossilegiumCommuneGrams} g
+            </span>
           </div>
         </div>
       </div>

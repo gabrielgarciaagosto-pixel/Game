@@ -92,7 +92,7 @@ export const CremationMiniGame: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-stone-950/95 text-stone-100 p-4 md:p-6 flex flex-col justify-between select-none">
+    <div className="fixed inset-0 z-50 bg-stone-950/95 text-stone-100 p-4 md:p-6 pb-24 flex flex-col justify-between select-none">
       <div className="flex justify-between items-center border-b border-stone-800 pb-3 gap-3">
         <div>
           <h2 className="text-lg md:text-xl font-bold text-orange-400">

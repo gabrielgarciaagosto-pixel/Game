@@ -123,7 +123,7 @@ export const EmbalmingMiniGame: React.FC = () => {
   const label = displayCaseName(currentCase);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/95 text-slate-100 p-4 md:p-6 flex flex-col justify-between select-none">
+    <div className="fixed inset-0 z-50 bg-slate-950/95 text-slate-100 p-4 md:p-6 pb-24 flex flex-col justify-between select-none">
       <div className="flex justify-between items-center border-b border-slate-800 pb-3 gap-3">
         <div>
           <h2 className="text-lg md:text-xl font-bold text-emerald-400">

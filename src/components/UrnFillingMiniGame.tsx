@@ -121,7 +121,7 @@ export const UrnFillingMiniGame: React.FC = () => {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-zinc-950/95 text-zinc-100 p-4 md:p-6 flex flex-col select-none">
+    <div className="fixed inset-0 z-50 bg-zinc-950/95 text-zinc-100 p-4 md:p-6 pb-24 flex flex-col select-none">
       <div className="flex justify-between items-center border-b border-zinc-800 pb-3 gap-3">
         <div>
           <h2 className="text-lg md:text-xl font-bold text-amber-300">

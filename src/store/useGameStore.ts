@@ -226,19 +226,68 @@ export const useGameStore = create<GameState>((set, get) => ({
   setActiveStation: (station) => set({ activeStation: station }),
 
   selectActiveCase: (caseId) => {
-    if (!get().coolerCases.some((c) => c.id === caseId)) return;
-    set({ activeCaseId: caseId });
+    const state = get();
+    if (!state.coolerCases.some((c) => c.id === caseId)) return;
+    if (state.activeCaseId === caseId) return;
+
+    // Return any in-progress chapel sprays to inventory when switching bodies
+    let inventory = state.showroomInventory;
+    if (state.placedFlowers.length > 0) {
+      inventory = state.showroomInventory.map((item) => {
+        const flowerKey = (Object.keys(flowerItemId) as Array<
+          keyof typeof flowerItemId
+        >).find((k) => flowerItemId[k] === item.id);
+        if (!flowerKey) return item;
+        const returned = state.placedFlowers.filter((f) => f === flowerKey).length;
+        return returned
+          ? { ...item, ownedCount: item.ownedCount + returned }
+          : item;
+      });
+    }
+
+    set({
+      activeCaseId: caseId,
+      placedFlowers: [],
+      serviceRatingBonus: 0,
+      showroomInventory: inventory,
+    });
   },
 
   tagBodyInCooler: (caseId) =>
     set((state) => {
       const now = Date.now();
+      const coolerCases = state.coolerCases.map((c) => {
+        if (c.id !== caseId) return c;
+        if (c.isTagged || now >= c.tagExpiresAt) return c;
+        return { ...c, isTagged: true, nameExpired: false };
+      });
+      // Tagging also selects that bay as the active case for station work
+      if (state.activeCaseId === caseId) {
+        return { coolerCases };
+      }
+
+      let inventory = state.showroomInventory;
+      if (state.placedFlowers.length > 0) {
+        inventory = state.showroomInventory.map((item) => {
+          const flowerKey = (Object.keys(flowerItemId) as Array<
+            keyof typeof flowerItemId
+          >).find((k) => flowerItemId[k] === item.id);
+          if (!flowerKey) return item;
+          const returned = state.placedFlowers.filter(
+            (f) => f === flowerKey
+          ).length;
+          return returned
+            ? { ...item, ownedCount: item.ownedCount + returned }
+            : item;
+        });
+      }
+
       return {
-        coolerCases: state.coolerCases.map((c) => {
-          if (c.id !== caseId) return c;
-          if (c.isTagged || now >= c.tagExpiresAt) return c;
-          return { ...c, isTagged: true, nameExpired: false };
-        }),
+        coolerCases,
+        activeCaseId: caseId,
+        placedFlowers: [],
+        serviceRatingBonus: 0,
+        showroomInventory: inventory,
       };
     }),
 

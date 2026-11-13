@@ -23,7 +23,7 @@ export const CoolerRoom: React.FC = () => {
   }, [expireUntaggedNames]);
 
   return (
-    <div className="fixed inset-0 z-40 bg-slate-950 text-slate-100 p-4 md:p-6 flex flex-col justify-between select-none">
+    <div className="fixed inset-0 z-40 bg-slate-950 text-slate-100 p-4 md:p-6 pb-24 flex flex-col justify-between select-none">
       <div className="flex justify-between items-center border-b border-cyan-900/60 pb-3 gap-3">
         <div>
           <h2 className="text-lg md:text-xl font-bold text-cyan-400">
@@ -80,6 +80,7 @@ export const CoolerRoom: React.FC = () => {
                   onPointerDown={(e) => {
                     e.stopPropagation();
                     tagBodyInCooler(body.id);
+                    selectActiveCase(body.id);
                   }}
                   className="absolute -top-3 left-1/2 -translate-x-1/2 z-20 bg-amber-400 text-slate-950 px-3 py-1.5 rounded-full font-extrabold text-xs shadow-xl animate-bounce whitespace-nowrap border-2 border-white"
                 >
