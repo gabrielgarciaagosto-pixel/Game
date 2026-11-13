@@ -14,6 +14,7 @@ const INTAKE_MIN_MS = 180_000;
 const INTAKE_MAX_MS = 300_000;
 
 interface GameState {
+  hasStartedGame: boolean;
   cash: number;
   reputation: number;
   ossilegiumCommuneGrams: number;
@@ -26,6 +27,7 @@ interface GameState {
   placedFlowers: Array<'LILIES' | 'ROSES' | 'WREATH'>;
   serviceRatingBonus: number;
   legalAlert: string | null;
+  startGame: () => void;
   setActiveStation: (station: StationId) => void;
   selectActiveCase: (caseId: string) => void;
   tagBodyInCooler: (caseId: string) => void;
@@ -137,6 +139,7 @@ export function nextIntakeDelayMs(): number {
 const seedCase = generateRandomCase();
 
 export const useGameStore = create<GameState>((set, get) => ({
+  hasStartedGame: false,
   cash: 2500,
   reputation: 100,
   ossilegiumCommuneGrams: 0,
@@ -222,6 +225,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       ownedCount: 1,
     },
   ],
+
+  startGame: () => set({ hasStartedGame: true, activeStation: 'OVERVIEW' }),
 
   setActiveStation: (station) => set({ activeStation: station }),
 

@@ -34,6 +34,7 @@
    - Cremating a `BURIAL_VIEWING` case triggers an immediate Wrongful Cremation Lawsuit ($2,500 fine and -40 Reputation).
 
 ## Navigation, Cooler Intake & Tagging Rules
+- **Boot Flow**: App launches on `UrnStartScreen` while `hasStartedGame` is false. Tapping START plays the urn rock/lid/ash animation (~2.4s), fades out, then calls `startGame()` to enter `MainHubMenu` and begin the cooler intake timer.
 - **Main Screen**: Use a 2x3 Square Tile Grid Menu (`MainHubMenu.tsx`) for room selection (`COOLER`, `EMBALMING`, `CREMATORY`, `URN_FILLING`, `CHAPEL`). Do not use a free-roam 3D lobby for room routing.
 - **Intake Spawner**: New decedents arrive randomly every 180–300 seconds (3–5 minutes) into the `Cooler` array, ringing an intake bell (`Web Audio API` chime) and delivering a matching dossier to the bottom-right `CaseInboxWidget`.
 - **60-Second Tagging Window**: Each new body in the Cooler has a 60-second `tagExpiresAt` timestamp. While active, a floating name badge hovers above the body. Tapping the badge sets `isTagged = true` and permanently locks the name onto the toe-tag. If 60 seconds elapse without tapping, the floating name vanishes forever and the body label reads `"UNIDENTIFIED REMAINS"`.

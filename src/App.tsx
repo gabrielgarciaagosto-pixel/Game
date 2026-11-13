@@ -5,6 +5,7 @@ import { EmbalmingMiniGame } from './components/EmbalmingMiniGame';
 import { MainHubMenu } from './components/MainHubMenu';
 import { ShowroomAndChapelModal } from './components/ShowroomAndChapelModal';
 import { UrnFillingMiniGame } from './components/UrnFillingMiniGame';
+import { UrnStartScreen } from './components/UrnStartScreen';
 import { useIntakeSpawner } from './hooks/useIntakeSpawner';
 import { displayCaseName } from './types/game';
 import { useGameStore } from './store/useGameStore';
@@ -13,6 +14,8 @@ function App() {
   useIntakeSpawner();
 
   const {
+    hasStartedGame,
+    startGame,
     cash,
     reputation,
     ossilegiumCommuneGrams,
@@ -27,6 +30,15 @@ function App() {
 
   const activeCase =
     coolerCases.find((c) => c.id === activeCaseId) ?? coolerCases[0] ?? null;
+
+  if (!hasStartedGame) {
+    return (
+      <UrnStartScreen
+        title="DEATH IS MY BUSINESS"
+        onStartComplete={startGame}
+      />
+    );
+  }
 
   return (
     <div className="relative flex flex-col w-full h-full overflow-hidden bg-slate-950 text-slate-100">
