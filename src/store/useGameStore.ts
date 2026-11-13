@@ -226,7 +226,30 @@ export const useGameStore = create<GameState>((set, get) => ({
     },
   ],
 
-  startGame: () => set({ hasStartedGame: true, activeStation: 'OVERVIEW' }),
+  startGame: () =>
+    set((state) => {
+      const now = Date.now();
+      // Restart the seed body's 60s tag window only once gameplay begins,
+      // so idle time on UrnStartScreen does not burn the toe-tag timer.
+      const coolerCases = state.coolerCases.map((c, index) => {
+        if (index !== 0 || c.isTagged || c.nameExpired) return c;
+        return {
+          ...c,
+          arrivedAt: now,
+          tagExpiresAt: now + TAG_WINDOW_MS,
+          nameExpired: false,
+        };
+      });
+      const inboxFiles = state.inboxFiles.map((f, index) =>
+        index === 0 ? { ...f, intakeTimestamp: now } : f
+      );
+      return {
+        hasStartedGame: true,
+        activeStation: 'OVERVIEW' as const,
+        coolerCases,
+        inboxFiles,
+      };
+    }),
 
   setActiveStation: (station) => set({ activeStation: station }),
 
