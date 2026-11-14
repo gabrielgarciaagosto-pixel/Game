@@ -705,6 +705,23 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((state) => {
       const target = resolveCase(state, caseId);
       if (!target) return state;
+      const r = state.retort;
+      const retortBusy =
+        r.caseId != null &&
+        r.phase !== 'IDLE' &&
+        r.phase !== 'DONE';
+      if (
+        location === 'CREMATION' &&
+        retortBusy &&
+        r.caseId !== caseId
+      ) {
+        return {
+          intakeToast:
+            'Retort occupied — finish the current cremation before loading another case.',
+          activeStation: 'CREMATION',
+          activeCaseId: r.caseId,
+        };
+      }
       const now = Date.now();
       const nextStation = stationForLocation(location);
       const leavingRetort =
@@ -747,6 +764,26 @@ export const useGameStore = create<GameState>((set, get) => ({
       };
       const location = locationMap[station];
       if (!location) return { activeStation: station, activeCaseId: caseId };
+
+      const r = state.retort;
+      const retortBusy =
+        r.caseId != null &&
+        r.phase !== 'IDLE' &&
+        r.phase !== 'DONE';
+      // Keep the second body refrigerated; open the running chamber instead
+      if (
+        location === 'CREMATION' &&
+        retortBusy &&
+        r.caseId !== caseId
+      ) {
+        return {
+          activeStation: 'CREMATION',
+          activeCaseId: r.caseId,
+          intakeToast:
+            'Retort occupied — finish the current cremation before loading another case.',
+        };
+      }
+
       const now = Date.now();
       const leavingRetort =
         state.retort.caseId === caseId && location !== 'CREMATION';

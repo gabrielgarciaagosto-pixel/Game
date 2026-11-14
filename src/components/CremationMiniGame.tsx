@@ -354,16 +354,31 @@ export const CremationMiniGame: React.FC = () => {
   };
 
   const handleSweepStroke = () => {
-    if (!activeTool) return;
+    const live = useGameStore.getState().retort;
+    const tool = live.activeTool;
+    if (!tool) return;
     setBoneNudge((n) => n + 1);
-    if (activeTool === 'IRON_RAKE') {
-      const next = Math.max(0, largeBonesLeft - 20);
-      if (next < largeBonesLeft) void hapticIronRake();
-      patchRetort({ largeBonesLeft: next });
-    } else if (activeTool === 'BRISTLE_BRUSH' && largeBonesLeft === 0) {
-      patchRetort({ mediumBonesLeft: Math.max(0, mediumBonesLeft - 22) });
-    } else if (activeTool === 'HAND_BRUSH' && mediumBonesLeft === 0) {
-      patchRetort({ fineAshLeft: Math.max(0, fineAshLeft - 25) });
+    if (tool === 'IRON_RAKE') {
+      useGameStore.setState((s) => {
+        const prev = s.retort.largeBonesLeft;
+        const next = Math.max(0, prev - 20);
+        if (next < prev) void hapticIronRake();
+        return { retort: { ...s.retort, largeBonesLeft: next } };
+      });
+    } else if (tool === 'BRISTLE_BRUSH' && live.largeBonesLeft === 0) {
+      useGameStore.setState((s) => ({
+        retort: {
+          ...s.retort,
+          mediumBonesLeft: Math.max(0, s.retort.mediumBonesLeft - 22),
+        },
+      }));
+    } else if (tool === 'HAND_BRUSH' && live.mediumBonesLeft === 0) {
+      useGameStore.setState((s) => ({
+        retort: {
+          ...s.retort,
+          fineAshLeft: Math.max(0, s.retort.fineAshLeft - 25),
+        },
+      }));
     }
   };
 
