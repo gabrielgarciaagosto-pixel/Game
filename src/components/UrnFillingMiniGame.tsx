@@ -64,7 +64,19 @@ export const UrnFillingMiniGame: React.FC = () => {
     }
   }, [currentCase, activeCaseId, focusCase]);
 
-  const [phase, setPhase] = useState<Phase>('CRUSH');
+  const [phase, setPhase] = useState<Phase>(() => {
+    // Screenshot / demo harness — cleared after read
+    try {
+      const forced = sessionStorage.getItem('ofu-demo-urn-phase') as Phase | null;
+      if (forced) {
+        sessionStorage.removeItem('ofu-demo-urn-phase');
+        return forced;
+      }
+    } catch {
+      /* ignore */
+    }
+    return 'CRUSH';
+  });
   const [bones, setBones] = useState<BoneChunk[]>(() =>
     Array.from({ length: 10 }, (_, i) => ({
       id: i,
