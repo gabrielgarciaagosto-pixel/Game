@@ -5,6 +5,7 @@ import { CrematoryAudio } from './components/CrematoryAudio';
 import { EmbalmingMiniGame } from './components/EmbalmingMiniGame';
 import { MainHubMenu } from './components/MainHubMenu';
 import { MenuThemeAudio } from './components/MenuThemeAudio';
+import { FuneraryEmporium } from './components/FuneraryEmporium';
 import { ShowroomAndChapelModal } from './components/ShowroomAndChapelModal';
 import { UrnFillingMiniGame } from './components/UrnFillingMiniGame';
 import { UrnStartScreen } from './components/UrnStartScreen';
@@ -106,6 +107,7 @@ function App() {
       {activeStation === 'CREMATION' && <CremationMiniGame />}
       {activeStation === 'URN_FILLING' && <UrnFillingMiniGame />}
       {activeStation === 'SHOWROOM' && <ShowroomAndChapelModal />}
+      {activeStation === 'EMPORIUM' && <FuneraryEmporium />}
       {activeStation === 'URN_VAULT' && <UrnVaultRoom />}
 
       <CaseInboxWidget />

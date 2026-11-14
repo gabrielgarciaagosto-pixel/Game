@@ -28,7 +28,18 @@ export type StationId =
   | 'CREMATION'
   | 'URN_FILLING'
   | 'SHOWROOM'
-  | 'URN_VAULT';
+  | 'URN_VAULT'
+  | 'EMPORIUM';
+
+export type PreferredUrnMaterial =
+  | 'MARBLE'
+  | 'BRONZE'
+  | 'WOOD'
+  | 'CERAMIC'
+  | 'GLASS'
+  | 'STEEL'
+  | 'STONE'
+  | 'PORCELAIN';
 
 export interface DecedentCase {
   id: string;
@@ -38,6 +49,10 @@ export interface DecedentCase {
   dehydrationFactor: number;
   directive: DispositionDirective;
   preferredFlowers: 'LILIES' | 'ROSES' | 'WREATH';
+  /** Family taste when selecting a vessel for cremains */
+  preferredUrnMaterial: PreferredUrnMaterial;
+  /** Catalog urn offered/sold to this family at chapel */
+  offeredUrnId: string | null;
   location: CaseLocation;
   isEmbalmed: boolean;
   embalmRank?: Rank;

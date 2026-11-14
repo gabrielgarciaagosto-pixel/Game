@@ -1,8 +1,10 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type {
   CaseInboxFile,
   CaseLocation,
   DecedentCase,
+  PreferredUrnMaterial,
   Rank,
   ShowroomItem,
   StationId,
@@ -14,6 +16,7 @@ import {
 import { stepRetortBurn, stepRetortDoor } from '../retort/tickRetort';
 import { playIntakeBell } from '../utils/soundEffects';
 import { getCremationTargets } from '../utils/mortuaryMath';
+import { getUrnById, URN_MATERIALS } from '../data/urnCatalog';
 
 const MAX_COOLER_BAYS = 6;
 const TAG_WINDOW_MS = 60_000;
@@ -33,6 +36,8 @@ interface GameState {
   inboxFiles: CaseInboxFile[];
   intakeToast: string | null;
   showroomInventory: ShowroomItem[];
+  /** Owned counts keyed by urn catalog id */
+  urnInventory: Record<string, number>;
   placedFlowers: Array<'LILIES' | 'ROSES' | 'WREATH'>;
   serviceRatingBonus: number;
   legalAlert: string | null;
@@ -89,6 +94,8 @@ interface GameState {
   completeUrnFilling: (bonusCash: number, caseId: string) => void;
   storeUrnInVault: (caseId: string) => void;
   buyShowroomItem: (itemId: string) => void;
+  buyUrn: (urnId: string) => void;
+  offerUrnToCase: (caseId: string, urnId: string | null) => void;
   placeFloralSpray: (
     flower: 'LILIES' | 'ROSES' | 'WREATH',
     caseId: string
@@ -199,6 +206,7 @@ export function generateRandomCase(now = Date.now()): DecedentCase {
     'ROSES',
     'WREATH',
   ];
+  const urnMats = URN_MATERIALS as PreferredUrnMaterial[];
 
   const pickedCond = conditions[Math.floor(Math.random() * conditions.length)];
   return {
@@ -209,6 +217,8 @@ export function generateRandomCase(now = Date.now()): DecedentCase {
     dehydrationFactor: pickedCond.factor,
     directive: directives[Math.floor(Math.random() * directives.length)],
     preferredFlowers: flowers[Math.floor(Math.random() * flowers.length)],
+    preferredUrnMaterial: urnMats[Math.floor(Math.random() * urnMats.length)],
+    offeredUrnId: null,
     location: 'COOLER',
     isEmbalmed: false,
     isCremated: false,
@@ -316,7 +326,75 @@ export function nextIntakeDelayMs(): number {
 
 const seedCase = generateRandomCase();
 
-export const useGameStore = create<GameState>((set, get) => ({
+const defaultShowroomInventory: ShowroomItem[] = [
+  {
+    id: 'casket_oak',
+    name: 'Half-Couch Oak Casket',
+    category: 'CASKET',
+    cost: 400,
+    resaleValue: 1100,
+    prestigeBonus: 10,
+    ownedCount: 1,
+  },
+  {
+    id: 'coffin_oct',
+    name: 'Traditional Tapered Coffin',
+    category: 'COFFIN',
+    cost: 250,
+    resaleValue: 700,
+    prestigeBonus: 5,
+    ownedCount: 2,
+  },
+  {
+    id: 'keepsake_mini',
+    name: 'Miniature Keepsake Urn Set',
+    category: 'KEEPSAKE',
+    cost: 65,
+    resaleValue: 210,
+    prestigeBonus: 6,
+    ownedCount: 3,
+  },
+  {
+    id: 'flower_lilies',
+    name: 'Standing Peace Lily Spray',
+    category: 'FLOWER',
+    cost: 50,
+    resaleValue: 160,
+    prestigeBonus: 4,
+    ownedCount: 2,
+  },
+  {
+    id: 'flower_roses',
+    name: 'Rose Casket Spray',
+    category: 'FLOWER',
+    cost: 55,
+    resaleValue: 175,
+    prestigeBonus: 4,
+    ownedCount: 1,
+  },
+  {
+    id: 'flower_wreath',
+    name: 'Memorial Laurel Wreath',
+    category: 'FLOWER',
+    cost: 70,
+    resaleValue: 200,
+    prestigeBonus: 5,
+    ownedCount: 1,
+  },
+  {
+    id: 'decor_pews',
+    name: 'Velvet Cushioned Chapel Bench',
+    category: 'DECOR',
+    cost: 600,
+    resaleValue: 0,
+    prestigeBonus: 20,
+    ownedCount: 1,
+  },
+];
+
+export const useGameStore = create<GameState>()(
+  persist(
+    (set, get) => ({
   hasStartedGame: false,
   cash: 2500,
   reputation: 100,
@@ -336,80 +414,11 @@ export const useGameStore = create<GameState>((set, get) => ({
   retort: { ...IDLE_RETORT },
   placedFlowers: [],
   serviceRatingBonus: 0,
-  showroomInventory: [
-    {
-      id: 'casket_oak',
-      name: 'Half-Couch Oak Casket',
-      category: 'CASKET',
-      cost: 400,
-      resaleValue: 1100,
-      prestigeBonus: 10,
-      ownedCount: 1,
-    },
-    {
-      id: 'coffin_oct',
-      name: 'Traditional Tapered Coffin',
-      category: 'COFFIN',
-      cost: 250,
-      resaleValue: 700,
-      prestigeBonus: 5,
-      ownedCount: 2,
-    },
-    {
-      id: 'urn_marble',
-      name: 'Carrara Marble Urn',
-      category: 'URN',
-      cost: 120,
-      resaleValue: 380,
-      prestigeBonus: 8,
-      ownedCount: 2,
-    },
-    {
-      id: 'keepsake_mini',
-      name: 'Miniature Keepsake Urn Set',
-      category: 'KEEPSAKE',
-      cost: 65,
-      resaleValue: 210,
-      prestigeBonus: 6,
-      ownedCount: 3,
-    },
-    {
-      id: 'flower_lilies',
-      name: 'Standing Peace Lily Spray',
-      category: 'FLOWER',
-      cost: 50,
-      resaleValue: 160,
-      prestigeBonus: 4,
-      ownedCount: 2,
-    },
-    {
-      id: 'flower_roses',
-      name: 'Rose Casket Spray',
-      category: 'FLOWER',
-      cost: 55,
-      resaleValue: 175,
-      prestigeBonus: 4,
-      ownedCount: 1,
-    },
-    {
-      id: 'flower_wreath',
-      name: 'Memorial Laurel Wreath',
-      category: 'FLOWER',
-      cost: 70,
-      resaleValue: 200,
-      prestigeBonus: 5,
-      ownedCount: 1,
-    },
-    {
-      id: 'decor_pews',
-      name: 'Velvet Cushioned Chapel Bench',
-      category: 'DECOR',
-      cost: 600,
-      resaleValue: 0,
-      prestigeBonus: 20,
-      ownedCount: 1,
-    },
-  ],
+  showroomInventory: defaultShowroomInventory,
+  urnInventory: {
+    urn_carrara_classic: 1,
+    urn_walnut_pillar: 1,
+  },
 
   getActiveCase: () => resolveActiveCase(get()),
 
@@ -948,10 +957,51 @@ export const useGameStore = create<GameState>((set, get) => ({
       if (!item || state.cash < item.cost) return state;
       return {
         cash: state.cash - item.cost,
-        reputation: state.reputation + item.prestigeBonus,
+        reputation: state.reputation + Math.min(8, item.prestigeBonus),
         showroomInventory: state.showroomInventory.map((i) =>
           i.id === itemId ? { ...i, ownedCount: i.ownedCount + 1 } : i
         ),
+      };
+    }),
+
+  buyUrn: (urnId) =>
+    set((state) => {
+      const urn = getUrnById(urnId);
+      if (!urn || state.cash < urn.cost) return state;
+      return {
+        cash: state.cash - urn.cost,
+        reputation: state.reputation + Math.min(10, urn.prestigeBonus),
+        urnInventory: {
+          ...state.urnInventory,
+          [urnId]: (state.urnInventory[urnId] ?? 0) + 1,
+        },
+      };
+    }),
+
+  offerUrnToCase: (caseId, urnId) =>
+    set((state) => {
+      const active = resolveCase(state, caseId);
+      if (!active) return state;
+      const previousId = active.offeredUrnId;
+      let inventory = { ...state.urnInventory };
+
+      // Return previously offered vessel to stock
+      if (previousId) {
+        inventory[previousId] = (inventory[previousId] ?? 0) + 1;
+      }
+
+      if (urnId) {
+        const available = inventory[urnId] ?? 0;
+        if (available <= 0) return state;
+        inventory[urnId] = available - 1;
+      }
+
+      return {
+        urnInventory: inventory,
+        cases: updateCaseById(state.cases, caseId, (c) => ({
+          ...c,
+          offeredUrnId: urnId,
+        })),
       };
     }),
 
@@ -1013,6 +1063,11 @@ export const useGameStore = create<GameState>((set, get) => ({
       const flowerBonus = Math.round(
         c.basePayout * (state.serviceRatingBonus / 100)
       );
+      const offered = getUrnById(c.offeredUrnId);
+      const urnMatch =
+        offered != null && offered.material === c.preferredUrnMaterial;
+      const urnSale = offered ? offered.resaleValue : 0;
+      const urnTasteBonus = urnMatch ? Math.round(urnSale * 0.2) : 0;
       const decayPenalty = Math.round(c.basePayout * (c.decayLevel / 100) * 0.8);
       const lateService =
         c.serviceDateMs != null && Date.now() > c.serviceDateMs;
@@ -1031,13 +1086,20 @@ export const useGameStore = create<GameState>((set, get) => ({
               0,
               c.basePayout +
                 flowerBonus +
+                urnSale +
+                urnTasteBonus +
                 (c.isUrnFilled ? 150 : 0) -
                 decayPenalty
             );
 
       const remaining = state.cases.filter((x) => x.id !== c.id);
       const decayRepHit = Math.floor(c.decayLevel / 10);
+      const urnRep =
+        offered && fine === 0 && lateFine === 0
+          ? Math.min(12, offered.prestigeBonus + (urnMatch ? 4 : 0))
+          : 0;
 
+      // Offered urn is sold with the service (already removed from inventory)
       return {
         cash: state.cash + netPayout,
         reputation: Math.max(
@@ -1045,7 +1107,8 @@ export const useGameStore = create<GameState>((set, get) => ({
           fine > 0 || lateFine > 0
             ? state.reputation - 15 - decayRepHit
             : state.reputation +
-                Math.min(20, Math.floor(state.serviceRatingBonus / 5)) -
+                Math.min(20, Math.floor(state.serviceRatingBonus / 5)) +
+                urnRep -
                 decayRepHit
         ),
         legalAlert: alertMsg,
@@ -1079,4 +1142,49 @@ export const useGameStore = create<GameState>((set, get) => ({
     });
     return true;
   },
-}));
+}),
+    {
+      name: 'ossuarian-first-urn-v1',
+      version: 1,
+      partialize: (state) => ({
+        hasStartedGame: state.hasStartedGame,
+        cash: state.cash,
+        reputation: state.reputation,
+        ossilegiumCommuneGrams: state.ossilegiumCommuneGrams,
+        activeStation: state.activeStation,
+        cases: state.cases,
+        activeCaseId: state.activeCaseId,
+        inboxFiles: state.inboxFiles,
+        showroomInventory: state.showroomInventory,
+        urnInventory: state.urnInventory,
+        placedFlowers: state.placedFlowers,
+        serviceRatingBonus: state.serviceRatingBonus,
+        cremulatorOwned: state.cremulatorOwned,
+        cremulatorDamaged: state.cremulatorDamaged,
+        cremationBurnActive: state.cremationBurnActive,
+        cremationBurnProgress: state.cremationBurnProgress,
+        cremationHeatNormalized: state.cremationHeatNormalized,
+        cremationDecayArrested: state.cremationDecayArrested,
+        retort: state.retort,
+      }),
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<GameState>;
+        const cases = (p.cases ?? current.cases).map((c) => ({
+          ...c,
+          preferredUrnMaterial:
+            c.preferredUrnMaterial ?? URN_MATERIALS[0],
+          offeredUrnId: c.offeredUrnId ?? null,
+        }));
+        return {
+          ...current,
+          ...p,
+          cases,
+          urnInventory: p.urnInventory ?? current.urnInventory,
+          showroomInventory: p.showroomInventory ?? current.showroomInventory,
+          intakeToast: null,
+          legalAlert: null,
+        };
+      },
+    }
+  )
+);
