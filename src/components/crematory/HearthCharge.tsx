@@ -228,7 +228,7 @@ export const HearthCharge: React.FC<{
               const p = pushAway(48 + i * 8, 28, contact, nudge + 4 + i);
               return (
                 <div
-                  key={i}
+                  key={`burn-femur-${i}`}
                   className="transition-transform duration-150 ease-out"
                   style={{
                     transform: `translate(${p.tx}px, ${p.ty}px) rotate(${p.rot * 0.1}deg)`,
@@ -246,7 +246,7 @@ export const HearthCharge: React.FC<{
                 const p = pushAway(35 + i * 5, 50, contact, nudge + i);
                 return (
                   <div
-                    key={i}
+                    key={`burn-shard-${i}`}
                     className="w-4 h-3 transition-transform duration-150 ease-out"
                     style={{
                       transform: `translate(${p.tx}px, ${p.ty}px) rotate(${i * 18 + p.rot}deg)`,
