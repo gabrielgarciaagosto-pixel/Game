@@ -37,6 +37,8 @@ export const ServiceMusicAudio: React.FC = () => {
   const orderRef = useRef<string[]>([]);
   const indexRef = useRef(0);
   const playingRef = useRef(false);
+  /** Tracks last preferredMusicId so clearing a pick restarts the default bed. */
+  const lastPreferredRef = useRef<string | null | undefined>(undefined);
 
   const chapelLayouts = useGameStore((s) => s.chapelLayouts);
 
@@ -115,20 +117,38 @@ export const ServiceMusicAudio: React.FC = () => {
       const manifest = await loadServicePlaylist();
       if (cancelled) return;
       manifestRef.current = manifest;
+      let forceRestart = false;
+      const prevPreferred = lastPreferredRef.current;
+      lastPreferredRef.current = preferredMusicId;
       // Player/family music pick: prefer that track; else full playlist order
-      if (preferredMusicId && manifest.tracks.some((t) => t.id === preferredMusicId)) {
-        orderRef.current = [
+      if (
+        preferredMusicId &&
+        manifest.tracks.some((t) => t.id === preferredMusicId)
+      ) {
+        const nextOrder = [
           preferredMusicId,
-          ...manifest.tracks.map((t) => t.id).filter((id) => id !== preferredMusicId),
+          ...manifest.tracks
+            .map((t) => t.id)
+            .filter((id) => id !== preferredMusicId),
         ];
+        if (orderRef.current[0] !== preferredMusicId) {
+          forceRestart = true;
+        }
+        orderRef.current = nextOrder;
         indexRef.current = 0;
+      } else if (prevPreferred != null && preferredMusicId == null) {
+        // Cleared pick → restore default playlist and crossfade
+        orderRef.current = buildPlayOrder(manifest);
+        indexRef.current = 0;
+        forceRestart = true;
       } else if (orderRef.current.length === 0) {
         orderRef.current = buildPlayOrder(manifest);
         indexRef.current = 0;
       }
       if (
         playingRef.current &&
-        isServiceBedId(audioManager.getCurrentId())
+        isServiceBedId(audioManager.getCurrentId()) &&
+        !forceRestart
       ) {
         return;
       }

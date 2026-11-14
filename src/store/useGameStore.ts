@@ -187,7 +187,8 @@ interface GameState {
    * Wipe gameplay progress in memory (title screen). Pair with pausing
    * persist writes so Capacitor reloads cannot resurrect the old save.
    */
-  hardResetGameState: () => void;
+  /** Wipe to title. Pass toast text for player-facing resets; omit for DEV default. */
+  hardResetGameState: (toast?: string | null) => void;
   setActiveStation: (station: StationId) => void;
   setComputerOpenApp: (app: 'VR441' | 'SHOP' | 'BANK' | null) => void;
   setBankOpenTab: (tab: 'overview' | 'loans' | 'listings' | null) => void;
@@ -773,12 +774,15 @@ export const useGameStore = create<GameState>()(
       };
     }),
 
-  hardResetGameState: () =>
+  hardResetGameState: (toast) =>
     set({
       ...freshPersistedGameFields(),
       computerOpenApp: null,
       bankOpenTab: null,
-      intakeToast: '[DEV] Game reset — back at title.',
+      intakeToast:
+        toast === undefined
+          ? '[DEV] Game reset — back at title.'
+          : toast,
       legalAlert: null,
       serviceFeedback: null,
     }),
@@ -1356,7 +1360,9 @@ export const useGameStore = create<GameState>()(
       /* ignore */
     }
     pauseGamePersistWrites();
-    get().hardResetGameState();
+    get().hardResetGameState(
+      'Foreclosed — the funeral home was seized. Start a new practice when ready.'
+    );
     window.setTimeout(() => {
       try {
         resumeGamePersistWrites();
@@ -2641,12 +2647,23 @@ export const useGameStore = create<GameState>()(
               null,
           };
         });
+        // Legacy saves may still have EMPORIUM; shop now lives on Computer.
+        const rawStation = (p.activeStation ??
+          current.activeStation) as StationId | 'EMPORIUM';
+        const fromEmporium = rawStation === 'EMPORIUM';
+        const activeStation = fromEmporium
+          ? ('COMPUTER' as const)
+          : (rawStation as StationId);
         return {
           ...current,
           ...p,
           cases,
           inboxFiles,
           chapelLayouts,
+          activeStation,
+          computerOpenApp: fromEmporium
+            ? 'SHOP'
+            : current.computerOpenApp ?? null,
           urnInventory: p.urnInventory ?? current.urnInventory,
           casketInventory: p.casketInventory ?? current.casketInventory,
           chapelOwnedDecor: p.chapelOwnedDecor ?? current.chapelOwnedDecor,
