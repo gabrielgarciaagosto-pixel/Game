@@ -20,6 +20,16 @@ export async function hapticIronRake(): Promise<void> {
   }
 }
 
+/** Soft thud when any crematory tool brushes remains (throttled by caller). */
+export async function hapticBoneContact(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    await Haptics.impact({ style: ImpactStyle.Medium });
+  } catch {
+    // Web / unsupported — ignore
+  }
+}
+
 export async function hapticHammer(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   try {

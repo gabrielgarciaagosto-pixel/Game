@@ -3,7 +3,7 @@ import { CaseTransferBar } from './CaseTransferBar';
 import type { Rank, SweepTool } from '../types/game';
 import { displayCaseName } from '../types/game';
 import { caseAtLocation, useGameStore } from '../store/useGameStore';
-import { hapticIronRake } from '../utils/haptics';
+import { hapticBoneContact, hapticIronRake } from '../utils/haptics';
 import { getCremationTargets } from '../utils/mortuaryMath';
 import {
   PRIMARY_SP_MAX,
@@ -14,10 +14,19 @@ import {
   randomPurgeMs,
   retortProgress,
 } from '../retort/retortTypes';
-import { HearthCharge } from './crematory/HearthCharge';
+import {
+  HearthCharge,
+  type BoneContact,
+} from './crematory/HearthCharge';
 import { ToolArt } from './crematory/crematoryArt';
 import { SetPointDial } from './crematory/SetPointDial';
 import { ToolDrawer } from './crematory/ToolDrawer';
+import {
+  createCircularStirState,
+  feedCircularStir,
+  nearRemains,
+  resetCircularStir,
+} from './crematory/stirGesture';
 
 type BonePhase = 'INTACT' | 'CHARRING' | 'CALCINING' | 'FRAGMENTING' | 'ASH';
 
@@ -244,12 +253,22 @@ export const CremationMiniGame: React.FC = () => {
   const [toolPos, setToolPos] = useState({ x: 52, y: 40 });
   const [toolGlide, setToolGlide] = useState(false);
   const [boneNudge, setBoneNudge] = useState(0);
+  const [boneContact, setBoneContact] = useState<BoneContact | null>(null);
+  const [contactHot, setContactHot] = useState(false);
   const [hearthHint, setHearthHint] = useState<string | null>(null);
   const [dialChamber, setDialChamber] = useState<'PRIMARY' | 'SECONDARY'>(
     'PRIMARY'
   );
   const [dust, setDust] = useState<
-    { id: number; x: number; y: number; dx: number; dy: number; size: number; tone: string }[]
+    {
+      id: number;
+      x: number;
+      y: number;
+      dx: number;
+      dy: number;
+      size: number;
+      tone: string;
+    }[]
   >([]);
   const [scrape, setScrape] = useState<{ id: number; x: number; y: number } | null>(
     null
@@ -258,9 +277,12 @@ export const CremationMiniGame: React.FC = () => {
   const chamberRef = useRef<HTMLDivElement>(null);
   const lastHaptic = useRef(0);
   const lastStirAt = useRef(0);
+  const lastContactFx = useRef(0);
   const dustSeq = useRef(1);
   const prevToolPoint = useRef<{ x: number; y: number } | null>(null);
   const strokeRef = useRef({ minY: 100, accum: 0, credited: false });
+  const circularStirRef = useRef(createCircularStirState());
+  const contactHotTimer = useRef<number | null>(null);
 
   const {
     blowerOn,
@@ -361,7 +383,9 @@ export const CremationMiniGame: React.FC = () => {
       mediumBonesLeft: 100,
       fineAshLeft: 100,
     });
-    setHearthHint('Calcination finished. Open Tools and sweep downward.');
+    setHearthHint(
+      'Calcination finished. Open Tools — sweep; contact nudges bones.'
+    );
   }, [progress, phase, patchRetort]);
 
   const hintAt = useRef(0);
@@ -375,8 +399,13 @@ export const CremationMiniGame: React.FC = () => {
     }, 1600);
   };
 
-  const spawnDust = (x: number, y: number, kind: 'ash' | 'char') => {
-    const motes = Array.from({ length: kind === 'ash' ? 14 : 7 }).map((_, i) => {
+  const spawnDust = (
+    x: number,
+    y: number,
+    kind: 'ash' | 'char' | 'ember'
+  ) => {
+    const count = kind === 'ember' ? 10 : kind === 'ash' ? 14 : 7;
+    const motes = Array.from({ length: count }).map((_, i) => {
       const id = dustSeq.current++;
       const angle = -Math.PI / 2 + (i / 12) * Math.PI - 0.4;
       const dist = 18 + (i % 5) * 10;
@@ -386,16 +415,51 @@ export const CremationMiniGame: React.FC = () => {
         y,
         dx: Math.cos(angle) * dist,
         dy: Math.sin(angle) * dist - 10,
-        size: kind === 'ash' ? 7 + (i % 4) * 3 : 5 + (i % 3) * 2,
-        tone: kind === 'ash' ? '0.95' : '0.55',
+        size:
+          kind === 'ember'
+            ? 4 + (i % 3) * 2
+            : kind === 'ash'
+              ? 7 + (i % 4) * 3
+              : 5 + (i % 3) * 2,
+        tone:
+          kind === 'ember' ? 'ember' : kind === 'ash' ? '0.95' : '0.55',
       };
     });
-    setDust((prev) => [...prev.slice(-24), ...motes]);
+    setDust((prev) => [...prev.slice(-28), ...motes]);
     window.setTimeout(() => {
       const ids = new Set(motes.map((m) => m.id));
       setDust((prev) => prev.filter((m) => !ids.has(m.id)));
     }, 980);
     setScrape({ id: dustSeq.current++, x, y });
+  };
+
+  /** Shared contact FX for every cremation tool over remains. */
+  const applyToolContact = (
+    x: number,
+    y: number,
+    moving: boolean
+  ) => {
+    if (!moving || !nearRemains(x, y)) return false;
+    const now = Date.now();
+    setBoneNudge((n) => n + 1);
+    setBoneContact((prev) => ({ x, y, n: (prev?.n ?? 0) + 1 }));
+    setContactHot(true);
+    if (contactHotTimer.current != null) {
+      window.clearTimeout(contactHotTimer.current);
+    }
+    contactHotTimer.current = window.setTimeout(
+      () => setContactHot(false),
+      220
+    );
+    if (now - lastContactFx.current > 90) {
+      lastContactFx.current = now;
+      spawnDust(x, y, phase === 'SWEEP' ? 'char' : 'ember');
+    }
+    if (now - lastHaptic.current > 140) {
+      lastHaptic.current = now;
+      void hapticBoneContact();
+    }
+    return true;
   };
 
   const pointInChamber = (clientX: number, clientY: number) => {
@@ -481,23 +545,33 @@ export const CremationMiniGame: React.FC = () => {
     prevToolPoint.current = point;
     setToolPos(point);
 
+    const dist = Math.hypot(point.x - prev.x, point.y - prev.y);
+    const moving = dist > 1.2;
     const dy = point.y - prev.y;
     const overHearth =
-      point.x > 14 && point.x < 88 && point.y > 54 && point.y < 96;
+      point.x > 10 && point.x < 92 && point.y > 48 && point.y < 98;
+
+    // Contact feedback for ALL tools (rod, rake, brushes)
+    applyToolContact(point.x, point.y, moving);
 
     if (activeTool === 'STIRRING_ROD') {
       const live = useGameStore.getState().retort;
-      const dist = Math.hypot(point.x - prev.x, point.y - prev.y);
       if (live.doorOpen <= STIR_DOOR_MIN) {
-        if (dist > 6) showHint('Open the door past 16% to stir.');
+        if (dist > 5) showHint('Open the door past 16% to stir.');
+        resetCircularStir(circularStirRef.current);
         return;
       }
-      if (
-        live.phase === 'BURN' &&
-        live.primaryOn &&
-        dist > 7 &&
-        Date.now() - lastStirAt.current > 420
-      ) {
+      if (live.phase !== 'BURN' || !live.primaryOn) {
+        if (dist > 6) showHint('Primary must be firing to stir.');
+        resetCircularStir(circularStirRef.current);
+        return;
+      }
+      if (!nearRemains(point.x, point.y)) {
+        // Linear wanders outside the charge don't build stir credit
+        return;
+      }
+      const credited = feedCircularStir(circularStirRef.current, point);
+      if (credited && Date.now() - lastStirAt.current > 280) {
         lastStirAt.current = Date.now();
         useGameStore.setState((s) => ({
           retort: {
@@ -509,15 +583,17 @@ export const CremationMiniGame: React.FC = () => {
             ),
           },
         }));
-        setBoneNudge((n) => n + 1);
-        if (Date.now() - lastHaptic.current > 180) {
+        spawnDust(point.x, point.y, 'ember');
+        if (Date.now() - lastHaptic.current > 100) {
           lastHaptic.current = Date.now();
           void hapticIronRake();
         }
+        showHint('Circular stir — keep orbiting the charge.');
       }
       return;
     }
 
+    // Sweep tools: downstroke still clears piles; contact already nudged bones
     if (dy < -1.5) {
       strokeRef.current = { minY: point.y, accum: 0, credited: false };
       return;
@@ -951,26 +1027,37 @@ export const CremationMiniGame: React.FC = () => {
                 bonePhase={bonePhase}
                 progress={progress}
                 nudge={boneNudge}
+                contact={boneContact}
+                contactHot={contactHot}
                 largeBonesLeft={largeBonesLeft}
                 mediumBonesLeft={mediumBonesLeft}
                 fineAshLeft={fineAshLeft}
               />
 
-              {dust.map((mote) => (
-                <span
-                  key={mote.id}
-                  className="ash-mote"
-                  style={{
-                    left: `${mote.x}%`,
-                    top: `${mote.y}%`,
-                    width: mote.size,
-                    height: mote.size,
-                    opacity: mote.tone,
-                    ['--dx' as string]: `${mote.dx}px`,
-                    ['--dy' as string]: `${mote.dy}px`,
-                  }}
-                />
-              ))}
+              {dust.map((mote) => {
+                const ember = mote.tone === 'ember';
+                return (
+                  <span
+                    key={mote.id}
+                    className="ash-mote"
+                    style={{
+                      left: `${mote.x}%`,
+                      top: `${mote.y}%`,
+                      width: mote.size,
+                      height: mote.size,
+                      opacity: ember ? 0.95 : Number(mote.tone) || 0.8,
+                      background: ember
+                        ? 'radial-gradient(circle, #fdba74 0%, #ea580c 55%, transparent 75%)'
+                        : undefined,
+                      boxShadow: ember
+                        ? '0 0 8px rgba(249,115,22,0.85)'
+                        : undefined,
+                      ['--dx' as string]: `${mote.dx}px`,
+                      ['--dy' as string]: `${mote.dy}px`,
+                    }}
+                  />
+                );
+              })}
               {scrape && (
                 <span
                   key={scrape.id}
@@ -1003,9 +1090,11 @@ export const CremationMiniGame: React.FC = () => {
                   style={{
                     left: `${toolPos.x}%`,
                     top: `${toolPos.y}%`,
+                    // Rotate 180° so tips point up/forward into the chamber
+                    // (handle toward the operator). Tip sits near the finger.
                     transform:
                       toolHeld || toolGlide
-                        ? 'translate(-50%, -82%)'
+                        ? 'translate(-50%, -18%) rotate(180deg)'
                         : undefined,
                     transition: toolHeld
                       ? 'none'
@@ -1025,6 +1114,7 @@ export const CremationMiniGame: React.FC = () => {
                       accum: 0,
                       credited: false,
                     };
+                    resetCircularStir(circularStirRef.current);
                     try {
                       (e.currentTarget as HTMLElement).setPointerCapture?.(
                         e.pointerId
@@ -1043,6 +1133,7 @@ export const CremationMiniGame: React.FC = () => {
                       toolHeldRef.current = false;
                       setToolHeld(false);
                       prevToolPoint.current = null;
+                      resetCircularStir(circularStirRef.current);
                       window.removeEventListener('pointermove', move);
                       window.removeEventListener('pointerup', end);
                       window.removeEventListener('pointercancel', end);
@@ -1061,7 +1152,9 @@ export const CremationMiniGame: React.FC = () => {
 
               {!activeTool && (
                 <div className="absolute bottom-2 left-2 right-2 z-20 text-center text-[10px] text-amber-100/90 bg-black/50 rounded px-2 py-1 pointer-events-none">
-                  Open Tools, then hold the tool and move it over the hearth
+                  {phase === 'BURN'
+                    ? 'Open Tools — stir with circular orbits over the charge'
+                    : 'Open Tools — sweep remains; tools nudge bones on contact'}
                 </div>
               )}
 

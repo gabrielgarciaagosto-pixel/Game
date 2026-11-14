@@ -10,22 +10,22 @@ export const CREMATORY_TOOLS: {
   {
     id: 'STIRRING_ROD',
     name: 'Stirring Rod',
-    blurb: 'Hold and move through the flame. Door must be past 16%.',
+    blurb: 'Orbit the charge in circles. Door past 16%; primary on.',
   },
   {
     id: 'IRON_RAKE',
     name: 'Iron Rake',
-    blurb: 'Sweep large bones from top to bottom.',
+    blurb: 'Sweep large bones downward. Nudges remains on contact.',
   },
   {
     id: 'BRISTLE_BRUSH',
     name: 'Iron Brush',
-    blurb: 'Sweep calcined fragments downward.',
+    blurb: 'Sweep fragments downward. Contact shakes the pile.',
   },
   {
     id: 'HAND_BRUSH',
     name: 'Hand Brush',
-    blurb: 'Sweep fine ash downward. Raises dust.',
+    blurb: 'Sweep fine ash. Raises dust when it kisses the heap.',
   },
 ];
 
@@ -62,8 +62,11 @@ export const ToolDrawer: React.FC<{
                     : 'border-zinc-600 bg-zinc-900/80'
                 }`}
               >
-                <div className="w-14 h-20 shrink-0 rounded-lg bg-gradient-to-b from-zinc-700 to-zinc-950 border border-zinc-600 flex items-end justify-center overflow-hidden">
-                  <ToolArt tool={tool.id} className="h-[4.6rem] w-auto" />
+                <div className="w-14 h-20 shrink-0 rounded-lg bg-gradient-to-b from-zinc-700 to-zinc-950 border border-zinc-600 flex items-center justify-center overflow-hidden">
+                  <ToolArt
+                    tool={tool.id}
+                    className="h-[4.6rem] w-auto rotate-180"
+                  />
                 </div>
                 <div className="min-w-0">
                   <div className="text-sm font-bold text-stone-100">{tool.name}</div>

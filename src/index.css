@@ -98,10 +98,10 @@ canvas {
 @keyframes tool-bob {
   0%,
   100% {
-    transform: translate(-50%, -82%) translateY(0);
+    transform: translate(-50%, -18%) rotate(180deg) translateY(0);
   }
   50% {
-    transform: translate(-50%, -82%) translateY(-7px);
+    transform: translate(-50%, -18%) rotate(180deg) translateY(7px);
   }
 }
 
