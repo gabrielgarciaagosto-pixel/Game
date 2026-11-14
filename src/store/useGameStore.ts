@@ -54,6 +54,14 @@ import {
   type OwnedProperty,
 } from '../data/bankProducts';
 import {
+  EMPTY_FLEET_ASSIGNMENT,
+  getFleetVehicle,
+  normalizeFleetAssignment,
+  resolveCortege,
+  type FleetAssignment,
+  type FleetClass,
+} from '../data/funeralFleets';
+import {
   BANK_FORECLOSURE_AFTER_MS,
   BANK_WARNING_AFTER_MS,
   BANK_WARNING_MESSAGE,
@@ -119,7 +127,7 @@ interface GameState {
    * Which Computer desktop app to open (null = desktop).
    * EMPORIUM redirects here with 'SHOP'. Not persisted.
    */
-  computerOpenApp: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | null;
+  computerOpenApp: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS' | null;
   /** Optional deep-link tab when opening BANK (not persisted) */
   bankOpenTab: 'overview' | 'loans' | 'listings' | null;
   cases: DecedentCase[];
@@ -151,6 +159,13 @@ interface GameState {
     tipCash: number;
     payoutBoostPct: number;
     reputationDelta: number;
+    fleetRecovery: string | null;
+    fleetEscort: string | null;
+    fleetCoach: string | null;
+    fleetRep: number;
+    fleetCash: number;
+    intermentThisService: number;
+    intermentTotal: number;
   } | null;
   /** Computer portal — cremation permit filing history (wiped on Reset Game) */
   permitSubmissions: PermitSubmissionRecord[];
@@ -171,6 +186,12 @@ interface GameState {
   ownedProperty: OwnedProperty;
   /** Open personal loans + mortgages (persisted) */
   activeLoans: ActiveBankLoan[];
+  /** Owned Lampblack cortege vehicle ids (persisted) */
+  ownedFleetIds: string[];
+  /** Explicit cortege slots; null = auto-best in that class (persisted) */
+  fleetAssignment: FleetAssignment;
+  /** Lifetime interment from funeral coaches (persisted) */
+  intermentScore: number;
   /** Working cremulator available for urn processing */
   cremulatorOwned: boolean;
   cremulatorDamaged: boolean;
@@ -191,8 +212,10 @@ interface GameState {
   hardResetGameState: (toast?: string | null) => void;
   setActiveStation: (station: StationId) => void;
   setComputerOpenApp: (
-    app: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | null
+    app: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS' | null
   ) => void;
+  buyFleetVehicle: (id: string) => { ok: boolean; message: string };
+  assignFleetVehicle: (fleetClass: FleetClass, id: string | null) => void;
   setBankOpenTab: (tab: 'overview' | 'loans' | 'listings' | null) => void;
   patchRetort: (partial: Partial<RetortMachine>) => void;
   ensureRetortForCase: (caseId: string) => void;
@@ -724,6 +747,9 @@ export function freshPersistedGameFields() {
     bankForeclosed: false,
     ownedProperty: ownedFromListing(STARTER_PROPERTY, 0),
     activeLoans: [] as ActiveBankLoan[],
+    ownedFleetIds: [] as string[],
+    fleetAssignment: { ...EMPTY_FLEET_ASSIGNMENT },
+    intermentScore: 0,
   };
 }
 
@@ -2018,6 +2044,59 @@ export const useGameStore = create<GameState>()(
     return { ok: true, message: `Now operating: ${listing.label}` };
   },
 
+  buyFleetVehicle: (id) => {
+    const state = get();
+    const vehicle = getFleetVehicle(id);
+    if (!vehicle) return { ok: false, message: 'Vehicle not in the catalog' };
+    if (state.ownedFleetIds.includes(vehicle.id)) {
+      return { ok: false, message: `${vehicle.name} is already in the garage` };
+    }
+    if (state.cash < vehicle.price) {
+      return {
+        ok: false,
+        message: `Need $${vehicle.price.toLocaleString()} for ${vehicle.name}`,
+      };
+    }
+    const now = gameNow();
+    set({
+      cash: state.cash - vehicle.price,
+      ownedFleetIds: [...state.ownedFleetIds, vehicle.id],
+      financeLedger: [
+        {
+          id: `led_fleet_${now}`,
+          at: now,
+          label: `Fleet — ${vehicle.name}`,
+          amount: -vehicle.price,
+          kind: 'OTHER' as const,
+        },
+        ...state.financeLedger,
+      ].slice(0, 80),
+      intakeToast: `Garage: ${vehicle.name}`,
+    });
+    return { ok: true, message: `${vehicle.name} is in the garage` };
+  },
+
+  assignFleetVehicle: (fleetClass, id) => {
+    const state = get();
+    if (id) {
+      const vehicle = getFleetVehicle(id);
+      if (!vehicle || vehicle.fleetClass !== fleetClass) return;
+      if (!state.ownedFleetIds.includes(id)) return;
+    }
+    const key =
+      fleetClass === 'RECOVERY'
+        ? 'recovery'
+        : fleetClass === 'ESCORT'
+          ? 'escort'
+          : 'coach';
+    set({
+      fleetAssignment: {
+        ...normalizeFleetAssignment(state.fleetAssignment),
+        [key]: id,
+      },
+    });
+  },
+
   tickBankLoans: () => {
     const state = get();
     if (!state.hasStartedGame || state.bankForeclosed) return;
@@ -2409,6 +2488,17 @@ export const useGameStore = create<GameState>()(
         state.ownedProperty.salesMult ?? 1
       );
 
+      const cortege = resolveCortege(
+        state.ownedFleetIds,
+        state.fleetAssignment
+      );
+      const fleetRep = serviceFailed ? 0 : (cortege.recovery?.repBonus ?? 0);
+      const fleetCash = serviceFailed ? 0 : (cortege.escort?.moneyBonus ?? 0);
+      const fleetInterment = serviceFailed
+        ? 0
+        : (cortege.coach?.interment ?? 0);
+      const intermentTotal = state.intermentScore + fleetInterment;
+
       const netPayout = serviceFailed
         ? -(fine + lateFine)
         : Math.max(
@@ -2424,7 +2514,7 @@ export const useGameStore = create<GameState>()(
                 (c.isUrnFilled ? 150 : 0) -
                 decayPenalty) *
                 salesMult
-            )
+            ) + fleetCash
           );
 
       const remaining = state.cases.filter((x) => x.id !== c.id);
@@ -2478,9 +2568,11 @@ export const useGameStore = create<GameState>()(
             : state.reputation +
                 chapelRewards.reputationDelta +
                 urnRep +
-                casketRep -
+                casketRep +
+                fleetRep -
                 decayRepHit
         ),
+        intermentScore: intermentTotal,
         legalAlert: alertMsg,
         serviceFeedback: serviceFailed
           ? null
@@ -2492,13 +2584,20 @@ export const useGameStore = create<GameState>()(
               tipCash,
               payoutBoostPct: chapelRewards.payoutBoostPct,
               reputationDelta:
-                chapelRewards.reputationDelta + urnRep + casketRep,
+                chapelRewards.reputationDelta + urnRep + casketRep + fleetRep,
+              fleetRecovery: cortege.recovery?.name ?? null,
+              fleetEscort: cortege.escort?.name ?? null,
+              fleetCoach: cortege.coach?.name ?? null,
+              fleetRep,
+              fleetCash,
+              intermentThisService: fleetInterment,
+              intermentTotal,
             },
         intakeToast: serviceFailed
           ? state.intakeToast
-          : honored.length > 0
-            ? `Family thanks — honored ${honored.length} preference${honored.length === 1 ? '' : 's'} (+${chapelRewards.payoutBoostPct}% / tip $${tipCash})`
-            : `Service complete — tip $${tipCash}`,
+          : `Service complete — tip $${tipCash}${
+              fleetInterment > 0 ? ` · Interment +${fleetInterment}` : ''
+            }${fleetCash > 0 ? ` · cortege +$${fleetCash}` : ''}`,
         cases: remaining,
         inboxFiles: state.inboxFiles.filter((f) => f.id !== c.id),
         urnInventory: inventory,
@@ -2536,7 +2635,7 @@ export const useGameStore = create<GameState>()(
 }),
     {
       name: 'ossuarian-first-urn-v1',
-      version: 4,
+      version: 5,
       migrate: (persisted, version) => {
         const p = (persisted ?? {}) as Record<string, unknown>;
         const rawCases = (p.cases as DecedentCase[] | undefined) ?? [];
@@ -2579,6 +2678,12 @@ export const useGameStore = create<GameState>()(
               null,
           };
         });
+        const fleets = {
+          ownedFleetIds: Array.isArray(p.ownedFleetIds) ? p.ownedFleetIds : [],
+          fleetAssignment: normalizeFleetAssignment(p.fleetAssignment),
+          intermentScore:
+            typeof p.intermentScore === 'number' ? p.intermentScore : 0,
+        };
         if (version >= 4) {
           return {
             ...p,
@@ -2593,6 +2698,7 @@ export const useGameStore = create<GameState>()(
             bankForeclosed: p.bankForeclosed ?? false,
             ownedProperty: p.ownedProperty ?? ownedFromListing(STARTER_PROPERTY, 0),
             activeLoans: p.activeLoans ?? [],
+            ...fleets,
           } as never;
         }
         return {
@@ -2608,6 +2714,9 @@ export const useGameStore = create<GameState>()(
           bankForeclosed: p.bankForeclosed ?? false,
           ownedProperty: ownedFromListing(STARTER_PROPERTY, 0),
           activeLoans: [],
+          ownedFleetIds: [],
+          fleetAssignment: { ...EMPTY_FLEET_ASSIGNMENT },
+          intermentScore: 0,
         } as never;
       },
       partialize: (state) => ({
@@ -2643,6 +2752,9 @@ export const useGameStore = create<GameState>()(
         bankForeclosed: state.bankForeclosed,
         ownedProperty: state.ownedProperty,
         activeLoans: state.activeLoans,
+        ownedFleetIds: state.ownedFleetIds,
+        fleetAssignment: state.fleetAssignment,
+        intermentScore: state.intermentScore,
       }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<GameState>;
@@ -2723,6 +2835,16 @@ export const useGameStore = create<GameState>()(
             current.ownedProperty ??
             ownedFromListing(STARTER_PROPERTY, 0),
           activeLoans: p.activeLoans ?? current.activeLoans ?? [],
+          ownedFleetIds: Array.isArray(p.ownedFleetIds)
+            ? p.ownedFleetIds
+            : current.ownedFleetIds ?? [],
+          fleetAssignment: normalizeFleetAssignment(
+            p.fleetAssignment ?? current.fleetAssignment
+          ),
+          intermentScore:
+            typeof p.intermentScore === 'number'
+              ? p.intermentScore
+              : current.intermentScore ?? 0,
           intakeToast: null,
           legalAlert: null,
           serviceFeedback: null,

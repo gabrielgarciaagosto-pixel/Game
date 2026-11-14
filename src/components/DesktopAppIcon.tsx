@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type DesktopIconKind = 'VR441' | 'SHOP' | 'BANK' | 'REALTY';
+export type DesktopIconKind = 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS';
 
 const META: Record<
   DesktopIconKind,
@@ -10,6 +10,7 @@ const META: Record<
   SHOP: { label: 'Funerary Emporium', short: 'Shop' },
   BANK: { label: 'First National Bank', short: 'Bank' },
   REALTY: { label: 'Lychgate Realty', short: 'Realty' },
+  FLEETS: { label: 'Funeral Fleets', short: 'Fleets' },
 };
 
 /** Crisp retro desktop icons — glyph art, phosphor-friendly edges. */
@@ -23,13 +24,13 @@ export const DesktopAppIcon: React.FC<{
       type="button"
       onClick={onOpen}
       style={{ touchAction: 'manipulation' }}
-      className="desktop-app-icon flex flex-col items-center gap-1.5 p-2 rounded active:bg-white/10 group"
+      className="desktop-app-icon flex flex-col items-center gap-1.5 p-1.5 rounded active:bg-white/10 group min-w-0"
     >
-      <div className="desktop-icon-face relative w-[3.35rem] h-[3.35rem] rounded-[0.35rem] border border-white/25 shadow-[0_0_12px_rgba(120,255,180,0.18),inset_0_1px_0_rgba(255,255,255,0.25)] overflow-hidden">
+      <div className="desktop-icon-face relative w-[4.35rem] h-[4.35rem] rounded-[0.4rem] border border-white/30 shadow-[0_0_14px_rgba(120,255,180,0.22),inset_0_1px_0_rgba(255,255,255,0.28)] overflow-hidden">
         <IconArt kind={kind} />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/15 to-transparent" />
       </div>
-      <span className="desktop-icon-label text-center text-[10px] font-semibold leading-tight max-w-[5.5rem] text-[#c8f5d8] drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] group-active:text-white">
+      <span className="desktop-icon-label text-center text-[13px] font-semibold leading-[1.15] max-w-[9.2rem] text-[#e9ffef] drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)] group-active:text-white">
         {meta.label}
       </span>
     </button>
@@ -103,6 +104,31 @@ function IconArt({ kind }: { kind: DesktopIconKind }) {
           <rect x="32" y="26" width="8" height="8" fill="#3d3224" />
           <rect x="24" y="34" width="8" height="12" fill="#2a2118" />
           <rect x="8" y="46" width="40" height="3" fill="#e8d5a8" />
+        </svg>
+      );
+    case 'FLEETS':
+      return (
+        <svg viewBox="0 0 56 56" className="w-full h-full" aria-hidden>
+          <rect width="56" height="56" fill="#14110e" />
+          <path
+            d="M6 36 H14 L18 30 H24 L28 22 H46 L50 30 V36 H52 V42 H4 V38 Q4 36 6 36 Z"
+            fill="#1c3a32"
+          />
+          <path d="M28 24 H44 V34 H30 Z" fill="#0a1a16" />
+          <path
+            d="M30 25 C34 32, 38 24, 44 34"
+            fill="none"
+            stroke="#e6c98a"
+            strokeWidth="1.2"
+          />
+          <rect x="31" y="28" width="10" height="4" rx="0.4" fill="#6b3e22" />
+          <circle cx="16" cy="28" r="2.2" fill="#fff1c2" />
+          <circle cx="48" cy="30" r="1.8" fill="#fff1c2" />
+          <circle cx="18" cy="40" r="5" fill="#111" />
+          <circle cx="18" cy="40" r="2.2" fill="#e6c98a" />
+          <circle cx="42" cy="40" r="5" fill="#111" />
+          <circle cx="42" cy="40" r="2.2" fill="#e6c98a" />
+          <path d="M8 34 H16" stroke="#d4b56a" strokeWidth="0.8" />
         </svg>
       );
   }

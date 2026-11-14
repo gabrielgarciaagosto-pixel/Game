@@ -11,6 +11,7 @@ import { BankBrowser } from './BankBrowser';
 import { DesktopAppIcon } from './DesktopAppIcon';
 import { FakeBrowserChrome } from './FakeBrowserChrome';
 import { FuneraryEmporium } from './FuneraryEmporium';
+import { FleetBrowser } from './FleetBrowser';
 import { RealtyBrowser } from './RealtyBrowser';
 
 function digitsOnlyHhmm(raw: string): string {
@@ -21,7 +22,7 @@ function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-type DesktopApp = 'DESKTOP' | 'VR441' | 'SHOP' | 'BANK' | 'REALTY';
+type DesktopApp = 'DESKTOP' | 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS';
 
 /**
  * Office computer: CRT desktop + icons; apps open in a fake browser.
@@ -43,7 +44,8 @@ export const ComputerRoom: React.FC = () => {
     computerOpenApp === 'SHOP' ||
     computerOpenApp === 'VR441' ||
     computerOpenApp === 'BANK' ||
-    computerOpenApp === 'REALTY'
+    computerOpenApp === 'REALTY' ||
+    computerOpenApp === 'FLEETS'
       ? computerOpenApp
       : 'DESKTOP'
   );
@@ -58,7 +60,8 @@ export const ComputerRoom: React.FC = () => {
       computerOpenApp === 'SHOP' ||
       computerOpenApp === 'VR441' ||
       computerOpenApp === 'BANK' ||
-      computerOpenApp === 'REALTY'
+      computerOpenApp === 'REALTY' ||
+      computerOpenApp === 'FLEETS'
     ) {
       setApp(computerOpenApp);
     }
@@ -89,7 +92,7 @@ export const ComputerRoom: React.FC = () => {
     setComputerOpenApp(null);
   };
 
-  const openApp = (next: 'VR441' | 'SHOP' | 'BANK' | 'REALTY') => {
+  const openApp = (next: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS') => {
     setApp(next);
     setComputerOpenApp(next);
   };
@@ -144,11 +147,12 @@ export const ComputerRoom: React.FC = () => {
           </button>
         </div>
 
-        <div className="flex-1 p-4 grid grid-cols-2 gap-3 content-start max-w-lg">
+        <div className="flex-1 px-2 pt-2 pb-1 grid grid-cols-2 gap-x-1 gap-y-1 content-start max-w-lg overflow-y-auto">
           <DesktopAppIcon kind="VR441" onOpen={() => openApp('VR441')} />
           <DesktopAppIcon kind="SHOP" onOpen={() => openApp('SHOP')} />
           <DesktopAppIcon kind="BANK" onOpen={() => openApp('BANK')} />
           <DesktopAppIcon kind="REALTY" onOpen={() => openApp('REALTY')} />
+          <DesktopAppIcon kind="FLEETS" onOpen={() => openApp('FLEETS')} />
         </div>
 
         <div className="crt-taskbar relative z-[7] shrink-0 h-10 flex items-center justify-between px-3">
@@ -431,6 +435,26 @@ export const ComputerRoom: React.FC = () => {
             onClose={goDesktop}
           >
             <RealtyBrowser />
+          </FakeBrowserChrome>
+        </div>
+      )}
+
+      {app === 'FLEETS' && (
+        <div
+          className="absolute inset-0 z-20"
+          style={{
+            paddingTop: 'calc(var(--safe-top, 0px) + 0.35rem)',
+            paddingBottom: 'calc(var(--safe-bottom, 0px) + 0.35rem)',
+            paddingLeft: '0.35rem',
+            paddingRight: '0.35rem',
+          }}
+        >
+          <FakeBrowserChrome
+            title="Lampblack Coach & Motor"
+            url="https://www.lampblackcoach.biz/showroom"
+            onClose={goDesktop}
+          >
+            <FleetBrowser />
           </FakeBrowserChrome>
         </div>
       )}

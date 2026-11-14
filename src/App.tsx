@@ -43,6 +43,7 @@ function App() {
     startGame,
     cash,
     reputation,
+    intermentScore,
     ossilegiumCommuneGrams,
     cases,
     activeCaseId,
@@ -107,6 +108,9 @@ function App() {
                 </div>
                 <div className="font-mono text-amber-300 text-lg">
                   {reputation}
+                </div>
+                <div className="font-mono text-[11px] text-amber-100/80">
+                  Interment {intermentScore}
                 </div>
               </div>
               <div>

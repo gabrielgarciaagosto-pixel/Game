@@ -15,6 +15,7 @@ import {
   RARE_SCHEDULE,
   type RareTone,
 } from '../data/shopRotation';
+import { FLEET_CATALOG } from '../data/funeralFleets';
 import { URN_CATALOG } from '../data/urnCatalog';
 import { IDLE_RETORT } from '../retort/retortTypes';
 import {
@@ -262,6 +263,64 @@ export function maxFacilityUpgrades() {
 export function markActiveEmbalmed() {
   const ok = useGameStore.getState().markActiveCaseEmbalmed();
   toast(ok ? 'Active case marked embalmed' : 'No active case / already embalmed');
+}
+
+export function grantFleetCash() {
+  setCash(90_000);
+  toast('Cash set $90000 for fleet showroom');
+}
+
+export function ownAllFleets() {
+  useGameStore.setState({
+    ownedFleetIds: FLEET_CATALOG.map((v) => v.id),
+  });
+  toast(`Garage owns all ${FLEET_CATALOG.length} cortege vehicles`);
+}
+
+export function clearFleets() {
+  useGameStore.setState({
+    ownedFleetIds: [],
+    fleetAssignment: { recovery: null, escort: null, coach: null },
+  });
+  toast('Garage cleared (interment kept)');
+}
+
+export function zeroInterment() {
+  useGameStore.setState({ intermentScore: 0 });
+  toast('Interment score zeroed');
+}
+
+/** Embalmed burial so the real service payout shows cortege bonuses. */
+export function completeFleetDemoService() {
+  let state = useGameStore.getState();
+  if (!state.cases.some((c) => c.directive === 'BURIAL_VIEWING')) {
+    spawnDirective('BURIAL_VIEWING');
+  }
+  state = useGameStore.getState();
+  const target =
+    state.cases.find((c) => c.id === state.activeCaseId) ??
+    state.cases.find((c) => c.directive === 'BURIAL_VIEWING') ??
+    state.cases[0];
+  if (!target) {
+    toast('No case for fleet demo service');
+    return;
+  }
+  useGameStore.setState({
+    activeCaseId: target.id,
+    cases: state.cases.map((c) =>
+      c.id === target.id
+        ? {
+            ...c,
+            directive: 'BURIAL_VIEWING' as const,
+            isEmbalmed: true,
+            decayLevel: 0,
+            serviceDateMs: null,
+          }
+        : c
+    ),
+  });
+  useGameStore.getState().finalizeServiceAndNextCase('BURIAL', target.id);
+  toast('Demo burial finalized — cortege bonuses posted');
 }
 
 export function grantBankTestCash() {

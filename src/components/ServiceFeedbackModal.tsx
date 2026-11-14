@@ -9,13 +9,41 @@ export const ServiceFeedbackModal: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-[11000] bg-black/70 flex items-center justify-center p-5 select-none">
-      <div className="max-w-md w-full rounded-2xl border border-emerald-700/60 bg-slate-950 p-5 shadow-xl space-y-3">
+      <div className="max-w-md w-full max-h-[88vh] overflow-y-auto rounded-2xl border border-emerald-700/60 bg-slate-950 p-5 shadow-xl space-y-3">
         <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-400/80">
           Family feedback
         </p>
         <h3 className="text-lg font-bold text-emerald-100">
           {feedback.decedentName}
         </h3>
+        <div className="rounded-lg border border-amber-800/50 bg-amber-950/40 px-3 py-2 space-y-1">
+          <div className="text-[10px] uppercase tracking-wider text-amber-300/80">
+            Cortege
+          </div>
+          <ul className="text-sm text-amber-50 space-y-0.5">
+            <li>
+              Recovery:{' '}
+              {feedback.fleetRecovery
+                ? `${feedback.fleetRecovery} · +${feedback.fleetRep} reputation`
+                : 'none'}
+            </li>
+            <li>
+              Escort:{' '}
+              {feedback.fleetEscort
+                ? `${feedback.fleetEscort} · +$${feedback.fleetCash.toLocaleString()}`
+                : 'none'}
+            </li>
+            <li>
+              Coach:{' '}
+              {feedback.fleetCoach
+                ? `${feedback.fleetCoach} · Interment +${feedback.intermentThisService}`
+                : 'none'}
+            </li>
+          </ul>
+          <p className="text-[12px] text-amber-200/90">
+            House interment {feedback.intermentTotal}
+          </p>
+        </div>
         <p className="text-sm text-slate-300">
           Boost +{feedback.payoutBoostPct}% · tip ${feedback.tipCash} · rep +
           {feedback.reputationDelta}

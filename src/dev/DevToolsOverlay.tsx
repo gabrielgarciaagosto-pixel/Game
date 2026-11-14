@@ -435,6 +435,26 @@ export const DevToolsOverlay: React.FC = () => {
               />
             </Section>
 
+            <Section title="Fleets">
+              <Btn
+                label="Fleet cash $90k"
+                onClick={() => actions.grantFleetCash()}
+              />
+              <Btn
+                label="Own all cortege"
+                onClick={() => actions.ownAllFleets()}
+              />
+              <Btn label="Clear garage" onClick={() => actions.clearFleets()} />
+              <Btn
+                label="Zero interment"
+                onClick={() => actions.zeroInterment()}
+              />
+              <Btn
+                label="Demo burial (fleet)"
+                onClick={() => actions.completeFleetDemoService()}
+              />
+            </Section>
+
             <Section title="Audio">
               <Btn label="Mute all" onClick={() => actions.muteAllAudio()} />
               <Btn label="Unmute" onClick={() => actions.unmuteAudio()} />

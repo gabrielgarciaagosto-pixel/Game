@@ -11,6 +11,7 @@ export const MainHubMenu: React.FC = () => {
     activeCaseId,
     cash,
     reputation,
+    intermentScore,
     ossilegiumCommuneGrams,
     retort,
     urnInventory,
@@ -84,7 +85,7 @@ export const MainHubMenu: React.FC = () => {
     {
       id: 'COMPUTER' as const,
       title: 'COMPUTER',
-      subtitle: `Desktop · Vital Records · Shop (${urnOwned} urns)`,
+      subtitle: `Desktop · Records · Shop · Fleets (${urnOwned} urns)`,
       color: 'from-teal-950 via-slate-950 to-slate-950 border-teal-500/45',
     },
   ];
@@ -128,6 +129,10 @@ export const MainHubMenu: React.FC = () => {
           </div>
           <div className="bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-slate-800">
             REP <span className="text-sky-400 font-bold">{reputation}</span>
+          </div>
+          <div className="bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-amber-700/50">
+            INT{' '}
+            <span className="text-amber-200 font-bold">{intermentScore}</span>
           </div>
           <div className="bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-slate-800">
             OSS <span className="text-violet-300 font-bold">{ossilegiumCommuneGrams}g</span>
