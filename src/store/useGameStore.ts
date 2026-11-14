@@ -552,16 +552,34 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   ensureRetortForCase: (caseId) =>
     set((state) => {
-      if (state.retort.caseId === caseId && state.retort.phase !== 'IDLE') {
+      const r = state.retort;
+      // Resume the same chamber session
+      if (r.caseId === caseId) {
+        if (r.phase === 'IDLE' || r.phase === 'DONE') {
+          return {
+            retort: { ...IDLE_RETORT, caseId, phase: 'LOAD' },
+            cremationBurnActive: false,
+            cremationBurnProgress: 0,
+            cremationHeatNormalized: 0,
+            cremationDecayArrested: false,
+          };
+        }
         return state;
       }
-      if (state.retort.caseId === caseId) return state;
+      // Another case already occupies the retort — never wipe a live burn
+      if (
+        r.caseId != null &&
+        r.phase !== 'IDLE' &&
+        r.phase !== 'DONE'
+      ) {
+        return state;
+      }
       return {
-        retort: {
-          ...IDLE_RETORT,
-          caseId,
-          phase: 'LOAD',
-        },
+        retort: { ...IDLE_RETORT, caseId, phase: 'LOAD' },
+        cremationBurnActive: false,
+        cremationBurnProgress: 0,
+        cremationHeatNormalized: 0,
+        cremationDecayArrested: false,
       };
     }),
 
@@ -606,8 +624,15 @@ export const useGameStore = create<GameState>((set, get) => ({
       const cremationCase = state.cases.find(
         (c) => c.id === r.caseId && c.location === 'CREMATION'
       );
+      // Bound remains left the chamber — shut the machine down
       if (!cremationCase && r.phase !== 'IDLE') {
-        return state;
+        return {
+          retort: { ...IDLE_RETORT },
+          cremationBurnActive: false,
+          cremationBurnProgress: 0,
+          cremationHeatNormalized: 0,
+          cremationDecayArrested: false,
+        };
       }
 
       const targets = cremationCase
@@ -650,8 +675,11 @@ export const useGameStore = create<GameState>((set, get) => ({
           return c;
         }
 
+        const inActiveRetort =
+          c.location === 'CREMATION' && c.id === state.retort.caseId;
+
         if (
-          c.location === 'CREMATION' &&
+          inActiveRetort &&
           (state.cremationDecayArrested ||
             state.cremationBurnProgress >= 0.15)
         ) {
@@ -659,7 +687,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         }
 
         let rate = DECAY_PER_SEC;
-        if (c.location === 'CREMATION' && state.cremationBurnActive) {
+        if (inActiveRetort && state.cremationBurnActive) {
           rate =
             DECAY_PER_SEC *
             Math.max(0.08, 1 - state.cremationHeatNormalized * 0.92);
@@ -679,12 +707,23 @@ export const useGameStore = create<GameState>((set, get) => ({
       if (!target) return state;
       const now = Date.now();
       const nextStation = stationForLocation(location);
+      const leavingRetort =
+        state.retort.caseId === caseId && location !== 'CREMATION';
       return {
         activeCaseId: caseId,
         cases: updateCaseById(state.cases, caseId, (c) =>
           relocateCase(c, location, now)
         ),
         activeStation: nextStation ?? state.activeStation,
+        ...(leavingRetort
+          ? {
+              retort: { ...IDLE_RETORT },
+              cremationBurnActive: false,
+              cremationBurnProgress: 0,
+              cremationHeatNormalized: 0,
+              cremationDecayArrested: false,
+            }
+          : {}),
       };
     }),
 
@@ -709,12 +748,23 @@ export const useGameStore = create<GameState>((set, get) => ({
       const location = locationMap[station];
       if (!location) return { activeStation: station, activeCaseId: caseId };
       const now = Date.now();
+      const leavingRetort =
+        state.retort.caseId === caseId && location !== 'CREMATION';
       return {
         activeCaseId: caseId,
         activeStation: station,
         cases: updateCaseById(state.cases, caseId, (c) =>
           relocateCase(c, location, now)
         ),
+        ...(leavingRetort
+          ? {
+              retort: { ...IDLE_RETORT },
+              cremationBurnActive: false,
+              cremationBurnProgress: 0,
+              cremationHeatNormalized: 0,
+              cremationDecayArrested: false,
+            }
+          : {}),
       };
     }),
 

@@ -1,3 +1,5 @@
+import type { SweepTool } from '../types/game';
+
 export type RetortPhase = 'IDLE' | 'LOAD' | 'BURN' | 'SWEEP' | 'DONE';
 
 export type RetortAudioMode = 'OFF' | 'START' | 'LOOP';
@@ -20,6 +22,11 @@ export interface RetortMachine {
   earlyPrimaryStarts: number;
   thermalWarnings: number;
   audioMode: RetortAudioMode;
+  /** Persists across Back so sweep isn't redone after leaving */
+  largeBonesLeft: number;
+  mediumBonesLeft: number;
+  fineAshLeft: number;
+  activeTool: SweepTool | null;
 }
 
 export const SECONDARY_SP = 1700;
@@ -46,6 +53,10 @@ export const IDLE_RETORT: RetortMachine = {
   earlyPrimaryStarts: 0,
   thermalWarnings: 0,
   audioMode: 'OFF',
+  largeBonesLeft: 100,
+  mediumBonesLeft: 100,
+  fineAshLeft: 100,
+  activeTool: null,
 };
 
 export function randomPurgeMs(): number {

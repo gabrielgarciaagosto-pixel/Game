@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CaseTransferBar } from './CaseTransferBar';
-import type { Rank, SweepTool } from '../types/game';
+import type { Rank } from '../types/game';
 import { displayCaseName } from '../types/game';
 import { caseAtLocation, useGameStore } from '../store/useGameStore';
 import { hapticIronRake } from '../utils/haptics';
@@ -186,7 +186,15 @@ export const CremationMiniGame: React.FC = () => {
     resetRetort,
   } = useGameStore();
 
-  const currentCase = caseAtLocation(cases, 'CREMATION', activeCaseId);
+  // Prefer the case already locked in the retort so a second intake can't wipe it
+  const retortBoundCase =
+    retort.caseId != null
+      ? (cases.find(
+          (c) => c.id === retort.caseId && c.location === 'CREMATION'
+        ) ?? null)
+      : null;
+  const currentCase =
+    retortBoundCase ?? caseAtLocation(cases, 'CREMATION', activeCaseId);
 
   useEffect(() => {
     if (currentCase && currentCase.id !== activeCaseId) {
@@ -195,22 +203,27 @@ export const CremationMiniGame: React.FC = () => {
   }, [currentCase, activeCaseId, focusCase]);
 
   useEffect(() => {
-    if (currentCase) ensureRetortForCase(currentCase.id);
-  }, [currentCase, ensureRetortForCase]);
+    if (!currentCase) return;
+    // Only bind a new session when the chamber is free
+    if (
+      retort.caseId == null ||
+      retort.phase === 'IDLE' ||
+      retort.phase === 'DONE' ||
+      retort.caseId === currentCase.id
+    ) {
+      ensureRetortForCase(currentCase.id);
+    }
+  }, [currentCase, ensureRetortForCase, retort.caseId, retort.phase]);
 
   const targets = currentCase
     ? getCremationTargets(currentCase.weightLbs)
     : null;
 
   const [panelZoomed, setPanelZoomed] = useState(false);
-  const [activeTool, setActiveTool] = useState<SweepTool | null>(null);
   const [rakeHeld, setRakeHeld] = useState(false);
   const [rakePos, setRakePos] = useState({ x: 50, y: 40 });
   const [lastStirAt, setLastStirAt] = useState(0);
   const [boneNudge, setBoneNudge] = useState(0);
-  const [largeBonesLeft, setLargeBonesLeft] = useState(100);
-  const [mediumBonesLeft, setMediumBonesLeft] = useState(100);
-  const [fineAshLeft, setFineAshLeft] = useState(100);
 
   const chamberRef = useRef<HTMLDivElement>(null);
   const lastHaptic = useRef(0);
@@ -231,6 +244,10 @@ export const CremationMiniGame: React.FC = () => {
     earlyPrimaryStarts,
     thermalWarnings,
     phase,
+    largeBonesLeft,
+    mediumBonesLeft,
+    fineAshLeft,
+    activeTool,
   } = retort;
 
   const secondarySp = SECONDARY_SP;
@@ -291,18 +308,22 @@ export const CremationMiniGame: React.FC = () => {
       phase: phase === 'LOAD' || phase === 'IDLE' ? 'BURN' : phase,
       audioMode: retort.audioMode === 'OFF' ? 'START' : retort.audioMode,
     });
-    setActiveTool((t) => t ?? 'STIRRING_ROD');
+    if (!activeTool) patchRetort({ activeTool: 'STIRRING_ROD' });
   };
 
   useEffect(() => {
     if (phase === 'BURN') {
-      setActiveTool((t) =>
-        t === 'IRON_RAKE' || t === 'BRISTLE_BRUSH' || t === 'HAND_BRUSH'
-          ? 'STIRRING_ROD'
-          : t ?? 'STIRRING_ROD'
-      );
+      const tool = useGameStore.getState().retort.activeTool;
+      if (
+        tool === 'IRON_RAKE' ||
+        tool === 'BRISTLE_BRUSH' ||
+        tool === 'HAND_BRUSH' ||
+        tool == null
+      ) {
+        patchRetort({ activeTool: 'STIRRING_ROD' });
+      }
     }
-  }, [phase]);
+  }, [phase, patchRetort]);
 
   const canStir =
     doorOpen > STIR_DOOR_MIN &&
@@ -336,15 +357,13 @@ export const CremationMiniGame: React.FC = () => {
     if (!activeTool) return;
     setBoneNudge((n) => n + 1);
     if (activeTool === 'IRON_RAKE') {
-      setLargeBonesLeft((v) => {
-        const next = Math.max(0, v - 20);
-        if (next < v) void hapticIronRake();
-        return next;
-      });
+      const next = Math.max(0, largeBonesLeft - 20);
+      if (next < largeBonesLeft) void hapticIronRake();
+      patchRetort({ largeBonesLeft: next });
     } else if (activeTool === 'BRISTLE_BRUSH' && largeBonesLeft === 0) {
-      setMediumBonesLeft((v) => Math.max(0, v - 22));
+      patchRetort({ mediumBonesLeft: Math.max(0, mediumBonesLeft - 22) });
     } else if (activeTool === 'HAND_BRUSH' && mediumBonesLeft === 0) {
-      setFineAshLeft((v) => Math.max(0, v - 25));
+      patchRetort({ fineAshLeft: Math.max(0, fineAshLeft - 25) });
     }
   };
 
@@ -628,8 +647,11 @@ export const CremationMiniGame: React.FC = () => {
               doorMoving: 'UP',
               phase: 'SWEEP',
               audioMode: 'OFF',
+              activeTool: 'IRON_RAKE',
+              largeBonesLeft: 100,
+              mediumBonesLeft: 100,
+              fineAshLeft: 100,
             });
-            setActiveTool('IRON_RAKE');
             setPanelZoomed(false);
           }}
           className="mt-3 w-full py-2.5 bg-emerald-700 text-white font-bold rounded text-xs"
@@ -842,8 +864,11 @@ export const CremationMiniGame: React.FC = () => {
                       doorMoving: 'UP',
                       phase: 'SWEEP',
                       audioMode: 'OFF',
+                      activeTool: 'IRON_RAKE',
+                      largeBonesLeft: 100,
+                      mediumBonesLeft: 100,
+                      fineAshLeft: 100,
                     });
-                    setActiveTool('IRON_RAKE');
                   }}
                   className="absolute bottom-2 left-2 right-2 z-50 py-2 bg-emerald-700/95 text-white font-bold rounded text-[11px]"
                 >
@@ -877,7 +902,9 @@ export const CremationMiniGame: React.FC = () => {
                 key={tool.id}
                 type="button"
                 onPointerDown={() =>
-                  setActiveTool((t) => (t === tool.id ? null : tool.id))
+                  patchRetort({
+                    activeTool: activeTool === tool.id ? null : tool.id,
+                  })
                 }
                 className={`flex-1 py-2 px-1 rounded border text-center text-[10px] font-bold ${
                   activeTool === tool.id
