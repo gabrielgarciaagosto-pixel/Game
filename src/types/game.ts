@@ -109,6 +109,11 @@ export interface DecedentCase {
   familyUrnDueAt: number | null;
   /** 0–100 ash-pour quality from the urnization mini-game */
   urnPourQuality: number;
+  /**
+   * Cremulator finished — ash ready for vessel select / pour.
+   * Survives Emporium trips so the processor does not reset to crush.
+   */
+  urnAshReady: boolean;
   location: CaseLocation;
   isEmbalmed: boolean;
   embalmRank?: Rank;

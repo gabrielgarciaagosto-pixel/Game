@@ -1,4 +1,5 @@
 import { URN_CATALOG } from './urnCatalog';
+import { isHourGatedUrn } from './shopRotation';
 import type { DecedentCase, DispositionDirective } from '../types/game';
 
 /** Directives that eventually need an urn vessel. */
@@ -23,16 +24,33 @@ export function caseUsesUrnStand(c: DecedentCase): boolean {
   return c.isUrnFilled;
 }
 
+/** Always-purchasable catalog vessels (no hour rares, within rep). */
+export function buyableUrnPool(reputation: number) {
+  return URN_CATALOG.filter(
+    (u) => !isHourGatedUrn(u.id) && u.reputationRequired <= reputation
+  );
+}
+
 /**
  * Family picks a catalog vessel after arrival.
  * Biased toward preferred material; memorial services lean prettier.
+ * Never picks reputation-locked or hour-gated rares the shop may not sell.
  */
-export function pickFamilyUrnRequest(c: DecedentCase): string {
-  const preferred = URN_CATALOG.filter(
+export function pickFamilyUrnRequest(
+  c: DecedentCase,
+  reputation = 0
+): string {
+  const buyable = buyableUrnPool(reputation);
+  const fallback = URN_CATALOG.filter(
+    (u) => !isHourGatedUrn(u.id) && u.reputationRequired === 0
+  );
+  const catalog = buyable.length > 0 ? buyable : fallback;
+
+  const preferred = catalog.filter(
     (u) => u.material === c.preferredUrnMaterial
   );
   const usePreferred = preferred.length > 0 && Math.random() < 0.72;
-  let pool = usePreferred ? preferred : URN_CATALOG;
+  let pool = usePreferred ? preferred : catalog;
 
   if (c.directive === 'CREMATION_THEN_VIEWING') {
     const ranked = [...pool].sort((a, b) => b.prestigeBonus - a.prestigeBonus);

@@ -149,6 +149,8 @@ interface GameState {
     caseId: string,
     pourQuality?: number
   ) => void;
+  /** Mark cremulator ash ready so Emporium trips resume at SELECT_URN / POUR */
+  markUrnAshReady: (caseId: string) => void;
   storeUrnInVault: (caseId: string) => void;
   buyShowroomItem: (itemId: string) => void;
   buyUrn: (urnId: string) => boolean;
@@ -312,6 +314,7 @@ export function generateRandomCase(now = Date.now()): DecedentCase {
       ? rollFamilyUrnDueAt(now)
       : null,
     urnPourQuality: 0,
+    urnAshReady: false,
     location: 'COOLER',
     isEmbalmed: false,
     isCremated: false,
@@ -356,6 +359,7 @@ function normalizeCase(c: DecedentCase): DecedentCase {
         ? rollFamilyUrnDueAt(c.arrivedAt ?? Date.now())
         : null),
     urnPourQuality: c.urnPourQuality ?? 0,
+    urnAshReady: c.urnAshReady ?? false,
   };
 }
 
@@ -859,7 +863,7 @@ export const useGameStore = create<GameState>()(
         if (c.familyRequestedUrnId) return c;
         if (c.familyUrnDueAt == null || now < c.familyUrnDueAt) return c;
         if (!directiveNeedsUrn(c.directive)) return c;
-        const urnId = pickFamilyUrnRequest(c);
+        const urnId = pickFamilyUrnRequest(c, state.reputation);
         const urn = getUrnById(urnId);
         any = true;
         toast = urn
@@ -1136,6 +1140,18 @@ export const useGameStore = create<GameState>()(
     });
   },
 
+  markUrnAshReady: (caseId) =>
+    set((state) => {
+      const active = resolveCase(state, caseId);
+      if (!active || active.isUrnFilled || active.urnAshReady) return state;
+      return {
+        cases: updateCaseById(state.cases, caseId, (c) => ({
+          ...c,
+          urnAshReady: true,
+        })),
+      };
+    }),
+
   completeUrnFilling: (bonusCash, caseId, pourQuality = 50) =>
     set((state) => {
       const active = resolveCase(state, caseId);
@@ -1148,6 +1164,7 @@ export const useGameStore = create<GameState>()(
         cases: updateCaseById(state.cases, caseId, (c) => ({
           ...c,
           isUrnFilled: true,
+          urnAshReady: false,
           urnPourQuality: quality,
           location: 'URN_FILLING',
         })),
