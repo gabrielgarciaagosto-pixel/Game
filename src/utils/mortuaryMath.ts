@@ -90,9 +90,11 @@ export function evaluateEmbalmingRank(
  * Cremation Hidden Target Duration & Stepped Temperature Ceiling
  */
 export function getCremationTargets(weightLbs: number) {
-  // 160 lbs = 180 seconds (3.0 game minutes)
-  const targetDurationSec = Math.round((3.0 + (weightLbs - 160) / 60) * 60);
-  const requiredStirs = Math.max(1, Math.floor(weightLbs / 75));
+  // ~5 minutes wall-clock for a typical adult when heat is held
+  const targetDurationSec = Math.round(
+    (5.0 + (weightLbs - 160) / 80) * 60
+  );
+  const requiredStirs = Math.max(2, Math.floor(weightLbs / 70));
   const requiresSteppedRamp = weightLbs > 200;
 
   return {

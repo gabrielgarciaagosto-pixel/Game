@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Death is my Business</string>
-    <string name="title_activity_main">Death is my Business</string>
+    <string name="app_name">Ossuarian: First Urn</string>
+    <string name="title_activity_main">Ossuarian: First Urn</string>
     <string name="package_name">com.deathismybusiness.game</string>
     <string name="custom_url_scheme">com.deathismybusiness.game</string>
 </resources>

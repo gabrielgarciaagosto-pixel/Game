@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "playback": "sequence",
+  "volume": 0.26,
+  "crossfadeMs": 1400,
+  "tracks": [
+    {
+      "id": "chapel-service-1",
+      "file": "chapel-service-1.m4a",
+      "title": "Chapel Service I"
+    },
+    {
+      "id": "chapel-service-2",
+      "file": "chapel-service-2.m4a",
+      "title": "Chapel Service II"
+    }
+  ]
+}

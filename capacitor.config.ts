@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.deathismybusiness.game',
-  appName: 'Death is my Business',
+  appName: 'Ossuarian: First Urn',
   webDir: 'dist',
   android: {
     allowMixedContent: false,
@@ -11,6 +11,11 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchAutoHide: true,
+    },
+    SystemBars: {
+      insetsHandling: 'css',
+      style: 'DARK',
+      hidden: false,
     },
   },
   server: {

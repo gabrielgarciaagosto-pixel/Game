@@ -19,3 +19,12 @@ export async function hapticIronRake(): Promise<void> {
     // Web / unsupported — ignore
   }
 }
+
+export async function hapticHammer(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    await Haptics.impact({ style: ImpactStyle.Medium });
+  } catch {
+    // Web / unsupported — ignore
+  }
+}

@@ -1,5 +1,40 @@
 @import 'tailwindcss';
 
+:root {
+  /*
+    Prefer Capacitor SystemBars CSS vars (--safe-area-inset-*) when env() is 0
+    on older Android WebViews, then fall back to a modest floor.
+  */
+  --safe-top: max(
+    0.75rem,
+    env(safe-area-inset-top, 0px),
+    var(--safe-area-inset-top, 0px)
+  );
+  --safe-bottom: max(
+    0.75rem,
+    env(safe-area-inset-bottom, 0px),
+    var(--safe-area-inset-bottom, 0px)
+  );
+  --safe-left: max(
+    0.75rem,
+    env(safe-area-inset-left, 0px),
+    var(--safe-area-inset-left, 0px)
+  );
+  --safe-right: max(
+    0.75rem,
+    env(safe-area-inset-right, 0px),
+    var(--safe-area-inset-right, 0px)
+  );
+
+  /* FILES FAB geometry — station shells pad to clear this control */
+  --files-fab-height: 3rem;
+  --files-fab-bottom: calc(var(--safe-bottom) + 2.25rem);
+  --files-panel-bottom: calc(var(--files-fab-bottom) + 3.75rem);
+  --files-clearance: calc(
+    var(--files-fab-bottom) + var(--files-fab-height) + 0.85rem
+  );
+}
+
 html,
 body,
 #root {
@@ -7,16 +42,129 @@ body,
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #0f172a;
   user-select: none;
   -webkit-user-select: none;
 }
 
 body {
   font-family: 'Segoe UI', system-ui, sans-serif;
+  background:
+    radial-gradient(120% 70% at 50% 0%, #1e293b, #020617 58%);
+}
+
+/* Portrait column. transform makes fixed station screens stay inside it. */
+#root {
+  max-width: 480px;
+  margin: 0 auto;
+  position: relative;
+  transform: translateZ(0);
+  background: #0f172a;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 0 70px rgba(0, 0, 0, 0.55);
+}
+
+/* Full-screen station shells — clear status bar + FILES FAB */
+.safe-screen {
+  padding-top: var(--safe-top);
+  padding-bottom: var(--files-clearance);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
+.safe-hub {
+  padding-top: var(--safe-top);
+  padding-bottom: var(--files-clearance);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
 }
 
 /* Keep touch gestures on the WebGL canvas only — not global UI buttons */
 canvas {
   touch-action: none;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes tool-bob {
+  0%,
+  100% {
+    transform: translate(-50%, -82%) translateY(0);
+  }
+  50% {
+    transform: translate(-50%, -82%) translateY(-7px);
+  }
+}
+
+@keyframes ash-drift {
+  0% {
+    opacity: 0.9;
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) scale(1.7);
+  }
+}
+
+@keyframes scrape-fade {
+  0% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes chapel-mourner-breathe {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.42;
+  }
+  50% {
+    transform: translateY(-2px);
+    opacity: 0.58;
+  }
+}
+
+.tool-bob {
+  animation: tool-bob 2.8s ease-in-out infinite;
+}
+
+.ash-mote {
+  position: absolute;
+  border-radius: 999px;
+  pointer-events: none;
+  background: radial-gradient(circle, #f5f5f4 0%, #a8a29e 45%, transparent 72%);
+  animation: ash-drift 0.95s ease-out forwards;
+  z-index: 46;
+}
+
+.hearth-scrape {
+  position: absolute;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(to bottom, transparent, #f5f5f4, transparent);
+  animation: scrape-fade 0.45s ease-out forwards;
+  pointer-events: none;
+  z-index: 45;
+}
+
+.retort-brick {
+  background-color: #1a120e;
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.28) 1px, transparent 1px),
+    radial-gradient(80% 55% at 50% 100%, rgba(234, 88, 12, 0.28), transparent 62%);
+  background-size: 100% 14px, 22px 100%, auto;
 }
