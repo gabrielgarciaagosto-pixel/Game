@@ -288,16 +288,26 @@ export const BankBrowser: React.FC = () => {
                 </div>
                 <div className="flex gap-2">
                   <TapButton
-                    onTap={() =>
+                    onTap={() => {
+                      const due = Math.min(
+                        l.principalRemaining,
+                        l.paymentAmount
+                      );
                       runConfirm(
                         'Confirm payment',
-                        `Pay installment $${l.paymentAmount}?`,
+                        due < l.paymentAmount
+                          ? `Final payment $${due.toLocaleString()} closes this note.`
+                          : `Pay installment $${due.toLocaleString()}?`,
                         () => payBankLoanInstallment(l.id)
-                      )
-                    }
+                      );
+                    }}
                     className="flex-1 py-2 rounded-lg bg-sky-800 text-[11px] font-bold"
                   >
-                    Pay ${l.paymentAmount}
+                    Pay $
+                    {Math.min(
+                      l.principalRemaining,
+                      l.paymentAmount
+                    ).toLocaleString()}
                   </TapButton>
                   <TapButton
                     onTap={() => {

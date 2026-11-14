@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { nextIntakeDelayMs, useGameStore } from '../store/useGameStore';
 
 /**
@@ -15,6 +15,8 @@ export function useIntakeSpawner() {
   const tickBankForeclosure = useGameStore((s) => s.tickBankForeclosure);
   const tickBankLoans = useGameStore((s) => s.tickBankLoans);
   const clientFlow = useGameStore((s) => s.ownedProperty.clientFlow);
+  const clientFlowRef = useRef(clientFlow);
+  clientFlowRef.current = clientFlow;
 
   useEffect(() => {
     if (!hasStartedGame) return;
@@ -23,7 +25,7 @@ export function useIntakeSpawner() {
     let cancelled = false;
 
     const scheduleNext = () => {
-      const delay = nextIntakeDelayMs(clientFlow);
+      const delay = nextIntakeDelayMs(clientFlowRef.current);
       timeoutId = setTimeout(() => {
         if (cancelled) return;
         receiveNewIntake();
@@ -56,6 +58,5 @@ export function useIntakeSpawner() {
     tickPermitEvaluations,
     tickBankLoans,
     tickBankForeclosure,
-    clientFlow,
   ]);
 }
