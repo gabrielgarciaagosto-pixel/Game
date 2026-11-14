@@ -64,7 +64,9 @@ export const ComputerRoom: React.FC = () => {
       computerOpenApp === 'FLEETS'
     ) {
       setApp(computerOpenApp);
+      return;
     }
+    setApp('DESKTOP');
   }, [computerOpenApp]);
 
   useEffect(() => {
@@ -126,7 +128,7 @@ export const ComputerRoom: React.FC = () => {
             ? ''
             : 'invisible pointer-events-none absolute inset-0'
         }`}
-        style={{ paddingTop: 'calc(var(--safe-top, 0px) + 0.75rem)' }}
+        style={{ paddingTop: 'var(--safe-top)' }}
       >
         <div className="px-4 flex justify-between items-start">
           <div>
@@ -178,12 +180,7 @@ export const ComputerRoom: React.FC = () => {
             : 'absolute inset-0 z-20 invisible pointer-events-none'
         }
         aria-hidden={app !== 'VR441'}
-        style={{
-          paddingTop: 'calc(var(--safe-top, 0px) + 0.35rem)',
-          paddingBottom: 'calc(var(--safe-bottom, 0px) + 0.35rem)',
-          paddingLeft: '0.35rem',
-          paddingRight: '0.35rem',
-        }}
+        style={{ inset: 0 }}
       >
         <FakeBrowserChrome
           title="State Vital Records — VR-441"
@@ -382,12 +379,7 @@ export const ComputerRoom: React.FC = () => {
       {app === 'SHOP' && (
         <div
           className="absolute inset-0 z-20"
-          style={{
-            paddingTop: 'calc(var(--safe-top, 0px) + 0.35rem)',
-            paddingBottom: 'calc(var(--safe-bottom, 0px) + 0.35rem)',
-            paddingLeft: '0.35rem',
-            paddingRight: '0.35rem',
-          }}
+          style={{ inset: 0 }}
         >
           <FakeBrowserChrome
             title="Funerary Emporium — Catalog"
@@ -402,12 +394,7 @@ export const ComputerRoom: React.FC = () => {
       {app === 'BANK' && (
         <div
           className="absolute inset-0 z-20"
-          style={{
-            paddingTop: 'calc(var(--safe-top, 0px) + 0.35rem)',
-            paddingBottom: 'calc(var(--safe-bottom, 0px) + 0.35rem)',
-            paddingLeft: '0.35rem',
-            paddingRight: '0.35rem',
-          }}
+          style={{ inset: 0 }}
         >
           <FakeBrowserChrome
             title="First National Mortuary Bank"
@@ -422,12 +409,7 @@ export const ComputerRoom: React.FC = () => {
       {app === 'REALTY' && (
         <div
           className="absolute inset-0 z-20"
-          style={{
-            paddingTop: 'calc(var(--safe-top, 0px) + 0.35rem)',
-            paddingBottom: 'calc(var(--safe-bottom, 0px) + 0.35rem)',
-            paddingLeft: '0.35rem',
-            paddingRight: '0.35rem',
-          }}
+          style={{ inset: 0 }}
         >
           <FakeBrowserChrome
             title="Lychgate Commercial Realty"
@@ -442,12 +424,7 @@ export const ComputerRoom: React.FC = () => {
       {app === 'FLEETS' && (
         <div
           className="absolute inset-0 z-20"
-          style={{
-            paddingTop: 'calc(var(--safe-top, 0px) + 0.35rem)',
-            paddingBottom: 'calc(var(--safe-bottom, 0px) + 0.35rem)',
-            paddingLeft: '0.35rem',
-            paddingRight: '0.35rem',
-          }}
+          style={{ inset: 0 }}
         >
           <FakeBrowserChrome
             title="Lampblack Coach & Motor"

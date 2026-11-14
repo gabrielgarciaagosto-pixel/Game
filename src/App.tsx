@@ -1,4 +1,10 @@
 import { useEffect, useState } from 'react';
+
+declare global {
+  interface Window {
+    __ossuarianHardwareBack?: () => 'handled' | 'exit';
+  }
+}
 import { BankDebtHud } from './components/BankDebtHud';
 import { BankForeclosureScreen } from './components/BankForeclosureScreen';
 import { CaseInboxWidget } from './components/CaseInboxWidget';
@@ -33,6 +39,29 @@ function App() {
     });
     setHydrated(useGameStore.persist.hasHydrated());
     return unsub;
+  }, []);
+
+  useEffect(() => {
+    window.__ossuarianHardwareBack = () => {
+      const state = useGameStore.getState();
+      if (!state.hasStartedGame) return 'exit';
+      if (state.activeStation === 'COMPUTER') {
+        if (state.computerOpenApp) {
+          state.setComputerOpenApp(null);
+          return 'handled';
+        }
+        state.setActiveStation('OVERVIEW');
+        return 'handled';
+      }
+      if (state.activeStation !== 'OVERVIEW') {
+        state.setActiveStation('OVERVIEW');
+        return 'handled';
+      }
+      return 'exit';
+    };
+    return () => {
+      delete window.__ossuarianHardwareBack;
+    };
   }, []);
 
   useIntakeSpawner();

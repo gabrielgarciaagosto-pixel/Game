@@ -13,7 +13,9 @@ const config: CapacitorConfig = {
       launchAutoHide: true,
     },
     SystemBars: {
-      insetsHandling: 'css',
+      // Native padding here plus our CSS floor double-counts the status bar.
+      // MainActivity publishes the real insets as --safe-area-inset-*.
+      insetsHandling: 'disable',
       style: 'DARK',
       hidden: false,
     },

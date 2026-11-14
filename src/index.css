@@ -2,29 +2,51 @@
 
 :root {
   /*
-    Prefer Capacitor SystemBars CSS vars (--safe-area-inset-*) when env() is 0
-    on older Android WebViews, then fall back to a modest floor.
+    Android draws the WebView under the status bar. env() and the Capacitor
+    inset vars are often 0, which left the browser tab under the clock.
+    The floor is a full status-bar height so hub, computer, and station
+    controls stay tappable even before those vars arrive. A reported notch
+    larger than the floor still wins.
   */
-  --safe-top: max(
-    0.75rem,
-    env(safe-area-inset-top, 0px),
-    var(--safe-area-inset-top, 0px)
-  );
-  --safe-bottom: max(
-    0.75rem,
-    env(safe-area-inset-bottom, 0px),
-    var(--safe-area-inset-bottom, 0px)
-  );
-  --safe-left: max(
-    0.75rem,
-    env(safe-area-inset-left, 0px),
-    var(--safe-area-inset-left, 0px)
-  );
-  --safe-right: max(
-    0.75rem,
-    env(safe-area-inset-right, 0px),
-    var(--safe-area-inset-right, 0px)
-  );
+  --safe-area-inset-top: 0px;
+  --safe-area-inset-right: 0px;
+  --safe-area-inset-bottom: 0px;
+  --safe-area-inset-left: 0px;
+  --safe-top-floor: 3rem;
+  --safe-bottom-floor: 0.75rem;
+  --safe-x-floor: 0.75rem;
+  --safe-top: var(--safe-top-floor);
+  --safe-bottom: var(--safe-bottom-floor);
+  --safe-left: var(--safe-x-floor);
+  --safe-right: var(--safe-x-floor);
+}
+
+@supports (top: env(safe-area-inset-top)) {
+  :root {
+    --safe-top: max(
+      var(--safe-top-floor),
+      env(safe-area-inset-top, 0px),
+      var(--safe-area-inset-top)
+    );
+    --safe-bottom: max(
+      var(--safe-bottom-floor),
+      env(safe-area-inset-bottom, 0px),
+      var(--safe-area-inset-bottom)
+    );
+    --safe-left: max(
+      var(--safe-x-floor),
+      env(safe-area-inset-left, 0px),
+      var(--safe-area-inset-left)
+    );
+    --safe-right: max(
+      var(--safe-x-floor),
+      env(safe-area-inset-right, 0px),
+      var(--safe-area-inset-right)
+    );
+  }
+}
+
+:root {
 
   /* FILES FAB geometry — station shells pad to clear this control */
   --files-fab-height: 3rem;
@@ -624,12 +646,12 @@ canvas {
 
 .hub-spirit {
   position: absolute;
+  left: 0;
+  top: 0;
   width: 68px;
   height: 132px;
-  margin-left: -34px;
-  animation: hub-spirit var(--dur, 16s) ease-in-out infinite;
-  animation-delay: var(--delay, 0s);
-  opacity: 0;
+  opacity: var(--a, 0.82);
+  pointer-events: none;
 }
 .hub-spirit-head,
 .hub-spirit-body,
@@ -658,6 +680,87 @@ canvas {
   height: 84px;
   border-radius: 50%;
   background: radial-gradient(ellipse at center, rgba(224, 242, 254, 0.42), transparent 70%);
+  animation: hub-flicker 3.4s ease-in-out infinite;
+}
+
+.hub-roam {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  pointer-events: none;
+  will-change: transform;
+}
+.hub-atmo .hub-roam.hub-atmo-flame {
+  left: 0;
+  top: 0;
+  width: 200px;
+  height: 148px;
+}
+.hub-atmo .hub-roam.hub-atmo-fume {
+  left: 0;
+  top: 0;
+  width: 210px;
+  height: 150px;
+}
+.hub-atmo .hub-roam.hub-atmo-frost {
+  left: 0;
+  top: 0;
+  width: 168px;
+  height: 124px;
+}
+.hub-atmo .hub-roam.hub-atmo-chapel {
+  left: 0;
+  top: 0;
+  width: 176px;
+  height: 132px;
+}
+.hub-dust-mote {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(231, 229, 228, 0.85), rgba(214, 211, 209, 0.2) 55%, transparent 72%);
+}
+.hub-crt-mote {
+  width: 86px;
+  height: 86px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(110, 231, 183, 0.55), rgba(52, 211, 153, 0.16) 55%, transparent 72%);
+  box-shadow: 0 0 18px rgba(52, 211, 153, 0.28);
+}
+.hub-roam > .hub-clash-tint {
+  position: absolute;
+  inset: -20%;
+  width: auto;
+  height: auto;
+  margin: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  opacity: 0;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation: none;
+  transform: none;
+}
+.hub-clash-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.hub-clash {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 40px;
+  height: 40px;
+  margin-left: -20px;
+  margin-top: -20px;
+  border-radius: 50%;
+  opacity: 0;
+  mix-blend-mode: screen;
+  pointer-events: none;
 }
 
 @keyframes hub-flame {
@@ -715,14 +818,6 @@ canvas {
   0%, 100% { opacity: 0.45; }
   50% { opacity: 0.9; }
 }
-@keyframes hub-spirit {
-  0% { opacity: 0; transform: translate3d(0, 8px, 0); }
-  8% { opacity: var(--a, 0.5); }
-  46% { opacity: calc(var(--a, 0.5) * 0.8); transform: translate3d(var(--dx, 24px), -22px, 0); }
-  90% { opacity: var(--a, 0.5); }
-  100% { opacity: 0; transform: translate3d(calc(var(--dx, 24px) * 0.4), -4px, 0); }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .hub-bob,
   .hub-fx i,
@@ -736,7 +831,8 @@ canvas {
   .hub-petal,
   .hub-atmo-crt,
   .hub-atmo-debt,
-  .hub-spirit {
+  .hub-spirit,
+  .hub-spirit-wisp {
     animation: none;
   }
   .hub-spirit { opacity: 0.55; }
