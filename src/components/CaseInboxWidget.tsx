@@ -42,9 +42,9 @@ export const CaseInboxWidget: React.FC = () => {
       <button
         type="button"
         onPointerDown={() => setIsOpen(!isOpen)}
-        className="fixed bottom-4 right-4 z-50 bg-amber-500 active:bg-amber-400 text-slate-950 font-extrabold px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 border-2 border-amber-200"
+        className="fixed bottom-3 right-3 z-50 bg-amber-500 active:bg-amber-400 text-slate-950 font-extrabold px-3 py-2.5 rounded-xl shadow-2xl flex items-center gap-2 border-2 border-amber-200 text-sm"
       >
-        <span>CASE FILES</span>
+        <span>FILES</span>
         {unreadCount > 0 && (
           <span className="bg-red-600 text-white text-xs px-2 py-0.5 rounded-full animate-pulse">
             {unreadCount} NEW
@@ -53,8 +53,8 @@ export const CaseInboxWidget: React.FC = () => {
       </button>
 
       {isOpen && (
-        <div className="fixed bottom-20 right-4 z-50 w-[min(460px,calc(100vw-2rem))] h-[22rem] bg-slate-900 border-2 border-amber-500/60 rounded-2xl shadow-2xl flex overflow-hidden text-slate-100 select-none">
-          <div className="w-40 md:w-44 border-r border-slate-800 overflow-y-auto bg-slate-950/60">
+        <div className="fixed bottom-16 left-3 right-3 z-50 h-[min(70vh,28rem)] bg-slate-900 border-2 border-amber-500/60 rounded-2xl shadow-2xl flex overflow-hidden text-slate-100 select-none">
+          <div className="w-[38%] max-w-[9.5rem] border-r border-slate-800 overflow-y-auto bg-slate-950/60">
             <div className="p-2 text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800">
               Family Directives
             </div>

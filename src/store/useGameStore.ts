@@ -30,6 +30,9 @@ interface GameState {
   placedFlowers: Array<'LILIES' | 'ROSES' | 'WREATH'>;
   serviceRatingBonus: number;
   legalAlert: string | null;
+  /** Working cremulator available for urn processing */
+  cremulatorOwned: boolean;
+  cremulatorDamaged: boolean;
   startGame: () => void;
   setActiveStation: (station: StationId) => void;
   selectActiveCase: (caseId: string) => void;
@@ -68,7 +71,11 @@ interface GameState {
     caseId: string
   ) => void;
   clearLegalAlert: () => void;
+  damageCremulator: () => void;
+  buyReplacementCremulator: () => boolean;
 }
+
+export const CREMULATOR_REPLACEMENT_COST = 1850;
 
 /** Prefer the selected case when it is already at `location`, else any case there. */
 export function caseAtLocation(
@@ -293,6 +300,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   inboxFiles: [toInboxFile(seedCase)],
   intakeToast: null,
   legalAlert: null,
+  cremulatorOwned: true,
+  cremulatorDamaged: false,
   placedFlowers: [],
   serviceRatingBonus: 0,
   showroomInventory: [
@@ -783,4 +792,24 @@ export const useGameStore = create<GameState>((set, get) => ({
     }),
 
   clearLegalAlert: () => set({ legalAlert: null }),
+
+  damageCremulator: () =>
+    set({
+      cremulatorOwned: false,
+      cremulatorDamaged: true,
+      legalAlert:
+        'CREMULATOR DESTROYED! Metal implants entered the drum. Purchase a replacement before processing more cremains.',
+    }),
+
+  buyReplacementCremulator: () => {
+    const state = get();
+    if (state.cremulatorOwned) return true;
+    if (state.cash < CREMULATOR_REPLACEMENT_COST) return false;
+    set({
+      cash: state.cash - CREMULATOR_REPLACEMENT_COST,
+      cremulatorOwned: true,
+      cremulatorDamaged: false,
+    });
+    return true;
+  },
 }));

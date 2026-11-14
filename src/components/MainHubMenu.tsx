@@ -46,7 +46,7 @@ export const MainHubMenu: React.FC = () => {
     {
       id: 'URN_FILLING' as const,
       title: 'URN PROCESSING',
-      subtitle: 'Magnet Sweep, Cremulator & Funnel',
+      subtitle: 'Crush, Magnet, Hatch & Cremulator',
       color: 'from-amber-900/80 to-slate-900 border-amber-500/50',
     },
     {
@@ -64,48 +64,42 @@ export const MainHubMenu: React.FC = () => {
   ];
 
   return (
-    <div className="w-full h-full bg-slate-950 text-slate-100 p-4 md:p-6 flex flex-col justify-between select-none">
-      <div className="flex justify-between items-center border-b border-slate-800 pb-3 gap-3">
+    <div className="w-full h-full bg-slate-950 text-slate-100 p-3 flex flex-col select-none overflow-hidden">
+      <div className="shrink-0 border-b border-slate-800 pb-2 space-y-2">
         <div>
-          <h1 className="text-xl md:text-2xl font-black tracking-wider text-slate-100">
+          <h1 className="text-lg font-black tracking-wider text-slate-100">
             DEATH IS MY BUSINESS
           </h1>
-          <p className="text-xs text-slate-400">
-            Selected Case:{' '}
+          <p className="text-[11px] text-slate-400 leading-snug">
+            Selected:{' '}
             <span className="text-amber-300 font-semibold">
               {activeCase
-                ? `${displayCaseName(activeCase)} (${activeCase.weightLbs} lbs) · ${activeCase.location}`
-                : 'None — Select a body in the Cooler'}
+                ? `${displayCaseName(activeCase)} · ${activeCase.location}`
+                : 'None — Cooler'}
             </span>
           </p>
         </div>
 
-        <div className="flex flex-wrap justify-end gap-2 md:gap-4 font-mono text-sm">
-          <div className="bg-slate-900 px-3 md:px-4 py-2 rounded border border-slate-800">
-            CASH:{' '}
-            <span className="text-emerald-400 font-bold">
-              ${cash.toLocaleString()}
-            </span>
+        <div className="flex flex-wrap gap-1.5 font-mono text-[11px]">
+          <div className="bg-slate-900 px-2.5 py-1.5 rounded border border-slate-800">
+            $<span className="text-emerald-400 font-bold">{cash.toLocaleString()}</span>
           </div>
-          <div className="bg-slate-900 px-3 md:px-4 py-2 rounded border border-slate-800">
-            REP: <span className="text-sky-400 font-bold">{reputation}</span>
+          <div className="bg-slate-900 px-2.5 py-1.5 rounded border border-slate-800">
+            REP <span className="text-sky-400 font-bold">{reputation}</span>
           </div>
-          <div className="bg-slate-900 px-3 md:px-4 py-2 rounded border border-slate-800">
-            OSS:{' '}
-            <span className="text-violet-300 font-bold">
-              {ossilegiumCommuneGrams} g
-            </span>
+          <div className="bg-slate-900 px-2.5 py-1.5 rounded border border-slate-800">
+            OSS <span className="text-violet-300 font-bold">{ossilegiumCommuneGrams}g</span>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-5 my-auto py-4">
+      <div className="flex-1 min-h-0 grid grid-cols-2 gap-2.5 content-start py-3 overflow-y-auto pb-20">
         {tiles.map((tile) => (
           <button
             key={tile.id}
             type="button"
             onPointerDown={() => setActiveStation(tile.id)}
-            className={`aspect-square max-h-44 w-full rounded-2xl bg-gradient-to-br ${tile.color} border-2 p-4 md:p-5 flex flex-col justify-between items-start text-left shadow-lg active:scale-95 transition-transform relative overflow-hidden`}
+            className={`min-h-[7.5rem] w-full rounded-2xl bg-gradient-to-br ${tile.color} border-2 p-3 flex flex-col justify-between items-start text-left shadow-lg active:scale-95 transition-transform relative overflow-hidden`}
           >
             <span className="text-base md:text-lg font-extrabold tracking-wide">
               {tile.title}

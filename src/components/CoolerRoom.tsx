@@ -25,35 +25,34 @@ export const CoolerRoom: React.FC = () => {
   }, [expireUntaggedNames]);
 
   return (
-    <div className="fixed inset-0 z-40 bg-slate-950 text-slate-100 p-4 md:p-6 pb-24 flex flex-col justify-between select-none">
-      <div className="flex justify-between items-center border-b border-cyan-900/60 pb-3 gap-3">
-        <div>
-          <h2 className="text-lg md:text-xl font-bold text-cyan-400">
-            MORTUARY COOLER — REFRIGERATION BAYS (38°F)
+    <div className="fixed inset-0 z-40 bg-slate-950 text-slate-100 p-3 pb-24 flex flex-col select-none overflow-hidden">
+      <div className="shrink-0 flex justify-between items-start border-b border-cyan-900/60 pb-2 gap-2">
+        <div className="min-w-0">
+          <h2 className="text-base font-bold text-cyan-400">
+            COOLER — 38°F BAYS
           </h2>
-          <p className="text-xs text-slate-400">
-            Tap the hovering name within 60 seconds of arrival to attach a
-            permanent Toe-Tag! Remains leave the cooler when taken to prep or
-            cremation.
+          <p className="text-[10px] text-slate-400 leading-snug">
+            Tap name within 60s to toe-tag. Use Prep / Cremate / Chapel to move
+            remains.
           </p>
         </div>
         <button
           type="button"
           onPointerDown={() => setActiveStation('OVERVIEW')}
-          className="px-4 py-2 bg-slate-800 rounded text-sm font-semibold active:bg-slate-700"
+          className="px-3 py-1.5 bg-slate-800 rounded text-xs font-semibold shrink-0"
         >
-          ← Main Menu
+          Menu
         </button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-5 my-auto py-4">
+      <div className="flex-1 min-h-0 grid grid-cols-2 gap-2.5 content-start py-3 overflow-y-auto">
         {Array.from({ length: 6 }).map((_, index) => {
           const body = coolerCases[index];
           if (!body) {
             return (
               <div
                 key={index}
-                className="h-44 md:h-48 rounded-xl bg-slate-900/40 border border-dashed border-slate-800 flex items-center justify-center text-xs text-slate-600 font-mono"
+                className="min-h-[8.5rem] rounded-xl bg-slate-900/40 border border-dashed border-slate-800 flex items-center justify-center text-[10px] text-slate-600 font-mono"
               >
                 BAY #{index + 1} — EMPTY
               </div>
@@ -71,7 +70,7 @@ export const CoolerRoom: React.FC = () => {
             <div
               key={body.id}
               onPointerDown={() => selectActiveCase(body.id)}
-              className={`h-44 md:h-48 rounded-xl p-4 flex flex-col justify-between relative border-2 transition-all ${
+              className={`min-h-[8.5rem] rounded-xl p-3 flex flex-col justify-between relative border-2 transition-all ${
                 isSelected
                   ? 'bg-cyan-950/60 border-amber-400'
                   : 'bg-slate-900 border-cyan-800/50'

@@ -25,10 +25,12 @@ function HoneywellReadout({
   label,
   pv,
   sp,
+  compact,
 }: {
   label: string;
   pv: number;
   sp: number;
+  compact?: boolean;
 }) {
   return (
     <div className="bg-zinc-950 border border-zinc-600 rounded p-2 font-mono">
@@ -38,7 +40,9 @@ function HoneywellReadout({
       <div className="flex items-end gap-2">
         <div>
           <div className="text-[8px] text-sky-400">PV</div>
-          <div className="text-2xl md:text-3xl text-sky-300 leading-none tabular-nums">
+          <div
+            className={`${compact ? 'text-xl' : 'text-3xl'} text-sky-300 leading-none tabular-nums`}
+          >
             {Math.round(pv)}
           </div>
         </div>
@@ -59,11 +63,13 @@ function PushButton({
   label,
   onPress,
   disabled,
+  size = 'md',
 }: {
   color: 'green' | 'red' | 'silver';
   label: string;
   onPress: () => void;
   disabled?: boolean;
+  size?: 'sm' | 'md';
 }) {
   const bg =
     color === 'green'
@@ -71,12 +77,16 @@ function PushButton({
       : color === 'red'
         ? 'bg-red-600 border-red-300 shadow-red-950/50'
         : 'bg-zinc-300 border-zinc-100 text-zinc-900 shadow-zinc-900/40';
+  const dim = size === 'sm' ? 'w-10 h-10 text-[8px]' : 'w-14 h-14 text-[10px]';
   return (
     <button
       type="button"
       disabled={disabled}
-      onPointerDown={onPress}
-      className={`w-12 h-12 md:w-14 md:h-14 rounded-full border-4 ${bg} shadow-inner font-black text-[9px] md:text-[10px] leading-tight active:scale-95 disabled:opacity-35 disabled:active:scale-100`}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        onPress();
+      }}
+      className={`${dim} rounded-full border-4 ${bg} shadow-inner font-black leading-tight active:scale-95 disabled:opacity-35 disabled:active:scale-100`}
     >
       {label}
     </button>
@@ -89,7 +99,7 @@ function StatusLamp({
   label,
 }: {
   on: boolean;
-  color: 'white' | 'amber' | 'green';
+  color: 'white' | 'amber' | 'green' | 'red';
   label: string;
 }) {
   const lit =
@@ -97,15 +107,17 @@ function StatusLamp({
       ? 'bg-amber-400 shadow-[0_0_12px_#fbbf24]'
       : color === 'green'
         ? 'bg-emerald-400 shadow-[0_0_12px_#34d399]'
-        : 'bg-zinc-100 shadow-[0_0_10px_#f4f4f5]';
+        : color === 'red'
+          ? 'bg-red-500 shadow-[0_0_12px_#ef4444]'
+          : 'bg-zinc-100 shadow-[0_0_10px_#f4f4f5]';
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="flex flex-col items-center gap-1 min-w-0">
       <div
         className={`w-4 h-4 rounded-full border border-zinc-700 transition-all ${
           on ? lit : 'bg-zinc-800'
-        } ${on && color === 'amber' ? 'animate-pulse' : ''}`}
+        } ${on && (color === 'amber' || color === 'red') ? 'animate-pulse' : ''}`}
       />
-      <span className="text-[8px] uppercase tracking-wide text-zinc-400">
+      <span className="text-[8px] uppercase tracking-wide text-zinc-500 text-center leading-tight">
         {label}
       </span>
     </div>
@@ -134,7 +146,8 @@ export const CremationMiniGame: React.FC = () => {
     ? getCremationTargets(currentCase.weightLbs)
     : null;
 
-  // —— Millennium panel state ——
+  const [panelZoomed, setPanelZoomed] = useState(false);
+
   const [blowerOn, setBlowerOn] = useState(false);
   const [purging, setPurging] = useState(false);
   const [heated, setHeated] = useState(false);
@@ -147,7 +160,7 @@ export const CremationMiniGame: React.FC = () => {
   const secondarySp = 1700;
   const primarySp = 1600;
 
-  const [doorOpen, setDoorOpen] = useState(0); // 0 closed … 1 fully up
+  const [doorOpen, setDoorOpen] = useState(0);
   const [doorMoving, setDoorMoving] = useState<'UP' | 'DOWN' | null>(null);
 
   const [elapsedSec, setElapsedSec] = useState(0);
@@ -160,6 +173,7 @@ export const CremationMiniGame: React.FC = () => {
   const [rakeHeld, setRakeHeld] = useState(false);
   const [rakePos, setRakePos] = useState({ x: 50, y: 40 });
   const [lastStirAt, setLastStirAt] = useState(0);
+  const [boneNudge, setBoneNudge] = useState(0);
 
   const [largeBonesLeft, setLargeBonesLeft] = useState(100);
   const [mediumBonesLeft, setMediumBonesLeft] = useState(100);
@@ -174,11 +188,9 @@ export const CremationMiniGame: React.FC = () => {
       : 0;
   const bonePhase = bonePhaseFromProgress(progress);
   const maxSafeTemp = targets?.getMaxSafeTempF(progress) ?? 1600;
-  const canStartSecondary = heated && secondaryTemp >= 780;
   const canStartPrimary =
     secondaryOn && secondaryTemp >= 800 && !purging;
 
-  // Purge countdown
   useEffect(() => {
     if (!purging || purgeEndsAt == null) return;
     const id = setInterval(() => {
@@ -191,7 +203,6 @@ export const CremationMiniGame: React.FC = () => {
     return () => clearInterval(id);
   }, [purging, purgeEndsAt]);
 
-  // Door motion
   useEffect(() => {
     if (!doorMoving) return;
     const id = setInterval(() => {
@@ -209,14 +220,12 @@ export const CremationMiniGame: React.FC = () => {
     return () => clearInterval(id);
   }, [doorMoving]);
 
-  // Temperature & burn loop
   useEffect(() => {
     if (!currentCase || !targets) return;
     const id = setInterval(() => {
       setSecondaryTemp((t) => {
         if (secondaryOn) {
-          const rise = 18 + Math.random() * 10;
-          return Math.min(secondarySp + 40, t + rise);
+          return Math.min(secondarySp + 40, t + 18 + Math.random() * 10);
         }
         if (blowerOn && heated) return Math.min(820, t + 6);
         if (blowerOn) return Math.min(200, t + 2);
@@ -225,11 +234,9 @@ export const CremationMiniGame: React.FC = () => {
 
       setPrimaryTemp((t) => {
         if (primaryOn) {
-          // Below 850°F ignition quality penalty → slower climb
           const slow =
             secondaryTemp < 850 || earlyPrimaryStarts > 0 ? 0.55 : 1;
-          const rise = (14 + Math.random() * 12) * slow;
-          return Math.min(primarySp + 60, t + rise);
+          return Math.min(primarySp + 60, t + (14 + Math.random() * 12) * slow);
         }
         if (secondaryOn) return Math.min(400, Math.max(t, t + 1));
         return Math.max(72, t - 5);
@@ -241,7 +248,6 @@ export const CremationMiniGame: React.FC = () => {
           (secondaryTemp >= 850 ? 1 : 0.65) *
           (earlyPrimaryStarts > 0 ? 0.85 : 1);
         setElapsedSec((prev) => prev + burnRate * 2.8);
-
         if (primaryTemp > maxSafeTemp) {
           setThermalWarnings((w) => w + 1);
         }
@@ -283,7 +289,6 @@ export const CremationMiniGame: React.FC = () => {
   };
 
   const startSecondary = () => {
-    if (!canStartSecondary && !heated) return;
     if (!heated) return;
     setSecondaryOn(true);
     if (phase === 'LOAD' && doorOpen < 0.2) setPhase('BURN');
@@ -291,9 +296,7 @@ export const CremationMiniGame: React.FC = () => {
 
   const startPrimary = () => {
     if (!canStartPrimary) return;
-    if (secondaryTemp < 850) {
-      setEarlyPrimaryStarts((n) => n + 1);
-    }
+    if (secondaryTemp < 850) setEarlyPrimaryStarts((n) => n + 1);
     setPrimaryOn(true);
     if (phase === 'LOAD') setPhase('BURN');
   };
@@ -310,6 +313,7 @@ export const CremationMiniGame: React.FC = () => {
     if (dist > 8 && Date.now() - lastStirAt > 400) {
       setStirCount((s) => s + 1);
       setLastStirAt(Date.now());
+      setBoneNudge((n) => n + 1);
       setPrimaryTemp((t) => Math.max(900, t - 90));
       if (Date.now() - lastHaptic.current > 180) {
         lastHaptic.current = Date.now();
@@ -320,6 +324,7 @@ export const CremationMiniGame: React.FC = () => {
 
   const handleSweepStroke = () => {
     if (!activeTool) return;
+    setBoneNudge((n) => n + 1);
     if (activeTool === 'IRON_RAKE') {
       setLargeBonesLeft((v) => {
         const next = Math.max(0, v - 20);
@@ -355,10 +360,10 @@ export const CremationMiniGame: React.FC = () => {
 
   if (!currentCase || !targets) {
     return (
-      <div className="fixed inset-0 z-50 bg-stone-950/95 text-stone-100 flex flex-col items-center justify-center gap-4 p-6">
-        <p className="text-center max-w-md">
+      <div className="fixed inset-0 z-50 bg-stone-950/95 text-stone-100 flex flex-col items-center justify-center gap-4 p-6 pb-28">
+        <p className="text-center max-w-sm text-sm">
           No case loaded in the crematory. Move remains here from the Cooler
-          (Cremate) or transfer menus — hub tiles only open rooms.
+          (Cremate).
         </p>
         <button
           type="button"
@@ -373,25 +378,22 @@ export const CremationMiniGame: React.FC = () => {
 
   if (currentCase.isCremated || phase === 'DONE') {
     return (
-      <div className="fixed inset-0 z-50 bg-stone-950/95 text-stone-100 p-4 md:p-6 pb-24 flex flex-col select-none">
-        <div className="flex justify-between border-b border-stone-800 pb-3">
-          <h2 className="text-lg font-bold text-orange-400">
+      <div className="fixed inset-0 z-50 bg-stone-950/95 text-stone-100 p-4 pb-28 flex flex-col select-none">
+        <div className="flex justify-between border-b border-stone-800 pb-3 gap-2">
+          <h2 className="text-base font-bold text-orange-400">
             CREMATION COMPLETE — {displayCaseName(currentCase)}
           </h2>
           <button
             type="button"
             onPointerDown={() => setActiveStation('OVERVIEW')}
-            className="px-4 py-2 bg-stone-800 rounded text-sm"
+            className="px-3 py-2 bg-stone-800 rounded text-xs shrink-0"
           >
-            Main Menu
+            Menu
           </button>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center">
           <p className="text-3xl font-black text-amber-300">
             Rank {currentCase.cremationRank ?? '—'}
-          </p>
-          <p className="text-sm text-stone-400">
-            Result saved on this case. Process ash into an urn next.
           </p>
           <button
             type="button"
@@ -413,183 +415,412 @@ export const CremationMiniGame: React.FC = () => {
       ? Math.max(0, Math.ceil((purgeEndsAt - Date.now()) / 1000))
       : 0;
 
-  return (
-    <div className="fixed inset-0 z-50 bg-[#1a2e1a] text-stone-100 p-2 md:p-4 pb-24 flex flex-col select-none overflow-hidden">
-      <div className="flex justify-between items-start gap-2 mb-2 shrink-0">
-        <div>
-          <h2 className="text-sm md:text-lg font-bold text-orange-300 tracking-wide">
-            MILLENNIUM RETORT — {displayCaseName(currentCase)} (
-            {currentCase.weightLbs} lbs)
-          </h2>
-          <p className="text-[10px] text-stone-400">
-            Required stirs: {targets.requiredStirs} · Progress{' '}
-            {Math.round(progress * 100)}% · Bone state: {bonePhase}
-            {earlyPrimaryStarts > 0 && (
-              <span className="text-amber-400">
-                {' '}
-                · Early primary ignition (−quality)
+  const controlPanel = (zoomed: boolean) => (
+    <div
+      className={`bg-gradient-to-b from-zinc-300 via-zinc-400 to-zinc-500 border-2 border-zinc-600 shadow-xl text-zinc-900 overflow-y-auto ${
+        zoomed ? 'flex-1 p-4 rounded-xl' : 'w-[30%] max-w-[120px] p-1.5 rounded-lg'
+      }`}
+      onPointerDown={(e) => {
+        if (!zoomed) {
+          e.stopPropagation();
+          setPanelZoomed(true);
+        }
+      }}
+    >
+      {zoomed && (
+        <button
+          type="button"
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            setPanelZoomed(false);
+          }}
+          className="mb-3 w-full py-2 bg-zinc-800 text-zinc-100 rounded font-bold text-xs"
+        >
+          ← Back to Retort View
+        </button>
+      )}
+      {!zoomed && (
+        <div className="text-[7px] font-black text-center text-zinc-700 mb-1 leading-tight">
+          TAP TO OPERATE
+        </div>
+      )}
+
+      <div
+        className={`text-center font-black tracking-[0.15em] text-zinc-700 ${zoomed ? 'text-[11px] mb-2' : 'text-[7px] mb-1'}`}
+      >
+        BLOWER
+      </div>
+      <div className={`flex justify-center ${zoomed ? 'gap-4 mb-2' : 'gap-1 mb-1'}`}>
+        <PushButton
+          color="green"
+          label="START"
+          onPress={startBlower}
+          size={zoomed ? 'md' : 'sm'}
+        />
+        <PushButton
+          color="red"
+          label="STOP"
+          onPress={stopBlower}
+          size={zoomed ? 'md' : 'sm'}
+        />
+      </div>
+      <div className={`flex justify-center ${zoomed ? 'gap-5 mb-3' : 'gap-1 mb-1'}`}>
+        <StatusLamp on={blowerOn && !purging} color="white" label="Ready" />
+        <StatusLamp
+          on={purging}
+          color="amber"
+          label={purging ? `Purging ${purgeSecLeft}s` : 'Purging'}
+        />
+        <StatusLamp on={heated && !purging} color="green" label="Heated" />
+      </div>
+
+      {zoomed && <div className="h-px bg-zinc-600/50 my-2" />}
+
+      <div
+        className={`text-center font-black tracking-wider text-zinc-700 ${zoomed ? 'text-[9px] mb-1' : 'text-[6px] mb-0.5 leading-tight'}`}
+      >
+        {zoomed ? 'SECONDARY CHAMBER' : 'SEC'}
+      </div>
+      <div className={`flex justify-center ${zoomed ? 'gap-3 mb-1' : 'gap-1 mb-1'}`}>
+        <PushButton
+          color="green"
+          label="START"
+          onPress={startSecondary}
+          disabled={!heated}
+          size={zoomed ? 'md' : 'sm'}
+        />
+        <PushButton
+          color="red"
+          label="STOP"
+          onPress={() => {
+            setSecondaryOn(false);
+            setPrimaryOn(false);
+          }}
+          size={zoomed ? 'md' : 'sm'}
+        />
+      </div>
+      {zoomed && (
+        <>
+          <HoneywellReadout
+            label="Afterburner"
+            pv={secondaryTemp}
+            sp={secondarySp}
+          />
+          <p className="text-[8px] text-center text-zinc-700 mt-1 mb-2">
+            Reach ~800°F before primary. Ideal ≥850°F.
+          </p>
+        </>
+      )}
+      {!zoomed && (
+        <div className="text-[8px] font-mono text-center text-sky-800 tabular-nums mb-1">
+          {Math.round(secondaryTemp)}°
+        </div>
+      )}
+
+      {zoomed && <div className="h-px bg-zinc-600/50 my-2" />}
+
+      <div
+        className={`text-center font-black tracking-wider text-zinc-700 ${zoomed ? 'text-[9px] mb-1' : 'text-[6px] mb-0.5'}`}
+      >
+        {zoomed ? 'PRIMARY CHAMBER' : 'PRI'}
+      </div>
+      <div className={`flex justify-center ${zoomed ? 'gap-3 mb-1' : 'gap-1 mb-1'}`}>
+        <PushButton
+          color="green"
+          label="START"
+          onPress={startPrimary}
+          disabled={!canStartPrimary}
+          size={zoomed ? 'md' : 'sm'}
+        />
+        <PushButton
+          color="red"
+          label="STOP"
+          onPress={() => setPrimaryOn(false)}
+          size={zoomed ? 'md' : 'sm'}
+        />
+      </div>
+      {zoomed && (
+        <>
+          <HoneywellReadout
+            label="Main Chamber"
+            pv={primaryTemp}
+            sp={primarySp}
+          />
+          <p className="text-[8px] text-center text-zinc-700 mt-1 mb-2">
+            Stirs {stirCount}/{targets.requiredStirs} · Runaways{' '}
+            {thermalWarnings}
+            {secondaryTemp < 850 && secondaryOn && (
+              <span className="block text-amber-800 font-bold">
+                Below 850°F — quality risk
               </span>
             )}
           </p>
-          <CaseTransferBar currentCase={currentCase} />
+        </>
+      )}
+      {!zoomed && (
+        <div className="text-[8px] font-mono text-center text-orange-800 tabular-nums mb-1">
+          {Math.round(primaryTemp)}°
         </div>
-        <button
-          type="button"
-          onPointerDown={() => takeCaseToStation(currentCase.id, 'COOLER')}
-          className="px-3 py-2 bg-stone-800 rounded text-xs"
-        >
-          Abort → Cooler
-        </button>
+      )}
+
+      {zoomed && <div className="h-px bg-zinc-600/50 my-2" />}
+
+      <div
+        className={`text-center font-black tracking-[0.15em] text-zinc-700 ${zoomed ? 'text-[11px] mb-2' : 'text-[7px] mb-1'}`}
+      >
+        DOOR
+      </div>
+      <div className={`flex justify-center ${zoomed ? 'gap-4 mb-3' : 'gap-1 mb-1'}`}>
+        <PushButton
+          color="silver"
+          label="UP"
+          onPress={() => setDoorMoving('UP')}
+          size={zoomed ? 'md' : 'sm'}
+        />
+        <PushButton
+          color="silver"
+          label="DOWN"
+          onPress={() => setDoorMoving('DOWN')}
+          size={zoomed ? 'md' : 'sm'}
+        />
       </div>
 
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-2 md:gap-3">
-        {/* Chamber + tools */}
-        <div className="flex flex-col min-h-0 gap-2">
-          <div
-            ref={chamberRef}
-            className="relative flex-1 min-h-[220px] rounded-lg border-4 border-zinc-700 bg-gradient-to-b from-zinc-900 via-stone-950 to-black overflow-hidden touch-none"
-            onPointerDown={(e) => {
-              if (phase === 'SWEEP') {
-                handleSweepStroke();
-                return;
-              }
-              if (activeTool === 'IRON_RAKE' && doorOpen > 0.35) {
-                setRakeHeld(true);
-                (e.currentTarget as HTMLElement).setPointerCapture?.(
-                  e.pointerId
-                );
-                handleRakeMove(e.clientX, e.clientY);
-              }
-            }}
-            onPointerMove={(e) => {
-              if (rakeHeld) handleRakeMove(e.clientX, e.clientY);
-            }}
-            onPointerUp={() => setRakeHeld(false)}
-            onPointerCancel={() => setRakeHeld(false)}
+      {zoomed && (
+        <div className="text-[7px] text-center text-zinc-700 leading-tight border-t border-zinc-600/40 pt-2">
+          CREMATORY MANUFACTURING AND SERVICE, INC.
+          <br />
+          TULSA, OKLAHOMA · MILLENNIUM
+        </div>
+      )}
+
+      {zoomed && progress >= 1 && phase === 'BURN' && (
+        <button
+          type="button"
+          onPointerDown={() => {
+            setPrimaryOn(false);
+            setSecondaryOn(false);
+            setDoorMoving('UP');
+            setPhase('SWEEP');
+            setActiveTool('IRON_RAKE');
+            setPanelZoomed(false);
+          }}
+          className="mt-3 w-full py-2.5 bg-emerald-700 text-white font-bold rounded text-xs"
+        >
+          Cool & Begin 3-Tool Sweep →
+        </button>
+      )}
+
+      {zoomed && phase === 'SWEEP' && fineAshLeft === 0 && (
+        <button
+          type="button"
+          onPointerDown={finishRetortProcess}
+          className="mt-3 w-full py-2.5 bg-amber-500 text-zinc-950 font-bold rounded text-xs"
+        >
+          Transfer Tray to Urn Processor →
+        </button>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 bg-[#1a2e1a] text-stone-100 flex flex-col select-none overflow-hidden pb-24">
+      <div className="shrink-0 px-3 pt-3 pb-2 border-b border-stone-800/80">
+        <div className="flex justify-between items-start gap-2">
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold text-orange-300 tracking-wide truncate">
+              MILLENNIUM — {displayCaseName(currentCase)}
+            </h2>
+            <p className="text-[10px] text-stone-400">
+              {Math.round(progress * 100)}% · {bonePhase} · Stirs {stirCount}/
+              {targets.requiredStirs}
+            </p>
+            <CaseTransferBar currentCase={currentCase} />
+          </div>
+          <button
+            type="button"
+            onPointerDown={() => takeCaseToStation(currentCase.id, 'COOLER')}
+            className="px-2.5 py-1.5 bg-stone-800 rounded text-[10px] shrink-0"
           >
-            {/* Vertical refractory door */}
+            Abort
+          </button>
+        </div>
+      </div>
+
+      {panelZoomed ? (
+        <div className="flex-1 min-h-0 p-3 flex flex-col animate-[fadeIn_0.25s_ease]">
+          {controlPanel(true)}
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0 flex flex-col gap-2 p-2">
+          <div className="flex-1 min-h-0 flex gap-2">
+            {controlPanel(false)}
+
             <div
-              className="absolute inset-x-0 top-0 z-30 bg-gradient-to-b from-zinc-500 via-zinc-600 to-zinc-800 border-b-4 border-zinc-900 shadow-2xl transition-none"
-              style={{
-                height: `${Math.max(0, (1 - doorOpen) * 100)}%`,
+              ref={chamberRef}
+              className="relative flex-1 min-w-0 rounded-lg border-4 border-zinc-700 bg-gradient-to-b from-zinc-900 via-stone-950 to-black overflow-hidden touch-none"
+              onPointerDown={(e) => {
+                if (phase === 'SWEEP') {
+                  handleSweepStroke();
+                  return;
+                }
+                if (activeTool === 'IRON_RAKE' && doorOpen > 0.35) {
+                  setRakeHeld(true);
+                  (e.currentTarget as HTMLElement).setPointerCapture?.(
+                    e.pointerId
+                  );
+                  handleRakeMove(e.clientX, e.clientY);
+                }
               }}
+              onPointerMove={(e) => {
+                if (rakeHeld) handleRakeMove(e.clientX, e.clientY);
+              }}
+              onPointerUp={() => setRakeHeld(false)}
+              onPointerCancel={() => setRakeHeld(false)}
             >
-              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] font-mono text-zinc-300 tracking-widest">
-                REFRACTORY DOOR {Math.round(doorOpen * 100)}%
-              </div>
-            </div>
-
-            {/* Flames */}
-            {(primaryOn || secondaryOn) && doorOpen < 0.9 && (
-              <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden">
-                {Array.from({ length: 7 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="absolute bottom-0 w-8 md:w-12 rounded-t-full opacity-80 animate-pulse"
-                    style={{
-                      left: `${8 + i * 13}%`,
-                      height: `${30 + (i % 3) * 18 + (primaryOn ? 20 : 0)}%`,
-                      background:
-                        'linear-gradient(to top, #ea580c, #fbbf24, transparent)',
-                      animationDelay: `${i * 0.12}s`,
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Remains / bones */}
-            <div className="absolute inset-0 z-20 flex items-end justify-center pb-6 pointer-events-none">
-              {bonePhase === 'INTACT' && (
-                <div className="w-40 h-16 md:w-56 md:h-20 bg-stone-300/80 rounded-sm shadow-inner" />
-              )}
-              {bonePhase === 'CHARRING' && (
-                <div className="w-40 h-14 md:w-52 md:h-16 bg-stone-800 rounded-sm border border-orange-700/50" />
-              )}
-              {bonePhase === 'CALCINING' && (
-                <div className="flex gap-2">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="w-3 h-10 md:w-4 md:h-14 bg-stone-200/70 rounded-sm rotate-12"
-                      style={{ transform: `rotate(${-20 + i * 10}deg)` }}
-                    />
-                  ))}
-                </div>
-              )}
-              {bonePhase === 'FRAGMENTING' && (
-                <div className="flex flex-wrap gap-1 w-48 justify-center">
-                  {Array.from({ length: 12 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="w-2 h-3 bg-stone-300/80 rounded-sm"
-                    />
-                  ))}
-                </div>
-              )}
-              {bonePhase === 'ASH' && (
-                <div className="w-44 h-8 bg-stone-500/70 rounded-full blur-[1px]" />
-              )}
-            </div>
-
-            {/* Iron rake overlay */}
-            {activeTool === 'IRON_RAKE' && doorOpen > 0.3 && phase !== 'SWEEP' && (
+              {/* Door — does not cover the left control strip */}
               <div
-                className="absolute z-40 pointer-events-none"
+                className="absolute inset-x-0 top-0 z-30 bg-gradient-to-b from-zinc-500 via-zinc-600 to-zinc-800 border-b-4 border-zinc-900 shadow-2xl"
                 style={{
-                  left: `${rakePos.x}%`,
-                  top: `${rakePos.y}%`,
-                  transform: 'translate(-10%, -50%) rotate(-12deg)',
+                  height: `${Math.max(0, (1 - doorOpen) * 100)}%`,
+                  transition: doorMoving ? 'none' : 'height 0.05s linear',
                 }}
               >
-                <div className="flex items-center">
-                  <div className="w-36 md:w-48 h-1.5 bg-gradient-to-r from-zinc-400 to-zinc-600 rounded-full shadow-lg" />
-                  <div className="w-8 h-4 border-2 border-zinc-400 rounded-sm bg-zinc-700 -ml-1" />
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[9px] font-mono text-zinc-300 tracking-widest whitespace-nowrap">
+                  DOOR {Math.round(doorOpen * 100)}%
                 </div>
-                {rakeHeld && (
-                  <div className="text-[9px] text-amber-300 mt-1 font-bold">
-                    STIRRING
+              </div>
+
+              {(primaryOn || secondaryOn) && (
+                <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="absolute bottom-0 w-7 rounded-t-full opacity-80 animate-pulse"
+                      style={{
+                        left: `${10 + i * 14}%`,
+                        height: `${28 + (i % 3) * 16 + (primaryOn ? 18 : 0)}%`,
+                        background:
+                          'linear-gradient(to top, #ea580c, #fbbf24, transparent)',
+                        animationDelay: `${i * 0.12}s`,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+
+              <div
+                className="absolute inset-0 z-20 flex items-end justify-center pb-8 pointer-events-none transition-transform duration-200"
+                style={{
+                  transform: `translateX(${(boneNudge % 3) - 1}px) translateY(${(boneNudge % 2)}px)`,
+                }}
+              >
+                {bonePhase === 'INTACT' && (
+                  <div className="w-36 h-14 bg-stone-300/80 rounded-sm shadow-inner" />
+                )}
+                {bonePhase === 'CHARRING' && (
+                  <div className="w-36 h-12 bg-stone-800 rounded-sm border border-orange-700/50" />
+                )}
+                {bonePhase === 'CALCINING' && (
+                  <div className="flex gap-1.5">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="w-3 h-12 bg-stone-200/70 rounded-sm"
+                        style={{
+                          transform: `rotate(${-20 + i * 10 + boneNudge}deg)`,
+                        }}
+                      />
+                    ))}
                   </div>
                 )}
+                {bonePhase === 'FRAGMENTING' && (
+                  <div className="flex flex-wrap gap-1 w-40 justify-center">
+                    {Array.from({ length: 12 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="w-2 h-3 bg-stone-300/80 rounded-sm"
+                        style={{
+                          transform: `translateY(${(boneNudge + i) % 4}px)`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+                {bonePhase === 'ASH' && (
+                  <div className="w-40 h-7 bg-stone-500/70 rounded-full blur-[1px]" />
+                )}
               </div>
-            )}
 
-            {phase === 'SWEEP' && (
-              <div className="absolute inset-0 z-25 flex items-center justify-center bg-black/40">
-                <p className="text-center text-amber-200 font-bold px-4 text-sm md:text-base">
-                  Tap chamber to sweep with selected tool
-                  <br />
-                  <span className="text-xs font-normal text-stone-300">
-                    Large {largeBonesLeft}% · Med {mediumBonesLeft}% · Fine{' '}
-                    {fineAshLeft}%
-                  </span>
-                </p>
-              </div>
-            )}
+              {activeTool === 'IRON_RAKE' &&
+                doorOpen > 0.3 &&
+                phase !== 'SWEEP' && (
+                  <div
+                    className="absolute z-40 pointer-events-none"
+                    style={{
+                      left: `${rakePos.x}%`,
+                      top: `${rakePos.y}%`,
+                      transform: 'translate(-10%, -50%) rotate(-12deg)',
+                    }}
+                  >
+                    <div className="flex items-center">
+                      <div className="w-28 h-1.5 bg-gradient-to-r from-zinc-400 to-zinc-600 rounded-full shadow-lg" />
+                      <div className="w-7 h-3.5 border-2 border-zinc-400 rounded-sm bg-zinc-700 -ml-1" />
+                    </div>
+                    {rakeHeld && (
+                      <div className="text-[9px] text-amber-300 mt-1 font-bold">
+                        STIRRING
+                      </div>
+                    )}
+                  </div>
+                )}
+
+              {phase === 'SWEEP' && (
+                <div className="absolute inset-0 z-25 flex items-center justify-center bg-black/45 px-3">
+                  <p className="text-center text-amber-200 font-bold text-xs">
+                    Tap chamber to sweep
+                    <br />
+                    <span className="text-[10px] font-normal text-stone-300">
+                      L {largeBonesLeft}% · M {mediumBonesLeft}% · F{' '}
+                      {fineAshLeft}%
+                    </span>
+                  </p>
+                </div>
+              )}
+
+              {!panelZoomed && progress >= 1 && phase === 'BURN' && (
+                <button
+                  type="button"
+                  onPointerDown={() => {
+                    setPrimaryOn(false);
+                    setSecondaryOn(false);
+                    setDoorMoving('UP');
+                    setPhase('SWEEP');
+                    setActiveTool('IRON_RAKE');
+                  }}
+                  className="absolute bottom-2 left-2 right-2 z-50 py-2 bg-emerald-700/95 text-white font-bold rounded text-[11px]"
+                >
+                  Begin Sweep →
+                </button>
+              )}
+
+              {!panelZoomed && phase === 'SWEEP' && fineAshLeft === 0 && (
+                <button
+                  type="button"
+                  onPointerDown={finishRetortProcess}
+                  className="absolute bottom-2 left-2 right-2 z-50 py-2 bg-amber-500 text-stone-950 font-bold rounded text-[11px]"
+                >
+                  To Urn Processor →
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* Wall tool rack */}
-          <div className="shrink-0 flex items-stretch gap-2 bg-stone-900/80 border border-stone-700 rounded-lg p-2">
-            <span className="text-[9px] uppercase tracking-widest text-stone-500 writing-mode-vertical self-center px-1">
-              Tool Rack
-            </span>
+          <div className="shrink-0 flex gap-1.5 bg-stone-900/90 border border-stone-700 rounded-lg p-1.5">
             {(
               [
-                {
-                  id: 'IRON_RAKE' as const,
-                  name: 'Iron Rake',
-                  hint: 'Hold & drag to stir',
-                },
-                {
-                  id: 'BRISTLE_BRUSH' as const,
-                  name: 'Bristle Brush',
-                  hint: 'Medium fragments',
-                },
-                {
-                  id: 'HAND_BRUSH' as const,
-                  name: 'Hand Brush',
-                  hint: 'Fine ash',
-                },
+                { id: 'IRON_RAKE' as const, name: 'Iron Rake' },
+                { id: 'BRISTLE_BRUSH' as const, name: 'Bristle' },
+                { id: 'HAND_BRUSH' as const, name: 'Hand Brush' },
               ] as const
             ).map((tool) => (
               <button
@@ -598,151 +829,18 @@ export const CremationMiniGame: React.FC = () => {
                 onPointerDown={() =>
                   setActiveTool((t) => (t === tool.id ? null : tool.id))
                 }
-                className={`flex-1 py-2 px-2 rounded border-2 text-left ${
+                className={`flex-1 py-2 px-1 rounded border text-center text-[10px] font-bold ${
                   activeTool === tool.id
                     ? 'border-amber-400 bg-amber-950/50'
                     : 'border-stone-600 bg-stone-800'
                 }`}
               >
-                <div className="text-xs font-bold">{tool.name}</div>
-                <div className="text-[9px] text-stone-400">{tool.hint}</div>
+                {tool.name}
               </button>
             ))}
           </div>
         </div>
-
-        {/* Control panel — vertical Millennium plate */}
-        <div className="shrink-0 lg:overflow-y-auto rounded-lg bg-gradient-to-b from-zinc-300 via-zinc-400 to-zinc-500 border-2 border-zinc-600 shadow-xl p-3 text-zinc-900 max-h-[42vh] lg:max-h-none">
-          <div className="text-center text-[10px] font-black tracking-[0.2em] text-zinc-700 mb-2">
-            BLOWER
-          </div>
-          <div className="flex justify-center gap-4 mb-2">
-            <PushButton color="green" label="START" onPress={startBlower} />
-            <PushButton color="red" label="STOP" onPress={stopBlower} />
-          </div>
-          <div className="flex justify-center gap-5 mb-3">
-            <StatusLamp on={blowerOn && !purging} color="white" label="Ready" />
-            <StatusLamp
-              on={purging}
-              color="amber"
-              label={purging ? `Purging ${purgeSecLeft}s` : 'Purging'}
-            />
-            <StatusLamp on={heated && !purging} color="green" label="Heated" />
-          </div>
-
-          <div className="h-px bg-zinc-600/50 my-2" />
-
-          <div className="text-center text-[9px] font-black tracking-wider text-zinc-700 mb-1">
-            SECONDARY CHAMBER TEMPERATURE CONTROLLER
-          </div>
-          <div className="flex justify-center gap-3 mb-1">
-            <PushButton
-              color="green"
-              label="START"
-              onPress={startSecondary}
-              disabled={!heated}
-            />
-            <PushButton
-              color="red"
-              label="STOP"
-              onPress={() => {
-                setSecondaryOn(false);
-                setPrimaryOn(false);
-              }}
-            />
-          </div>
-          <HoneywellReadout
-            label="Afterburner"
-            pv={secondaryTemp}
-            sp={secondarySp}
-          />
-          <p className="text-[8px] text-center text-zinc-700 mt-1 mb-2">
-            Reach ~800°F before primary. Ideal ignition ≥850°F.
-          </p>
-
-          <div className="h-px bg-zinc-600/50 my-2" />
-
-          <div className="text-center text-[9px] font-black tracking-wider text-zinc-700 mb-1">
-            PRIMARY CHAMBER TEMPERATURE CONTROLLER
-          </div>
-          <div className="flex justify-center gap-3 mb-1">
-            <PushButton
-              color="green"
-              label="START"
-              onPress={startPrimary}
-              disabled={!canStartPrimary}
-            />
-            <PushButton
-              color="red"
-              label="STOP"
-              onPress={() => setPrimaryOn(false)}
-            />
-          </div>
-          <HoneywellReadout
-            label="Main Chamber"
-            pv={primaryTemp}
-            sp={primarySp}
-          />
-          <p className="text-[8px] text-center text-zinc-700 mt-1 mb-2">
-            Stirs {stirCount}/{targets.requiredStirs} · Runaways {thermalWarnings}
-            {secondaryTemp < 850 && secondaryOn && (
-              <span className="block text-amber-800 font-bold">
-                Secondary below 850°F — slow burn / quality risk
-              </span>
-            )}
-          </p>
-
-          <div className="h-px bg-zinc-600/50 my-2" />
-
-          <div className="text-center text-[10px] font-black tracking-[0.2em] text-zinc-700 mb-2">
-            DOOR
-          </div>
-          <div className="flex justify-center gap-4 mb-3">
-            <PushButton
-              color="silver"
-              label="UP"
-              onPress={() => setDoorMoving('UP')}
-            />
-            <PushButton
-              color="silver"
-              label="DOWN"
-              onPress={() => setDoorMoving('DOWN')}
-            />
-          </div>
-
-          <div className="text-[7px] text-center text-zinc-700 leading-tight border-t border-zinc-600/40 pt-2">
-            CREMATORY MANUFACTURING AND SERVICE, INC.
-            <br />
-            TULSA, OKLAHOMA · MILLENNIUM
-          </div>
-
-          {progress >= 1 && phase === 'BURN' && (
-            <button
-              type="button"
-              onPointerDown={() => {
-                setPrimaryOn(false);
-                setSecondaryOn(false);
-                setDoorMoving('UP');
-                setPhase('SWEEP');
-                setActiveTool('IRON_RAKE');
-              }}
-              className="mt-3 w-full py-2 bg-emerald-700 text-white font-bold rounded text-xs"
-            >
-              Cool & Begin 3-Tool Sweep →
-            </button>
-          )}
-
-          {phase === 'SWEEP' && fineAshLeft === 0 && (
-            <button
-              type="button"
-              onPointerDown={finishRetortProcess}
-              className="mt-3 w-full py-2 bg-amber-500 text-zinc-950 font-bold rounded text-xs"
-            >
-              Transfer Tray to Urn Processor →
-            </button>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
 };
