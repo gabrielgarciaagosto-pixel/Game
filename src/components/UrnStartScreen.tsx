@@ -52,10 +52,10 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
           justify-content: center;
           box-sizing: border-box;
           padding:
-            max(2rem, env(safe-area-inset-top, 0px))
-            max(1rem, env(safe-area-inset-right, 0px))
-            max(2rem, env(safe-area-inset-bottom, 0px))
-            max(1rem, env(safe-area-inset-left, 0px));
+            max(2rem, env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px))
+            max(1rem, env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px))
+            max(2rem, env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px))
+            max(1rem, env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px));
           background-color: #08080a;
           color: #ebe6dd;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;

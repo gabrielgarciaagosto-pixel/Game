@@ -12,6 +12,11 @@ const config: CapacitorConfig = {
     SplashScreen: {
       launchAutoHide: true,
     },
+    SystemBars: {
+      insetsHandling: 'css',
+      style: 'DARK',
+      hidden: false,
+    },
   },
   server: {
     androidScheme: 'https',
