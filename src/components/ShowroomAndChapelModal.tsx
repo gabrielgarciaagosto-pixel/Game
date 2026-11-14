@@ -29,6 +29,7 @@ import { directiveLabel } from '../types/game';
 import { ChapelMourners } from './ChapelMourners';
 import { UrnVessel } from './urns/UrnVessel';
 import { CasketVessel } from './caskets/CasketVessel';
+import { ChapelNave } from './chapel/ChapelNave';
 
 const FLOWER_TYPES = ['LILIES', 'ROSES', 'WREATH'] as const;
 
@@ -264,31 +265,14 @@ export const ShowroomAndChapelModal: React.FC = () => {
       <div className="flex-1 flex flex-col gap-3 mt-3 pb-4">
         {/* Floor */}
         <div
-          className={`relative h-56 rounded-xl border-2 border-violet-700 overflow-hidden bg-gradient-to-b ${wallGrad} touch-none`}
+          className={`relative h-72 rounded-xl border-2 border-violet-700 overflow-hidden bg-gradient-to-b ${wallGrad} touch-none shadow-[inset_0_18px_40px_rgba(0,0,0,0.45)]`}
           data-chapel-floor
         >
-          <div
-            className="absolute inset-x-0 bottom-0 h-[42%]"
-            style={{ background: floorColor }}
-          />
-          <div
-            className="absolute inset-y-0 left-0 w-6"
-            style={{ background: drapeColor }}
-          />
-          <div
-            className="absolute inset-y-0 right-0 w-6"
-            style={{ background: drapeColor }}
-          />
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              background: `radial-gradient(60% 50% at 50% 35%, ${lightColor}, transparent 70%)`,
-            }}
-          />
-          {/* pews silhouette */}
-          <div
-            className="absolute left-3 right-3 bottom-2 h-3 rounded-sm opacity-80 pointer-events-none"
-            style={{ background: pewColor }}
+          <ChapelNave
+            floor={floorColor}
+            drape={drapeColor}
+            light={lightColor}
+            pew={pewColor}
           />
 
           <ChapelMourners active={viewingService} />
@@ -864,9 +848,31 @@ function DraggablePiece({
           {offeredCasket ? (
             <CasketVessel casket={offeredCasket} size="sm" showPlaque={false} />
           ) : (
-            <div className="w-28 h-10 bg-amber-900 rounded-sm border border-amber-600 flex items-center justify-center text-[9px] font-bold">
-              CASKET / BIER
-            </div>
+            <CasketVessel
+              casket={{
+                id: 'bier',
+                name: 'Bier',
+                material: 'OAK',
+                silhouette: 'HALF_COUCH',
+                finish: 'Oak',
+                hardware: 'Brass',
+                blurb: '',
+                cost: 0,
+                resaleValue: 0,
+                prestigeBonus: 0,
+                reputationRequired: 0,
+                palette: {
+                  body: '#b45309',
+                  bodyDeep: '#78350f',
+                  highlight: '#fbbf24',
+                  lining: '#f5e6d3',
+                  hardware: '#d4a017',
+                  trim: '#92400e',
+                },
+              }}
+              size="sm"
+              showPlaque={false}
+            />
           )}
         </div>
       )}

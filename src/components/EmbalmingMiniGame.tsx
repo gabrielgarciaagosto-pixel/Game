@@ -321,7 +321,7 @@ export const EmbalmingMiniGame: React.FC = () => {
         }}
         onPointerUp={() => setIsPouring(false)}
         onPointerCancel={() => setIsPouring(false)}
-        className="relative flex-1 bg-slate-900 rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-between px-6 md:px-12 overflow-hidden touch-none"
+        className="equip-wear relative flex-1 bg-slate-900 rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-between px-6 md:px-12 overflow-hidden touch-none"
       >
         {(() => {
           const fillPercent = Math.min(

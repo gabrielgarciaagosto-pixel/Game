@@ -607,11 +607,13 @@ canvas {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 22%;
+  height: 16%;
   background:
-    repeating-linear-gradient(0deg, rgba(125, 255, 178, 0.12) 0 1px, transparent 1px 4px),
-    radial-gradient(ellipse at 50% 100%, rgba(52, 211, 153, 0.48), transparent 72%);
-  animation: hub-flicker 2.4s ease-in-out infinite;
+    repeating-linear-gradient(0deg, rgba(125, 255, 178, 0.045) 0 1px, transparent 1px 8px),
+    radial-gradient(ellipse at 50% 130%, rgba(52, 211, 153, 0.16), transparent 68%);
+  -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent 92%);
+  mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent 92%);
+  animation: hub-flicker 2.8s ease-in-out infinite;
 }
 
 .hub-atmo-debt {
@@ -622,9 +624,9 @@ canvas {
 
 .hub-spirit {
   position: absolute;
-  width: 58px;
-  height: 120px;
-  margin-left: -29px;
+  width: 68px;
+  height: 132px;
+  margin-left: -34px;
   animation: hub-spirit var(--dur, 16s) ease-in-out infinite;
   animation-delay: var(--delay, 0s);
   opacity: 0;
@@ -638,24 +640,24 @@ canvas {
 }
 .hub-spirit-head {
   top: 0;
-  width: 16px;
-  height: 18px;
+  width: 20px;
+  height: 22px;
   border-radius: 50%;
-  background: radial-gradient(circle at 40% 40%, rgba(241, 245, 249, 0.85), rgba(186, 230, 253, 0.15) 70%, transparent 72%);
+  background: radial-gradient(circle at 40% 40%, rgba(248, 250, 252, 0.95), rgba(186, 230, 253, 0.35) 70%, transparent 74%);
 }
 .hub-spirit-body {
-  top: 14px;
-  width: 28px;
-  height: 64px;
+  top: 16px;
+  width: 34px;
+  height: 74px;
   border-radius: 40% 40% 46% 46%;
-  background: linear-gradient(180deg, rgba(226, 232, 240, 0.45), rgba(186, 230, 253, 0.05) 80%, transparent);
+  background: linear-gradient(180deg, rgba(241, 245, 249, 0.72), rgba(186, 230, 253, 0.16) 78%, transparent);
 }
 .hub-spirit-wisp {
-  top: 20px;
-  width: 54px;
-  height: 70px;
+  top: 22px;
+  width: 64px;
+  height: 84px;
   border-radius: 50%;
-  background: radial-gradient(ellipse at center, rgba(224, 242, 254, 0.28), transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(224, 242, 254, 0.42), transparent 70%);
 }
 
 @keyframes hub-flame {
@@ -737,7 +739,7 @@ canvas {
   .hub-spirit {
     animation: none;
   }
-  .hub-spirit { opacity: 0.4; }
+  .hub-spirit { opacity: 0.55; }
   .hub-atmo-debt { opacity: 0.7; }
 }
 
@@ -759,4 +761,64 @@ canvas {
       rgba(0, 0, 0, 0.28) 100%
     );
   }
+}
+
+.retort-brick::after,
+.equip-wear::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 36;
+  background:
+    radial-gradient(ellipse at 0% 100%, rgba(28, 18, 10, 0.55), transparent 46%),
+    radial-gradient(ellipse at 100% 0%, rgba(0, 0, 0, 0.32), transparent 40%),
+    repeating-linear-gradient(128deg, transparent 0 16px, rgba(255, 255, 255, 0.05) 16px 17px);
+}
+
+.paper-sheet {
+  background-color: #f3e6cf;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(90, 62, 28, 0.06) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(90deg, rgba(90, 62, 28, 0.045) 0 1px, transparent 1px 5px);
+  color: #3a2e22;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28), inset 0 0 0 1px rgba(90, 60, 20, 0.18);
+}
+.paper-sheet p,
+.paper-sheet label,
+.paper-sheet div,
+.paper-sheet span,
+.paper-sheet h2,
+.paper-sheet h3,
+.paper-sheet strong {
+  color: #3a2e22;
+}
+.paper-sheet input,
+.paper-sheet select,
+.paper-sheet textarea {
+  background: #fffaf3;
+  color: #2a2118;
+  border-color: #c4b49a;
+}
+
+.bone-hit {
+  animation: bone-fracture 0.28s ease-out;
+}
+@keyframes bone-fracture {
+  0% { transform: translate(-50%, -50%) scale(1.08) rotate(var(--rot, 0deg)); }
+  40% { transform: translate(-50%, -50%) scale(0.86) rotate(calc(var(--rot, 0deg) + 8deg)); }
+  100% { transform: translate(-50%, -50%) scale(1) rotate(var(--rot, 0deg)); }
+}
+.bone-mote {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #e7e5e4;
+  pointer-events: none;
+  animation: bone-mote 0.45s ease-out forwards;
+}
+@keyframes bone-mote {
+  from { opacity: 0.9; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -120%) scale(0.4); }
 }

@@ -9,6 +9,12 @@ import {
 import { hapticHammer } from '../utils/haptics';
 import { getUrnById, URN_CATALOG } from '../data/urnCatalog';
 import { UrnVessel } from './urns/UrnVessel';
+import {
+  BoneFragment,
+  MetalBit,
+  type BoneKind,
+  type MetalKind,
+} from './urns/BoneArt';
 import { startAshPourSfx, stopAshPourSfx } from '../utils/soundEffects';
 
 type Phase =
@@ -25,19 +31,47 @@ const SPILL_TILT = 62;
 
 interface BoneChunk {
   id: number;
+  kind: BoneKind;
   x: number;
   y: number;
+  rot: number;
   size: number;
+  /** 0 whole, 1 shards, 2 dust */
+  stage: 0 | 1 | 2;
   crushed: boolean;
 }
 
 interface MetalFragment {
   id: number;
-  kind: 'TITANIUM' | 'DENTAL_GOLD';
+  kind: MetalKind;
   x: number;
   y: number;
   collected: boolean;
 }
+
+const BONE_KINDS: BoneKind[] = [
+  'SHAFT',
+  'SKULL',
+  'RIB',
+  'VERTEBRA',
+  'KNUCKLE',
+  'SHAFT',
+  'RIB',
+  'VERTEBRA',
+  'KNUCKLE',
+  'SKULL',
+];
+
+const METAL_KINDS: MetalKind[] = [
+  'SCREW',
+  'PLATE',
+  'STAPLE',
+  'SCREW',
+  'DENTAL_GOLD',
+  'PLATE',
+  'STAPLE',
+  'SCREW',
+];
 
 export const UrnFillingMiniGame: React.FC = () => {
   const {
@@ -92,14 +126,22 @@ export const UrnFillingMiniGame: React.FC = () => {
 
   const [phase, setPhase] = useState<Phase>(resumePhase);
   const [bones, setBones] = useState<BoneChunk[]>(() =>
-    Array.from({ length: 10 }, (_, i) => ({
+    BONE_KINDS.map((kind, i) => ({
       id: i,
-      x: 15 + ((i * 9) % 70),
-      y: 20 + ((i * 13) % 55),
-      size: 14 + (i % 4) * 4,
+      kind,
+      x: 12 + ((i * 9) % 74),
+      y: 18 + ((i * 13) % 58),
+      rot: (i * 37) % 80 - 40,
+      size: kind === 'KNUCKLE' ? 28 : kind === 'RIB' ? 46 : 40 + (i % 3) * 8,
+      stage: 0,
       crushed: false,
     }))
   );
+  const [motes, setMotes] = useState<Array<{ id: number; x: number; y: number }>>(
+    []
+  );
+  const bonesRef = useRef(bones);
+  bonesRef.current = bones;
   const [hammerPos, setHammerPos] = useState({ x: 50, y: 20 });
   const [hammerHeld, setHammerHeld] = useState(false);
   const [dustLevel, setDustLevel] = useState(0);
@@ -111,9 +153,9 @@ export const UrnFillingMiniGame: React.FC = () => {
   const [magnetCleared, setMagnetCleared] = useState(false);
   const [cremulatorProgress, setCremulatorProgress] = useState(0);
   const [fragments, setFragments] = useState<MetalFragment[]>(() =>
-    Array.from({ length: 8 }, (_, i) => ({
+    METAL_KINDS.map((kind, i) => ({
       id: i,
-      kind: i % 3 === 0 ? 'DENTAL_GOLD' : 'TITANIUM',
+      kind,
       x: 12 + ((i * 11) % 76),
       y: 18 + ((i * 17) % 58),
       collected: false,
@@ -193,27 +235,38 @@ export const UrnFillingMiniGame: React.FC = () => {
     const x = ((clientX - rect.left) / rect.width) * 100;
     const y = ((clientY - rect.top) / rect.height) * 100;
     setHammerPos({ x, y });
-    setBones((prev) =>
-      prev.map((b) => {
-        if (b.crushed) return b;
-        const dist = Math.hypot(b.x - x, b.y - y);
-        if (dist < 14) {
-          if (Date.now() - lastHammer.current > 120) {
-            lastHammer.current = Date.now();
-            void hapticHammer();
-          }
-          if (!extractorOn) setDustLevel((d) => Math.min(95, d + 6));
-          return {
-            ...b,
-            crushed: true,
-            size: Math.max(6, b.size * 0.45),
-            x: b.x + (Math.random() - 0.5) * 8,
-            y: b.y + (Math.random() - 0.5) * 8,
-          };
-        }
-        return b;
-      })
-    );
+    let struck = false;
+    const next = bonesRef.current.map((b) => {
+      if (b.stage >= 2) return b;
+      if (Math.hypot(b.x - x, b.y - y) >= 16) return b;
+      struck = true;
+      const nextStage = (b.stage + 1) as 1 | 2;
+      return {
+        ...b,
+        stage: nextStage,
+        crushed: nextStage === 2,
+        size: nextStage === 2 ? Math.max(22, b.size * 0.7) : Math.max(18, b.size * 0.62),
+        rot: b.rot + (Math.random() - 0.5) * 28,
+        x: b.x + (Math.random() - 0.5) * 6,
+        y: b.y + (Math.random() - 0.5) * 6,
+      };
+    });
+    if (!struck) return;
+    if (Date.now() - lastHammer.current > 120) {
+      lastHammer.current = Date.now();
+      void hapticHammer();
+    }
+    if (!extractorOn) setDustLevel((d) => Math.min(70, d + 4));
+    bonesRef.current = next;
+    setBones(next);
+    setMotes((prev) => [
+      ...prev.slice(-36),
+      ...Array.from({ length: 7 }, (_, n) => ({
+        id: particleId.current++,
+        x: x + (n - 3) * 1.6,
+        y: y + (n % 3) * 1.3,
+      })),
+    ]);
   };
 
   const moveMagnet = (clientX: number, clientY: number) => {
@@ -676,17 +729,26 @@ export const UrnFillingMiniGame: React.FC = () => {
           >
             {bones.map((b) => (
               <div
-                key={b.id}
-                className={`absolute rounded-sm pointer-events-none transition-all duration-150 ${
-                  b.crushed ? 'bg-stone-500/80' : 'bg-stone-200'
-                }`}
+                key={`${b.id}-${b.stage}`}
+                className="bone-hit absolute pointer-events-none"
                 style={{
                   left: `${b.x}%`,
                   top: `${b.y}%`,
                   width: b.size,
-                  height: b.size * (b.crushed ? 0.6 : 1.4),
-                  transform: 'translate(-50%, -50%)',
+                  height: b.size * 0.62,
+                  ['--rot' as string]: `${b.rot}deg`,
+                  transform: `translate(-50%, -50%) rotate(${b.rot}deg)`,
+                  filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.45))',
                 }}
+              >
+                <BoneFragment kind={b.kind} stage={b.stage} />
+              </div>
+            ))}
+            {motes.map((m) => (
+              <span
+                key={m.id}
+                className="bone-mote"
+                style={{ left: `${m.x}%`, top: `${m.y}%` }}
               />
             ))}
             <div
@@ -755,15 +817,17 @@ export const UrnFillingMiniGame: React.FC = () => {
               f.collected ? null : (
                 <div
                   key={f.id}
-                  className={`absolute w-5 h-5 rounded-sm pointer-events-none ${
-                    f.kind === 'DENTAL_GOLD' ? 'bg-yellow-400' : 'bg-slate-300'
-                  }`}
+                  className="absolute pointer-events-none drop-shadow"
                   style={{
                     left: `${f.x}%`,
                     top: `${f.y}%`,
+                    width: f.kind === 'PLATE' ? 36 : f.kind === 'STAPLE' ? 26 : 18,
+                    height: f.kind === 'SCREW' ? 32 : 20,
                     transform: 'translate(-50%, -50%)',
                   }}
-                />
+                >
+                  <MetalBit kind={f.kind} />
+                </div>
               )
             )}
             <div
@@ -814,14 +878,18 @@ export const UrnFillingMiniGame: React.FC = () => {
             {bones.map((b) => (
               <div
                 key={b.id}
-                className="absolute w-3 h-2 bg-stone-400 rounded-sm pointer-events-none transition-all"
+                className="absolute pointer-events-none"
                 style={{
                   left: `${b.x}%`,
                   top: `${b.y}%`,
-                  transform: 'translate(-50%, -50%)',
-                  opacity: hatchLoaded ? 0.2 : 1,
+                  width: 22,
+                  height: 14,
+                  transform: `translate(-50%, -50%) rotate(${b.rot}deg)`,
+                  opacity: hatchLoaded ? 0.25 : 0.9,
                 }}
-              />
+              >
+                <BoneFragment kind={b.kind} stage={2} />
+              </div>
             ))}
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-28 h-16 border-2 border-amber-600 bg-zinc-900 rounded-b-xl flex flex-col items-center justify-end pb-1 overflow-hidden">
               <div

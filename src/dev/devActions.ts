@@ -342,13 +342,35 @@ export function fillCooler() {
   toast(added > 0 ? `Filled cooler (+${added})` : 'Cooler already full');
 }
 
-/** Put a case in the chamber and fire the retort so the hub shows a live burn. */
+function isCremationDirective(directive: string) {
+  return (
+    directive === 'CREMATION_DIRECT' ||
+    directive === 'VIEWING_THEN_CREMATION' ||
+    directive === 'CREMATION_THEN_VIEWING'
+  );
+}
+
+/** Put a cooler cremation case in the chamber. Leaves a live burn alone. */
 export function startRetortBurn() {
   const state = useGameStore.getState();
-  const target =
-    state.cases.find((c) => c.location !== 'EMBALMING') ?? state.cases[0];
+  const r = state.retort;
+  const already =
+    r.caseId != null &&
+    r.phase !== 'IDLE' &&
+    r.phase !== 'DONE' &&
+    state.cases.some((c) => c.id === r.caseId && c.location === 'CREMATION');
+  if (already) {
+    toast('Retort already burning');
+    return;
+  }
+  const eligible = state.cases.filter(
+    (c) =>
+      isCremationDirective(c.directive) &&
+      (c.location === 'COOLER' || c.location === 'CREMATION')
+  );
+  const target = eligible.find((c) => c.location === 'CREMATION') ?? eligible[0];
   if (!target) {
-    toast('No case to burn');
+    toast('No cremation case in the cooler');
     return;
   }
   useGameStore.setState({
@@ -372,6 +394,33 @@ export function startRetortBurn() {
     },
   });
   toast('Retort burning');
+}
+
+/** Open the urn processor on the crush tray for a real case. */
+export function stageUrnCrush() {
+  const state = useGameStore.getState();
+  const target =
+    state.cases.find((c) => c.location !== 'CREMATION' && c.location !== 'EMBALMING') ??
+    state.cases[0];
+  if (!target) {
+    toast('No case for the urn tray');
+    return;
+  }
+  useGameStore.setState({
+    cases: state.cases.map((c) =>
+      c.id === target.id
+        ? {
+            ...c,
+            location: 'URN_FILLING' as const,
+            urnAshReady: false,
+            isUrnFilled: false,
+          }
+        : c
+    ),
+    activeCaseId: target.id,
+    activeStation: 'URN_FILLING',
+  });
+  toast('Urn tray staged');
 }
 
 export function clearCooler() {

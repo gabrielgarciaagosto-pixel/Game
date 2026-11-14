@@ -182,6 +182,30 @@ class AudioManager {
     return this.currentId;
   }
 
+  /**
+   * Ramp the live music bed. Does not restart the clip, touch SFX, or
+   * unmute a muted bus. Caller passes the player level (playlist volume
+   * times any room duck).
+   */
+  setCurrentVolume(volume: number, durationMs: number): void {
+    if (this.muted || !this.ctx) return;
+    const vol = Math.max(0.0001, Math.min(1, volume));
+    const dur = Math.max(0.05, durationMs / 1000);
+    const t = this.ctx.currentTime;
+    for (const voice of this.voices) {
+      if (voice.generation !== this.generation) continue;
+      if (voice.endsAt != null && voice.endsAt < t) continue;
+      try {
+        const now = Math.max(0.0001, voice.gain.gain.value);
+        voice.gain.gain.cancelScheduledValues(t);
+        voice.gain.gain.setValueAtTime(now, t);
+        voice.gain.gain.linearRampToValueAtTime(vol, t + dur);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
   private clearHandoffTimer() {
     if (this.handoffTimer != null) {
       window.clearTimeout(this.handoffTimer);

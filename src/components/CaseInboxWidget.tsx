@@ -145,7 +145,7 @@ export const CaseInboxWidget: React.FC = () => {
                 </div>
 
                 <div className="mt-3 space-y-2">
-                  <div className="p-2.5 rounded-lg border border-slate-700 bg-slate-950/80 space-y-1.5">
+                  <div className="paper-sheet p-2.5 rounded-lg border border-stone-400 space-y-1.5">
                     <div className="text-[10px] uppercase tracking-wider text-slate-500">
                       Vital records
                     </div>

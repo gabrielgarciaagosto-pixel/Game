@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import type { UrnCatalogEntry, UrnSilhouette } from '../../data/urnCatalog';
+import type { UrnCatalogEntry, UrnMaterial, UrnSilhouette } from '../../data/urnCatalog';
 
 function BodyPath(silhouette: UrnSilhouette): string {
   switch (silhouette) {
@@ -23,6 +23,92 @@ function BodyPath(silhouette: UrnSilhouette): string {
   }
 }
 
+function MaterialMarks({
+  material,
+  silhouette,
+  accent,
+}: {
+  material: UrnMaterial;
+  silhouette: UrnSilhouette;
+  accent: string;
+}) {
+  if (material === 'MARBLE' || material === 'STONE') {
+    return (
+      <g fill="none" stroke={material === 'STONE' ? '#44403c' : '#78716c'} strokeLinecap="round">
+        <path d="M38 52 C44 66 42 84 48 112" strokeWidth="1.6" opacity="0.7" />
+        <path d="M58 46 C54 68 62 90 57 114" strokeWidth="1.15" opacity="0.55" />
+        <path d="M44 70 C52 78 48 96 53 108" strokeWidth="0.7" opacity="0.4" />
+        {material === 'STONE' && (
+          <>
+            <circle cx="46" cy="80" r="1.1" fill="#57534e" stroke="none" opacity="0.55" />
+            <circle cx="60" cy="96" r="0.8" fill="#44403c" stroke="none" opacity="0.5" />
+            <circle cx="42" cy="100" r="0.7" fill="#292524" stroke="none" opacity="0.45" />
+          </>
+        )}
+      </g>
+    );
+  }
+  if (material === 'BRONZE') {
+    return (
+      <g>
+        <path d="M36 70 C44 78 42 96 48 112" stroke="#3f6212" strokeWidth="2.2" fill="none" opacity="0.55" />
+        <path d="M58 60 C56 82 64 98 60 114" stroke="#65a30d" strokeWidth="1.4" fill="none" opacity="0.4" />
+        <path d="M34 86 H66" stroke={accent} strokeWidth="1.6" opacity="0.75" />
+      </g>
+    );
+  }
+  if (material === 'STEEL') {
+    return (
+      <g stroke="#e2e8f0" strokeWidth="0.45" opacity="0.55">
+        {Array.from({ length: 10 }, (_, i) => (
+          <line key={i} x1="32" x2="68" y1={58 + i * 5} y2={58 + i * 5} />
+        ))}
+        <path d="M40 48 C46 70 46 96 42 116" stroke="#fff" strokeWidth="2.2" opacity="0.35" fill="none" />
+      </g>
+    );
+  }
+  if (material === 'CERAMIC' || material === 'PORCELAIN') {
+    return (
+      <g>
+        <path d="M40 50 C48 58 44 64 50 70 C56 76 52 84 58 92" stroke="#fff" strokeWidth="2" fill="none" opacity="0.35" />
+        <path d="M46 62 C44 78 50 90 48 108" stroke={accent} strokeWidth="1.3" fill="none" opacity="0.45" />
+        <ellipse cx="44" cy="78" rx="3" ry="1.2" fill="#fff" opacity="0.35" />
+        <ellipse cx="58" cy="96" rx="2" ry="0.8" fill="#fff" opacity="0.28" />
+      </g>
+    );
+  }
+  if (material === 'WOOD') {
+    return (
+      <g fill="none" stroke="#3f2a16" strokeWidth="0.7" opacity="0.45">
+        <path d="M40 54 C48 62 46 86 54 112" />
+        <path d="M52 50 C50 70 46 92 44 114" />
+        <path d="M46 60 C54 72 50 94 56 110" opacity="0.7" />
+      </g>
+    );
+  }
+  if (material === 'GLASS') {
+    return (
+      <path
+        d="M40 50 C46 72 44 96 42 114"
+        stroke="#fff"
+        strokeWidth="2.4"
+        fill="none"
+        opacity="0.55"
+      />
+    );
+  }
+  if (silhouette === 'ART_DECO') {
+    return (
+      <g stroke={accent} fill="none">
+        <path d="M38 70 H62" strokeWidth="1.5" />
+        <path d="M40 86 H60" strokeWidth="1" />
+        <path d="M42 102 H58" strokeWidth="1" />
+      </g>
+    );
+  }
+  return null;
+}
+
 export const UrnVessel: React.FC<{
   urn: UrnCatalogEntry;
   className?: string;
@@ -31,9 +117,10 @@ export const UrnVessel: React.FC<{
 }> = ({ urn, className, showPlaque = true, size = 'md' }) => {
   const uid = useId().replace(/:/g, '');
   const body = `urn-body-${uid}`;
+  const shade = `urn-shade-${uid}`;
   const shine = `urn-shine-${uid}`;
-  const height =
-    size === 'lg' ? 'h-56' : size === 'sm' ? 'h-28' : 'h-40';
+  const height = size === 'lg' ? 'h-56' : size === 'sm' ? 'h-28' : 'h-40';
+  const bodyPath = BodyPath(urn.silhouette);
 
   return (
     <svg
@@ -44,96 +131,73 @@ export const UrnVessel: React.FC<{
       <defs>
         <linearGradient id={body} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor={urn.palette.highlight} />
-          <stop offset="0.35" stopColor={urn.palette.body} />
+          <stop offset="0.42" stopColor={urn.palette.body} />
           <stop offset="1" stopColor={urn.palette.bodyDeep} />
         </linearGradient>
-        <linearGradient id={shine} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#fff" stopOpacity="0.45" />
-          <stop offset="0.4" stopColor="#fff" stopOpacity="0.05" />
-          <stop offset="1" stopColor="#000" stopOpacity="0.25" />
+        <linearGradient id={shade} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#000" stopOpacity="0.45" />
+          <stop offset="0.38" stopColor="#000" stopOpacity="0.05" />
+          <stop offset="0.72" stopColor="#fff" stopOpacity="0.05" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0.28" />
         </linearGradient>
-        <filter id={`soft-${uid}`}>
-          <feDropShadow dx="0" dy="4" stdDeviation="2.2" floodOpacity="0.45" />
-        </filter>
+        <linearGradient id={shine} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff" stopOpacity="0.7" />
+          <stop offset="0.35" stopColor="#fff" stopOpacity="0.05" />
+          <stop offset="1" stopColor="#000" stopOpacity="0.2" />
+        </linearGradient>
       </defs>
 
-      <ellipse cx="50" cy="132" rx="28" ry="6" fill="#000" opacity="0.28" />
+      <ellipse cx="50" cy="136" rx="30" ry="7" fill="#000" opacity="0.32" />
 
-      {/* base plinth */}
       <path
-        d="M30 118 H70 L66 130 H34 Z"
+        d="M30 118 H70 L66 132 H34 Z"
         fill={urn.palette.base}
         stroke="#000"
         strokeOpacity="0.25"
       />
+      <path d="M34 124 H66" stroke="#fff" strokeOpacity="0.25" />
 
-      {/* body */}
-      <path
-        d={BodyPath(urn.silhouette)}
-        fill={`url(#${body})`}
-        stroke={urn.palette.bodyDeep}
-        strokeWidth="1.2"
-        filter={`url(#soft-${uid})`}
-      />
-      <path
-        d={BodyPath(urn.silhouette)}
-        fill={`url(#${shine})`}
-        opacity="0.55"
+      <path d={bodyPath} fill={`url(#${body})`} stroke={urn.palette.bodyDeep} strokeWidth="1.15" />
+      <path d={bodyPath} fill={`url(#${shade})`} />
+      <path d={bodyPath} fill={`url(#${shine})`} opacity="0.45" />
+
+      <MaterialMarks
+        material={urn.material}
+        silhouette={urn.silhouette}
+        accent={urn.palette.accent}
       />
 
-      {/* material accents */}
-      {urn.material === 'MARBLE' && (
-        <>
-          <path
-            d="M40 58 C46 70 44 90 48 110"
-            stroke={urn.palette.accent}
-            strokeWidth="1.1"
-            fill="none"
-            opacity="0.45"
-          />
-          <path
-            d="M56 50 C54 72 60 92 58 112"
-            stroke={urn.palette.accent}
-            strokeWidth="0.8"
-            fill="none"
-            opacity="0.35"
-          />
-        </>
-      )}
-      {(urn.material === 'BRONZE' || urn.material === 'STEEL') && (
-        <path
-          d="M34 78 H66"
-          stroke={urn.palette.accent}
-          strokeWidth="2"
-          opacity="0.7"
-        />
-      )}
-      {urn.material === 'WOOD' && (
-        <>
-          <path d="M40 60 C48 68 52 90 56 112" stroke="#000" strokeOpacity="0.18" fill="none" />
-          <path d="M52 52 C50 70 46 92 44 114" stroke="#000" strokeOpacity="0.12" fill="none" />
-        </>
-      )}
-      {urn.silhouette === 'ART_DECO' && (
-        <>
-          <path d="M38 70 H62" stroke={urn.palette.accent} strokeWidth="1.5" />
-          <path d="M40 86 H60" stroke={urn.palette.accent} strokeWidth="1" />
-          <path d="M42 102 H58" stroke={urn.palette.accent} strokeWidth="1" />
-        </>
-      )}
       {urn.silhouette === 'TEMPLE' && (
         <>
           <path d="M24 52 L50 34 L76 52 Z" fill={urn.palette.lid} stroke={urn.palette.bodyDeep} />
-          <path d="M30 52 V110 M40 52 V110 M50 52 V110 M60 52 V110 M70 52 V110" stroke={urn.palette.accent} strokeWidth="1.2" opacity="0.5" />
+          <path
+            d="M30 52 V110 M40 52 V110 M50 52 V110 M60 52 V110 M70 52 V110"
+            stroke={urn.palette.accent}
+            strokeWidth="1.2"
+            opacity="0.45"
+          />
         </>
       )}
+      {urn.silhouette === 'ART_DECO' && urn.material !== 'CERAMIC' && (
+        <g stroke={urn.palette.accent} fill="none">
+          <path d="M38 70 H62" strokeWidth="1.4" />
+          <path d="M40 86 H60" strokeWidth="1" />
+        </g>
+      )}
 
-      {/* lid / finial */}
       {urn.silhouette !== 'TEMPLE' && (
         <>
           <ellipse
             cx="50"
             cy={urn.silhouette === 'CUBE' ? 48 : 34}
+            rx={urn.silhouette === 'CUBE' ? 22 : 16}
+            ry="5"
+            fill={urn.palette.bodyDeep}
+            opacity="0.35"
+          />
+          <ellipse
+            cx="50"
+            cy={urn.silhouette === 'CUBE' ? 46 : 32}
             rx={urn.silhouette === 'CUBE' ? 22 : 16}
             ry="5"
             fill={urn.palette.lid}
@@ -142,26 +206,25 @@ export const UrnVessel: React.FC<{
           <path
             d={
               urn.silhouette === 'CUBE'
-                ? 'M30 48 H70 V40 H30 Z'
-                : 'M38 34 C38 24 62 24 62 34 Z'
+                ? 'M30 46 H70 V38 H30 Z'
+                : 'M38 32 C38 22 62 22 62 32 Z'
             }
             fill={urn.palette.lid}
             stroke={urn.palette.bodyDeep}
           />
-          <circle cx="50" cy={urn.silhouette === 'CUBE' ? 36 : 22} r="3.2" fill={urn.palette.accent} />
+          <path
+            d={urn.silhouette === 'CUBE' ? 'M32 40 H48' : 'M42 26 C46 23 52 23 56 27'}
+            stroke="#fff"
+            strokeOpacity="0.55"
+            fill="none"
+          />
+          <circle cx="50" cy={urn.silhouette === 'CUBE' ? 34 : 20} r="3.2" fill={urn.palette.accent} />
+          <circle cx="49" cy={urn.silhouette === 'CUBE' ? 33 : 19} r="1.1" fill="#fff" opacity="0.7" />
         </>
       )}
 
       {showPlaque && (
-        <rect
-          x="40"
-          y="88"
-          width="20"
-          height="10"
-          rx="1.5"
-          fill={urn.palette.accent}
-          opacity="0.85"
-        />
+        <rect x="40" y="88" width="20" height="10" rx="1.5" fill={urn.palette.accent} opacity="0.9" />
       )}
     </svg>
   );

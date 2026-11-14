@@ -103,11 +103,17 @@ export const CrematoryAudio: React.FC = () => {
       return;
     }
 
-    // Left crematory or chapel/menu music is playing — fade out, keep audioMode
+    // Left the crematory, or hub/chapel music owns the bus.
+    // Only fade a crematory bed — never the ducked hub theme or service playlist.
     if (!inCrematory || otherMusicOwns) {
-      if (activeBedRef.current !== 'off') {
+      if (
+        activeBedRef.current !== 'off' &&
+        isCrematoryBed(audioManager.getCurrentId())
+      ) {
         activeBedRef.current = 'off';
         void audioManager.fadeOut(CROSSFADE_MS);
+      } else {
+        activeBedRef.current = 'off';
       }
       return;
     }

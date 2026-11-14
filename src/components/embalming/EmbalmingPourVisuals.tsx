@@ -92,16 +92,6 @@ export const ChemicalBottle: React.FC<BottleProps> = ({ kind }) => {
 
 type Vec = { x: number; y: number };
 type RopePoint = { x: number; y: number; px: number; py: number };
-type StreamBit = {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  age: number;
-  life: number;
-  wobble: number;
-  w: number;
-};
 type SplashBit = {
   x: number;
   y: number;
@@ -148,41 +138,79 @@ function drawSmooth(ctx: CanvasRenderingContext2D, pts: Vec[]) {
   ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
 }
 
-function normalAt(pts: StreamBit[], i: number): Vec {
-  const a = pts[Math.max(0, i - 1)];
-  const b = pts[Math.min(pts.length - 1, i + 1)];
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy) || 1;
-  return { x: -dy / len, y: dx / len };
+type SpinePt = { x: number; y: number; nx: number; ny: number; u: number };
+
+/** Ballistic arc plus a slow sine wobble. Normals come from the parabola, so the ribbon cannot kink. */
+function sampleSpine(
+  origin: Vec,
+  dir: Vec,
+  speed: number,
+  gravity: number,
+  time: number,
+  amp: number,
+  flight: number,
+  steps: number
+): SpinePt[] {
+  const pts: SpinePt[] = [];
+  let x = origin.x;
+  let y = origin.y;
+  let vx = dir.x * speed;
+  let vy = dir.y * speed;
+  const dt = flight / steps;
+  for (let i = 0; i <= steps; i++) {
+    const sp = Math.hypot(vx, vy) || 1;
+    const nx = -vy / sp;
+    const ny = vx / sp;
+    const u = i / steps;
+    const env = Math.sin(u * Math.PI);
+    const wob =
+      Math.sin(time * 2.4 + u * 7.4) * amp * env +
+      Math.sin(time * 3.6 + u * 4.1) * amp * 0.28 * env;
+    pts.push({ x: x + nx * wob, y: y + ny * wob, nx, ny, u });
+    vy += gravity * dt;
+    x += vx * dt;
+    y += vy * dt;
+  }
+  return pts;
 }
 
-function fillRibbon(
+function traceSide(ctx: CanvasRenderingContext2D, pts: Vec[], move: boolean) {
+  if (pts.length === 0) return;
+  if (move) ctx.moveTo(pts[0].x, pts[0].y);
+  else ctx.lineTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length - 1; i++) {
+    const xc = (pts[i].x + pts[i + 1].x) / 2;
+    const yc = (pts[i].y + pts[i + 1].y) / 2;
+    ctx.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc);
+  }
+  ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+}
+
+function drawLiquid(
   ctx: CanvasRenderingContext2D,
-  run: StreamBit[],
-  color: string,
-  widthScale: number
+  spine: SpinePt[],
+  width0: number,
+  tint: { stream: string; edge: string; deep: string }
 ) {
-  if (run.length < 2) return;
-  ctx.beginPath();
-  for (let i = 0; i < run.length; i++) {
-    const n = normalAt(run, i);
-    const taper = Math.max(0.28, 1 - run[i].age / run[i].life);
-    const w = run[i].w * taper * widthScale;
-    const x = run[i].x + n.x * w;
-    const y = run[i].y + n.y * w;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  for (let i = run.length - 1; i >= 0; i--) {
-    const n = normalAt(run, i);
-    const taper = Math.max(0.28, 1 - run[i].age / run[i].life);
-    const w = run[i].w * taper * widthScale;
-    ctx.lineTo(run[i].x - n.x * w, run[i].y - n.y * w);
-  }
-  ctx.closePath();
-  ctx.fillStyle = color;
-  ctx.fill();
+  if (spine.length < 3) return;
+  const band = (scale: number, color: string) => {
+    const left: Vec[] = [];
+    const right: Vec[] = [];
+    for (const p of spine) {
+      const w = Math.max(0.6, width0 * scale * (1 - p.u * 0.7));
+      left.push({ x: p.x + p.nx * w, y: p.y + p.ny * w });
+      right.push({ x: p.x - p.nx * w, y: p.y - p.ny * w });
+    }
+    ctx.beginPath();
+    traceSide(ctx, left, true);
+    traceSide(ctx, [...right].reverse(), false);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+  };
+  band(1, tint.deep);
+  band(0.68, tint.stream);
+  band(0.2, tint.edge);
 }
 
 export type PourPointer = { x: number; y: number };
@@ -241,15 +269,14 @@ export const PourStage: React.FC<PourStageProps> = ({
     if (!ctx) return;
 
     const rope: RopePoint[] = [];
-    const stream: StreamBit[] = [];
     const splash: SplashBit[] = [];
     const emit = { x: 0, y: 0, dx: 0, dy: 1, ready: false };
     let dripUntil = 0;
     let sheen = 0;
+    let lastSplash = 0;
     let last = performance.now();
     let raf = 0;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const maxStream = reduced ? 28 : 60;
     const maxSplash = reduced ? 24 : 52;
 
     const ensureRope = (w: number, h: number) => {
@@ -327,23 +354,6 @@ export const PourStage: React.FC<PourStageProps> = ({
         tip: { x: b.x + ax * 30, y: b.y + ay * 30 },
         dir: { x: ax, y: ay },
       };
-    };
-
-    const pushStream = (mouth: Vec, dir: Vec, speed: number, width: number) => {
-      if (stream.length >= maxStream) stream.splice(0, stream.length - maxStream + 1);
-      const wob = (Math.random() - 0.5) * 0.45;
-      const px = -dir.y;
-      const py = dir.x;
-      stream.push({
-        x: mouth.x + px * wob * 3,
-        y: mouth.y + py * wob * 3,
-        vx: (dir.x + px * wob * 0.35) * speed,
-        vy: (dir.y + py * wob * 0.35) * speed,
-        age: 0,
-        life: 0.95,
-        wobble: Math.random() * Math.PI * 2,
-        w: width,
-      });
     };
 
     const burst = (x: number, y: number, inTank: boolean) => {
@@ -480,32 +490,6 @@ export const PourStage: React.FC<PourStageProps> = ({
       if (emitting) dripUntil = now + 520;
       const dripping = !emitting && now < dripUntil;
 
-      if (emitting) {
-        const speed = 120 + Math.min(flow, 70) * 3.2;
-        const width = 3.4 + Math.min(flow, 40) / 18 + (snap.isGlugging ? 0.7 : 0);
-        const nBits = 1;
-        for (let i = 0; i < nBits; i++) {
-          pushStream({ x: emit.x, y: emit.y }, edir, speed, width);
-        }
-      } else if (dripping && Math.random() < dt * 8) {
-        pushStream(
-          { x: emit.x, y: emit.y },
-          { x: edir.x * 0.25, y: Math.max(0.35, edir.y) },
-          70,
-          1.3
-        );
-        splash.push({
-          x: emit.x,
-          y: emit.y,
-          vx: 0,
-          vy: 20,
-          age: 0,
-          life: 0.25,
-          r: 1.6,
-          kind: 'glint',
-        });
-      }
-
       const tankEl = tankRef.current;
       let tank: { x: number; y: number; w: number; h: number; surface: number } | null =
         null;
@@ -522,27 +506,52 @@ export const PourStage: React.FC<PourStageProps> = ({
       }
 
       const g = 980;
-      for (let i = stream.length - 1; i >= 0; i--) {
-        const p = stream[i];
-        p.vy += g * dt;
-        p.age += dt;
-        const sp = Math.hypot(p.vx, p.vy) || 1;
-        const nx = -p.vy / sp;
-        const ny = p.vx / sp;
-        const wob = Math.sin(p.age * 16 + p.wobble) * (reduced ? 0 : 5);
-        p.vx += nx * wob * dt;
-        p.vy += ny * wob * dt;
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-        let hit: { x: number; y: number; inTank: boolean } | null = null;
-        if (tank && p.x > tank.x + 4 && p.x < tank.x + tank.w - 4 && p.y >= tank.surface && p.vy > 0) {
-          hit = { x: p.x, y: tank.surface, inTank: true };
-        } else if (p.y > h - 6) {
-          hit = { x: p.x, y: h - 6, inTank: false };
+      let ribbon: SpinePt[] = [];
+      if (emitting || dripping) {
+        const speed = emitting ? 150 + Math.min(flow, 70) * 2.2 : 80;
+        const aim = dripping
+          ? { x: edir.x * 0.2, y: Math.max(0.55, edir.y) }
+          : edir;
+        ribbon = sampleSpine(
+          { x: emit.x, y: emit.y },
+          aim,
+          speed,
+          g,
+          now / 1000,
+          reduced ? 1.1 : emitting ? 3.2 : 1.4,
+          emitting ? 0.52 : 0.26,
+          reduced ? 16 : 26
+        );
+        for (let i = 1; i < ribbon.length; i++) {
+          const p = ribbon[i];
+          const inTank =
+            !!tank &&
+            p.x > tank.x + 4 &&
+            p.x < tank.x + tank.w - 4 &&
+            p.y >= tank.surface;
+          const onFloor = p.y > h - 6;
+          if (!inTank && !onFloor) continue;
+          const yHit = inTank && tank ? tank.surface : h - 6;
+          ribbon = ribbon.slice(0, i + 1);
+          ribbon[ribbon.length - 1] = { ...p, y: yHit, u: p.u };
+          if (emitting && now - lastSplash > 80) {
+            lastSplash = now;
+            burst(p.x, yHit, inTank);
+            if (inTank) sheen = Math.min(1, sheen + 0.2);
+          }
+          break;
         }
-        if (hit || p.age > p.life) {
-          if (hit) burst(hit.x, hit.y, hit.inTank);
-          stream.splice(i, 1);
+        if (dripping && Math.random() < dt * 8) {
+          splash.push({
+            x: emit.x,
+            y: emit.y,
+            vx: 0,
+            vy: 20,
+            age: 0,
+            life: 0.25,
+            r: 1.6,
+            kind: 'glint',
+          });
         }
       }
 
@@ -589,22 +598,11 @@ export const PourStage: React.FC<PourStageProps> = ({
         ctx.restore();
       }
 
-      const runs: StreamBit[][] = [];
-      let run: StreamBit[] = [];
-      for (let i = 0; i < stream.length; i++) {
-        const p = stream[i];
-        const prev = run[run.length - 1];
-        if (prev && Math.hypot(p.x - prev.x, p.y - prev.y) > 36) {
-          if (run.length > 1) runs.push(run);
-          run = [];
-        }
-        run.push(p);
-      }
-      if (run.length > 1) runs.push(run);
-      for (const piece of runs) {
-        fillRibbon(ctx, piece, tint.deep, 1);
-        fillRibbon(ctx, piece, tint.stream, 0.72);
-        fillRibbon(ctx, piece, tint.edge, 0.28);
+      if (ribbon.length > 2) {
+        const width = emitting
+          ? 11 + Math.min(flow, 40) / 10 + (snap.isGlugging ? 1.4 : 0)
+          : 3.2;
+        drawLiquid(ctx, ribbon, width, tint);
       }
 
       for (const s of splash) {

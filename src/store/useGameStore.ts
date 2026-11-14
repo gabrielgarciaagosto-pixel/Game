@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import {
   directiveLabel,
+  displayCaseName,
   type CaseInboxFile,
   type CaseLocation,
   type DecedentCase,
@@ -903,10 +904,16 @@ export const useGameStore = create<GameState>()(
         if (c.isTagged || now >= c.tagExpiresAt) return c;
         return { ...c, isTagged: true, nameExpired: false };
       });
-      if (state.activeCaseId === caseId) return { cases };
+      const tagged = cases.find((c) => c.id === caseId);
+      const lastCase =
+        state.lastCase && state.lastCase.id === caseId && tagged?.isTagged
+          ? { ...state.lastCase, name: tagged.name }
+          : state.lastCase;
+      if (state.activeCaseId === caseId) return { cases, lastCase };
       // Same as selectActiveCase: mirror layout flowers, never refund merch
       return {
         cases,
+        lastCase,
         activeCaseId: caseId,
         placedFlowers: flowersFromLayout(state, caseId),
         serviceRatingBonus: 0,
@@ -953,7 +960,7 @@ export const useGameStore = create<GameState>()(
       activeCaseId: state.activeCaseId ?? next.id,
       lastCase: {
         id: next.id,
-        name: next.name,
+        name: displayCaseName(next),
         service: directiveLabel(next.directive),
         at: next.arrivedAt,
       },
@@ -2617,7 +2624,7 @@ export const useGameStore = create<GameState>()(
         intermentScore: intermentTotal,
         lastCase: {
           id: c.id,
-          name: c.name,
+          name: displayCaseName(c),
           service:
             chosenDisposition === 'BURIAL' ? 'Burial service' : 'Cremation service',
           at: gameNow(),

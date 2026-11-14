@@ -89,7 +89,7 @@ export const HubAtmosphere: React.FC = () => {
       dx: slot.dx,
       dur: slot.dur,
       delay: -((h >> 5) % slot.dur),
-      alpha: 0.62 + (h % 4) * 0.06,
+      alpha: 0.78 + (h % 4) * 0.04,
     };
   });
 

@@ -413,6 +413,10 @@ export const DevToolsOverlay: React.FC = () => {
                 onClick={() => actions.startRetortBurn()}
               />
               <Btn
+                label="Urn crush tray"
+                onClick={() => actions.stageUrnCrush()}
+              />
+              <Btn
                 label="Finish burn + cremulator"
                 onClick={() => actions.instantFinishBurn()}
               />

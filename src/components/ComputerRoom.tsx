@@ -215,7 +215,7 @@ export const ComputerRoom: React.FC = () => {
                 Open <strong className="text-[#e8f5e9]">FILES</strong> to copy
                 vitals. Draft stays if you switch apps. Fee every submit.
               </p>
-              <section className="rounded border border-[#3a6a8a] bg-[#0b1824]/95 p-3 space-y-2">
+              <section className="paper-sheet rounded border border-[#8a7048] p-3 space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-[9px] uppercase tracking-[0.18em] text-sky-300/80">
                     VR-441 entry form

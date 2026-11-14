@@ -14,18 +14,23 @@ import {
   type MenuPlaylistManifest,
 } from '../data/menuPlaylist';
 
+/** Room duck: about a third of the playlist level, within a short fade. */
+const ROOM_DUCK = 0.35;
+const DUCK_FADE_MS = 750;
+
 /**
  * Title + main-hub BGM (Gabriel menu playlist).
  * Random track on menu open; on end, another random (avoid immediate repeat).
- * Crossfades out when entering gameplay rooms; respects mute/unmute.
+ * Stays playing in every room except the chapel, ducked to about 35%.
+ * Chapel keeps the service playlist. Mute and the playlist volume still apply.
+ * SFX never go through this bed.
  *
- * Generation tokens cancel in-flight starts so leaving hub / Reset Game cannot
- * resurrect a menu bed inside Cooler / Chapel / Crematory.
+ * Generation tokens cancel in-flight starts so leaving for the chapel
+ * cannot resurrect a menu bed over service music.
  */
 export const MenuThemeAudio: React.FC = () => {
   const hasStartedGame = useGameStore((s) => s.hasStartedGame);
   const activeStation = useGameStore((s) => s.activeStation);
-  const audioMode = useGameStore((s) => s.retort.audioMode);
 
   const manifestRef = useRef<MenuPlaylistManifest | null>(null);
   const currentTrackRef = useRef<string | null>(null);
@@ -35,15 +40,17 @@ export const MenuThemeAudio: React.FC = () => {
   /** Monotonic token so a stale playTrack never fades a newer menu start. */
   const playTokenRef = useRef(0);
 
-  const menuActive =
-    (!hasStartedGame || activeStation === 'OVERVIEW') &&
-    audioMode !== 'START' &&
-    audioMode !== 'LOOP';
-  const menuActiveRef = useRef(menuActive);
-  menuActiveRef.current = menuActive;
+  const chapelOwns = hasStartedGame && activeStation === 'SHOWROOM';
+  const atHub = !hasStartedGame || activeStation === 'OVERVIEW';
+  const menuShouldPlay = !chapelOwns;
+  const gainScale = atHub ? 1 : ROOM_DUCK;
+  const menuShouldPlayRef = useRef(menuShouldPlay);
+  menuShouldPlayRef.current = menuShouldPlay;
+  const gainScaleRef = useRef(gainScale);
+  gainScaleRef.current = gainScale;
 
   const isStale = (gen: number) =>
-    gen !== genRef.current || !menuActiveRef.current;
+    gen !== genRef.current || !menuShouldPlayRef.current;
 
   const playTrack = async (trackId: string, fadeMs: number, gen: number) => {
     if (isStale(gen)) return;
@@ -59,7 +66,7 @@ export const MenuThemeAudio: React.FC = () => {
     await audioManager.crossfadeTo(bedId, {
       url: track.file,
       loop: false,
-      volume: manifest.volume,
+      volume: manifest.volume * gainScaleRef.current,
       durationMs: fadeMs,
     });
 
@@ -103,7 +110,7 @@ export const MenuThemeAudio: React.FC = () => {
     const onNearEnd = (id: string) => {
       if (!isMenuBedId(id)) return;
       if (!playingRef.current || !manifestRef.current) return;
-      if (!menuActiveRef.current) return;
+      if (!menuShouldPlayRef.current) return;
       const gen = genRef.current;
       void startRandom(
         manifestRef.current.crossfadeMs ?? CROSSFADE_MS,
@@ -117,7 +124,7 @@ export const MenuThemeAudio: React.FC = () => {
 
   useEffect(() => {
     const onUnmute = () => {
-      if (!menuActiveRef.current) return;
+      if (!menuShouldPlayRef.current) return;
       playingRef.current = false;
       const gen = genRef.current;
       void startRandom(
@@ -131,31 +138,35 @@ export const MenuThemeAudio: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const fadeMs = manifestRef.current?.crossfadeMs ?? CROSSFADE_MS;
+    const chapelFade = manifestRef.current?.crossfadeMs ?? CROSSFADE_MS;
 
-    if (!menuActive) {
-      // Invalidate any in-flight startRandom / near-end handoff.
+    if (!menuShouldPlay) {
+      // Chapel owns the bus. Let the service playlist crossfade in.
       genRef.current += 1;
       if (playingRef.current || isMenuOrThemeBedId(audioManager.getCurrentId())) {
         playingRef.current = false;
         const id = audioManager.getCurrentId();
         if (id == null || isMenuOrThemeBedId(id)) {
-          void audioManager.fadeOut(fadeMs);
+          void audioManager.fadeOut(chapelFade);
         }
       }
       return;
     }
 
-    // Already on a menu bed (e.g. splash → hub) — keep playing.
+    const manifestVol = manifestRef.current?.volume ?? 0.42;
+    const target = manifestVol * gainScale;
+
+    // Same clip, new level: hub is full, every other non-chapel room is ducked.
     if (playingRef.current && isMenuBedId(audioManager.getCurrentId())) {
+      audioManager.setCurrentVolume(target, DUCK_FADE_MS);
       return;
     }
 
     // Hub / title owns the bus: crossfade over leftover chapel/crematory beds
     // so returning from Chapel is never stuck silent.
     const gen = ++genRef.current;
-    void startRandom(fadeMs, null, gen);
-  }, [menuActive]);
+    void startRandom(atHub ? chapelFade : DUCK_FADE_MS, null, gen);
+  }, [menuShouldPlay, gainScale, atHub]);
 
   return null;
 };
