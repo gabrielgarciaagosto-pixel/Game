@@ -168,7 +168,8 @@ export const CaseInboxWidget: React.FC = () => {
                                   activeFile.timeOfDeathHour ?? 0,
                                   activeFile.timeOfDeathMinute ?? 0
                                 );
-                                return `${colon} · ${colon.replace(':', '')}`;
+                                // HHMM first so paste into VR-441 yields 4 digits cleanly
+                                return `${colon.replace(':', '')} · ${colon}`;
                               })()
                             : '—'}
                         </div>

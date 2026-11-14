@@ -7,7 +7,11 @@ import {
 import { US_PLACE_LABELS } from '../data/usPlaces';
 import { useGameStore } from '../store/useGameStore';
 
-/** Digits-only HHMM for Android numeric keypads (no ':' needed). */
+/**
+ * Digits-only HHMM for Android numeric keypads (no ':' needed).
+ * Strip non-digits first so paste of FILES "07:45" / "07:45 · 0745"
+ * is not truncated by maxLength before sanitization.
+ */
 function digitsOnlyHhmm(raw: string): string {
   return raw.replace(/\D/g, '').slice(0, 4);
 }
@@ -181,8 +185,15 @@ export const ComputerRoom: React.FC = () => {
                   timeOfDeath: digitsOnlyHhmm(e.target.value),
                 }))
               }
+              onPaste={(e) => {
+                e.preventDefault();
+                const text = e.clipboardData.getData('text');
+                setForm((f) => ({
+                  ...f,
+                  timeOfDeath: digitsOnlyHhmm(text),
+                }));
+              }}
               placeholder="1030"
-              maxLength={4}
               className="mt-1 w-full bg-[#061018] border border-[#2a4a5c] rounded px-2 py-2 text-sm text-[#e8f5e9] font-mono tracking-widest"
               inputMode="numeric"
               pattern="[0-9]*"
