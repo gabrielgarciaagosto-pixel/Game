@@ -9,33 +9,47 @@ export type DispositionDirective =
 
 export type SweepTool = 'IRON_RAKE' | 'BRISTLE_BRUSH' | 'HAND_BRUSH';
 
+export type CaseLocation =
+  | 'COOLER'
+  | 'EMBALMING'
+  | 'CREMATION'
+  | 'URN_FILLING'
+  | 'CHAPEL'
+  | 'URN_VAULT';
+
 export type StationId =
   | 'OVERVIEW'
   | 'COOLER'
   | 'EMBALMING'
   | 'CREMATION'
   | 'URN_FILLING'
-  | 'SHOWROOM';
+  | 'SHOWROOM'
+  | 'URN_VAULT';
 
 export interface DecedentCase {
   id: string;
   name: string;
   weightLbs: number;
   tissueCondition: TissueCondition;
-  dehydrationFactor: number; // 0.5 (Edematous), 1.0 (Normal), 2.0 (Dehydrated)
+  dehydrationFactor: number;
   directive: DispositionDirective;
   preferredFlowers: 'LILIES' | 'ROSES' | 'WREATH';
+  location: CaseLocation;
   isEmbalmed: boolean;
   embalmRank?: Rank;
+  embalmTipMultiplier?: number;
   isCremated: boolean;
   cremationRank?: Rank;
   isUrnFilled: boolean;
   basePayout: number;
-  /** Cooler toe-tag window */
   arrivedAt: number;
   tagExpiresAt: number;
   isTagged: boolean;
   nameExpired: boolean;
+  /** 0 = pristine, 100 = fully decomposed */
+  decayLevel: number;
+  leftCoolerAt: number | null;
+  serviceDateMs: number | null;
 }
 
 export interface CaseInboxFile {
@@ -47,6 +61,7 @@ export interface CaseInboxFile {
   directive: DispositionDirective;
   preferredFlowers: 'LILIES' | 'ROSES' | 'WREATH';
   isRead: boolean;
+  serviceDateMs: number | null;
 }
 
 export interface ShowroomItem {
@@ -61,4 +76,11 @@ export interface ShowroomItem {
 
 export function displayCaseName(c: DecedentCase): string {
   return c.isTagged ? c.name : 'UNIDENTIFIED REMAINS';
+}
+
+export function decayLabel(level: number): string {
+  if (level < 15) return 'Stable';
+  if (level < 40) return 'Early Decomposition';
+  if (level < 70) return 'Advanced Decomposition';
+  return 'Critical Putrefaction';
 }

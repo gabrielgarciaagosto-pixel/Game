@@ -6,6 +6,7 @@ import { MainHubMenu } from './components/MainHubMenu';
 import { ShowroomAndChapelModal } from './components/ShowroomAndChapelModal';
 import { UrnFillingMiniGame } from './components/UrnFillingMiniGame';
 import { UrnStartScreen } from './components/UrnStartScreen';
+import { UrnVaultRoom } from './components/UrnVaultRoom';
 import { useIntakeSpawner } from './hooks/useIntakeSpawner';
 import { displayCaseName } from './types/game';
 import { useGameStore } from './store/useGameStore';
@@ -19,7 +20,7 @@ function App() {
     cash,
     reputation,
     ossilegiumCommuneGrams,
-    coolerCases,
+    cases,
     activeCaseId,
     activeStation,
     legalAlert,
@@ -29,7 +30,7 @@ function App() {
   } = useGameStore();
 
   const activeCase =
-    coolerCases.find((c) => c.id === activeCaseId) ?? coolerCases[0] ?? null;
+    cases.find((c) => c.id === activeCaseId) ?? cases[0] ?? null;
 
   if (!hasStartedGame) {
     return (
@@ -75,6 +76,7 @@ function App() {
                 </div>
                 <div className="font-mono text-xs text-sky-300 truncate">
                   {activeCase?.directive ?? '—'}
+                  {activeCase?.location ? ` · ${activeCase.location}` : ''}
                 </div>
               </div>
               <div>
@@ -96,6 +98,7 @@ function App() {
       {activeStation === 'CREMATION' && <CremationMiniGame />}
       {activeStation === 'URN_FILLING' && <UrnFillingMiniGame />}
       {activeStation === 'SHOWROOM' && <ShowroomAndChapelModal />}
+      {activeStation === 'URN_VAULT' && <UrnVaultRoom />}
 
       <CaseInboxWidget />
 

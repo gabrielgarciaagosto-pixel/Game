@@ -5,12 +5,17 @@ import { useGameStore } from '../store/useGameStore';
 export const MainHubMenu: React.FC = () => {
   const {
     setActiveStation,
-    coolerCases,
+    takeActiveCaseToStation,
+    cases,
     activeCaseId,
     cash,
     reputation,
     ossilegiumCommuneGrams,
   } = useGameStore();
+
+  const coolerCases = cases.filter((c) => c.location === 'COOLER');
+  const vaultCount = cases.filter((c) => c.location === 'URN_VAULT').length;
+  const activeCase = cases.find((c) => c.id === activeCaseId) ?? null;
 
   const untaggedUrgentCount = coolerCases.filter(
     (c) => !c.isTagged && Date.now() < c.tagExpiresAt
@@ -26,34 +31,44 @@ export const MainHubMenu: React.FC = () => {
           ? `${untaggedUrgentCount} UNTAGGED (TIMER ACTIVE!)`
           : undefined,
       color: 'from-cyan-900/80 to-slate-900 border-cyan-500/50',
+      takesCase: false,
     },
     {
       id: 'EMBALMING' as const,
       title: 'EMBALMING ROOM',
       subtitle: 'Chemical Mixing & Arterial Prep',
       color: 'from-emerald-900/80 to-slate-900 border-emerald-500/50',
+      takesCase: true,
     },
     {
       id: 'CREMATION' as const,
       title: 'CREMATORY',
-      subtitle: 'Retort Burn, Stir & 3-Tool Sweep',
+      subtitle: 'Millennium Retort · Door · Rake',
       color: 'from-orange-900/80 to-slate-900 border-orange-500/50',
+      takesCase: true,
     },
     {
       id: 'URN_FILLING' as const,
       title: 'URN PROCESSING',
       subtitle: 'Magnet Sweep, Cremulator & Funnel',
       color: 'from-amber-900/80 to-slate-900 border-amber-500/50',
+      takesCase: true,
     },
     {
       id: 'SHOWROOM' as const,
       title: 'CHAPEL & SHOWROOM',
       subtitle: 'Floral Layout, Caskets & Services',
       color: 'from-violet-900/80 to-slate-900 border-violet-500/50',
+      takesCase: true,
+    },
+    {
+      id: 'URN_VAULT' as const,
+      title: 'URN VAULT',
+      subtitle: `${vaultCount} urn${vaultCount === 1 ? '' : 's'} stored`,
+      color: 'from-stone-800/80 to-slate-900 border-stone-500/50',
+      takesCase: false,
     },
   ];
-
-  const activeCase = coolerCases.find((c) => c.id === activeCaseId);
 
   return (
     <div className="w-full h-full bg-slate-950 text-slate-100 p-4 md:p-6 flex flex-col justify-between select-none">
@@ -66,7 +81,7 @@ export const MainHubMenu: React.FC = () => {
             Selected Case:{' '}
             <span className="text-amber-300 font-semibold">
               {activeCase
-                ? `${displayCaseName(activeCase)} (${activeCase.weightLbs} lbs)`
+                ? `${displayCaseName(activeCase)} (${activeCase.weightLbs} lbs) · ${activeCase.location}`
                 : 'None — Select a body in the Cooler'}
             </span>
           </p>
@@ -96,7 +111,11 @@ export const MainHubMenu: React.FC = () => {
           <button
             key={tile.id}
             type="button"
-            onPointerDown={() => setActiveStation(tile.id)}
+            onPointerDown={() =>
+              tile.takesCase
+                ? takeActiveCaseToStation(tile.id)
+                : setActiveStation(tile.id)
+            }
             className={`aspect-square max-h-44 w-full rounded-2xl bg-gradient-to-br ${tile.color} border-2 p-4 md:p-5 flex flex-col justify-between items-start text-left shadow-lg active:scale-95 transition-transform relative overflow-hidden`}
           >
             <span className="text-base md:text-lg font-extrabold tracking-wide">

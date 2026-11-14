@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { displayCaseName } from '../types/game';
+import { CaseTransferBar } from './CaseTransferBar';
+import { displayCaseName, decayLabel } from '../types/game';
 import { useGameStore } from '../store/useGameStore';
 import { hapticGlug } from '../utils/haptics';
 import {
@@ -26,10 +27,17 @@ function updateProximityFromEvent(
 }
 
 export const EmbalmingMiniGame: React.FC = () => {
-  const { coolerCases, activeCaseId, completeEmbalming, setActiveStation } =
-    useGameStore();
+  const {
+    cases,
+    activeCaseId,
+    completeEmbalming,
+    setActiveStation,
+    takeActiveCaseToStation,
+  } = useGameStore();
   const currentCase =
-    coolerCases.find((c) => c.id === activeCaseId) ?? coolerCases[0] ?? null;
+    cases.find((c) => c.id === activeCaseId) ??
+    cases.find((c) => c.location === 'EMBALMING') ??
+    null;
 
   const [selectedFluid, setSelectedFluid] = useState<FluidType>('FORMALDEHYDE');
   const [poured, setPoured] = useState({
@@ -91,7 +99,7 @@ export const EmbalmingMiniGame: React.FC = () => {
   if (!currentCase) {
     return (
       <div className="fixed inset-0 z-50 bg-slate-950/95 text-slate-100 flex flex-col items-center justify-center gap-4 p-6">
-        <p>No body selected. Choose a cooler bay first.</p>
+        <p>No body on the prep table. Pull a case from the Cooler.</p>
         <button
           type="button"
           onPointerDown={() => setActiveStation('COOLER')}
@@ -99,6 +107,35 @@ export const EmbalmingMiniGame: React.FC = () => {
         >
           Open Cooler
         </button>
+      </div>
+    );
+  }
+
+  if (currentCase.isEmbalmed) {
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-950/95 text-slate-100 p-4 md:p-6 pb-24 flex flex-col select-none">
+        <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+          <h2 className="text-lg font-bold text-emerald-400">
+            EMBALMING COMPLETE — {displayCaseName(currentCase)}
+          </h2>
+          <button
+            type="button"
+            onPointerDown={() => setActiveStation('OVERVIEW')}
+            className="px-4 py-2 bg-slate-800 rounded text-sm"
+          >
+            Main Menu
+          </button>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center">
+          <p className="text-2xl font-black text-amber-300">
+            Rank {currentCase.embalmRank ?? '—'}
+          </p>
+          <p className="text-sm text-slate-400 max-w-md">
+            Embalming result is saved on this case. Return them to refrigeration
+            or move to the chapel for viewing.
+          </p>
+          <CaseTransferBar currentCase={currentCase} />
+        </div>
       </div>
     );
   }
@@ -139,15 +176,35 @@ export const EmbalmingMiniGame: React.FC = () => {
               {currentCase.tissueCondition}
             </span>{' '}
             (Factor ×{currentCase.dehydrationFactor})
+            {currentCase.decayLevel > 5 && (
+              <>
+                {' '}
+                |{' '}
+                <span className="text-red-400 font-semibold">
+                  {decayLabel(currentCase.decayLevel)} (
+                  {Math.round(currentCase.decayLevel)}%)
+                </span>
+              </>
+            )}
           </p>
+          <CaseTransferBar currentCase={currentCase} />
         </div>
-        <button
-          type="button"
-          onPointerDown={() => setActiveStation('OVERVIEW')}
-          className="px-4 py-2 bg-slate-800 rounded text-sm active:bg-slate-700"
-        >
-          Main Menu
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onPointerDown={() => takeActiveCaseToStation('COOLER')}
+            className="px-3 py-2 bg-cyan-800 rounded text-sm active:bg-cyan-700"
+          >
+            Return Cooler
+          </button>
+          <button
+            type="button"
+            onPointerDown={() => setActiveStation('OVERVIEW')}
+            className="px-4 py-2 bg-slate-800 rounded text-sm active:bg-slate-700"
+          >
+            Main Menu
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-2 md:gap-4 my-3">

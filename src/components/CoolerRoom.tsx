@@ -1,17 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { displayCaseName } from '../types/game';
+import { displayCaseName, decayLabel } from '../types/game';
 import { useGameStore } from '../store/useGameStore';
 
 export const CoolerRoom: React.FC = () => {
   const {
-    coolerCases,
+    cases,
     tagBodyInCooler,
     selectActiveCase,
     activeCaseId,
     setActiveStation,
+    takeActiveCaseToStation,
     expireUntaggedNames,
   } = useGameStore();
 
+  const coolerCases = cases.filter((c) => c.location === 'COOLER');
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -31,7 +33,8 @@ export const CoolerRoom: React.FC = () => {
           </h2>
           <p className="text-xs text-slate-400">
             Tap the hovering name within 60 seconds of arrival to attach a
-            permanent Toe-Tag!
+            permanent Toe-Tag! Remains leave the cooler when taken to prep or
+            cremation.
           </p>
         </div>
         <button
@@ -50,7 +53,7 @@ export const CoolerRoom: React.FC = () => {
             return (
               <div
                 key={index}
-                className="h-40 md:h-44 rounded-xl bg-slate-900/40 border border-dashed border-slate-800 flex items-center justify-center text-xs text-slate-600 font-mono"
+                className="h-44 md:h-48 rounded-xl bg-slate-900/40 border border-dashed border-slate-800 flex items-center justify-center text-xs text-slate-600 font-mono"
               >
                 BAY #{index + 1} — EMPTY
               </div>
@@ -68,7 +71,7 @@ export const CoolerRoom: React.FC = () => {
             <div
               key={body.id}
               onPointerDown={() => selectActiveCase(body.id)}
-              className={`h-40 md:h-44 rounded-xl p-4 flex flex-col justify-between relative border-2 transition-all ${
+              className={`h-44 md:h-48 rounded-xl p-4 flex flex-col justify-between relative border-2 transition-all ${
                 isSelected
                   ? 'bg-cyan-950/60 border-amber-400'
                   : 'bg-slate-900 border-cyan-800/50'
@@ -108,10 +111,58 @@ export const CoolerRoom: React.FC = () => {
                 </div>
               </div>
 
-              <div className="text-[11px] text-slate-400 flex justify-between">
-                <span>{body.isEmbalmed ? 'Embalmed ✓' : 'Unembalmed'}</span>
-                <span>{body.isCremated ? 'Cremated ✓' : 'Intact'}</span>
+              <div className="text-[11px] text-slate-400 flex justify-between gap-1">
+                <span>
+                  {body.isEmbalmed
+                    ? `Embalmed ${body.embalmRank ?? '✓'}`
+                    : 'Unembalmed'}
+                </span>
+                <span>
+                  {body.isCremated
+                    ? `Cremated ${body.cremationRank ?? '✓'}`
+                    : body.decayLevel > 5
+                      ? decayLabel(body.decayLevel)
+                      : 'Intact'}
+                </span>
               </div>
+
+              {isSelected && (
+                <div className="flex gap-1 mt-1">
+                  <button
+                    type="button"
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      selectActiveCase(body.id);
+                      takeActiveCaseToStation('EMBALMING');
+                    }}
+                    className="flex-1 text-[10px] py-1.5 bg-emerald-700 rounded font-bold"
+                  >
+                    Prep
+                  </button>
+                  <button
+                    type="button"
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      selectActiveCase(body.id);
+                      takeActiveCaseToStation('CREMATION');
+                    }}
+                    className="flex-1 text-[10px] py-1.5 bg-orange-700 rounded font-bold"
+                  >
+                    Cremate
+                  </button>
+                  <button
+                    type="button"
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      selectActiveCase(body.id);
+                      takeActiveCaseToStation('SHOWROOM');
+                    }}
+                    className="flex-1 text-[10px] py-1.5 bg-violet-700 rounded font-bold"
+                  >
+                    Chapel
+                  </button>
+                </div>
+              )}
             </div>
           );
         })}

@@ -3,12 +3,13 @@ import { nextIntakeDelayMs, useGameStore } from '../store/useGameStore';
 
 /**
  * Background cooler intake: random 3–5 minute interval between arrivals.
- * Only runs after the urn start screen calls `startGame()`.
+ * Also ticks decay for cases left outside refrigeration.
  */
 export function useIntakeSpawner() {
   const hasStartedGame = useGameStore((s) => s.hasStartedGame);
   const receiveNewIntake = useGameStore((s) => s.receiveNewIntake);
   const expireUntaggedNames = useGameStore((s) => s.expireUntaggedNames);
+  const tickDecay = useGameStore((s) => s.tickDecay);
 
   useEffect(() => {
     if (!hasStartedGame) return;
@@ -27,12 +28,15 @@ export function useIntakeSpawner() {
     };
 
     scheduleNext();
-    const expireTick = setInterval(() => expireUntaggedNames(), 1000);
+    const expireTick = setInterval(() => {
+      expireUntaggedNames();
+      tickDecay();
+    }, 1000);
 
     return () => {
       cancelled = true;
       clearTimeout(timeoutId);
       clearInterval(expireTick);
     };
-  }, [hasStartedGame, receiveNewIntake, expireUntaggedNames]);
+  }, [hasStartedGame, receiveNewIntake, expireUntaggedNames, tickDecay]);
 }

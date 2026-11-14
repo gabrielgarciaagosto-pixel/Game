@@ -1,8 +1,9 @@
 import React, { useMemo, useRef, useState } from 'react';
+import { CaseTransferBar } from './CaseTransferBar';
 import { displayCaseName } from '../types/game';
 import { useGameStore } from '../store/useGameStore';
 
-type Phase = 'MAGNET' | 'CREMULATOR' | 'POUR';
+type Phase = 'MAGNET' | 'CREMULATOR' | 'POUR' | 'DONE';
 
 interface MetalFragment {
   id: number;
@@ -13,10 +14,17 @@ interface MetalFragment {
 }
 
 export const UrnFillingMiniGame: React.FC = () => {
-  const { coolerCases, activeCaseId, completeUrnFilling, setActiveStation } =
-    useGameStore();
+  const {
+    cases,
+    activeCaseId,
+    completeUrnFilling,
+    storeUrnInVault,
+    setActiveStation,
+  } = useGameStore();
   const currentCase =
-    coolerCases.find((c) => c.id === activeCaseId) ?? coolerCases[0] ?? null;
+    cases.find((c) => c.id === activeCaseId) ??
+    cases.find((c) => c.location === 'URN_FILLING') ??
+    null;
 
   const [phase, setPhase] = useState<Phase>('MAGNET');
   const [fragments, setFragments] = useState<MetalFragment[]>(() =>
@@ -103,19 +111,62 @@ export const UrnFillingMiniGame: React.FC = () => {
   const finish = () => {
     const pourBonus = urnFill >= 95 ? 120 : urnFill >= 70 ? 60 : 20;
     completeUrnFilling(collectedBonus + pourBonus);
+    setPhase('DONE');
   };
 
   if (!currentCase) {
     return (
       <div className="fixed inset-0 z-50 bg-zinc-950/95 text-zinc-100 flex flex-col items-center justify-center gap-4 p-6">
-        <p>No body selected. Choose a cooler bay first.</p>
+        <p>No cremains ready. Complete a cremation first.</p>
         <button
           type="button"
-          onPointerDown={() => setActiveStation('COOLER')}
-          className="px-4 py-2 bg-cyan-700 rounded font-semibold"
+          onPointerDown={() => setActiveStation('CREMATION')}
+          className="px-4 py-2 bg-orange-700 rounded font-semibold"
         >
-          Open Cooler
+          Open Crematory
         </button>
+      </div>
+    );
+  }
+
+  if (phase === 'DONE' || currentCase.isUrnFilled) {
+    return (
+      <div className="fixed inset-0 z-50 bg-zinc-950/95 text-zinc-100 p-4 md:p-6 pb-24 flex flex-col select-none">
+        <div className="flex justify-between items-center border-b border-zinc-800 pb-3">
+          <h2 className="text-lg font-bold text-amber-300">
+            URN SEALED — {displayCaseName(currentCase)}
+          </h2>
+          <button
+            type="button"
+            onPointerDown={() => setActiveStation('OVERVIEW')}
+            className="px-4 py-2 bg-zinc-800 rounded text-sm"
+          >
+            Main Menu
+          </button>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center">
+          <p className="text-sm text-zinc-400 max-w-md">
+            Cremation rank {currentCase.cremationRank ?? '—'} is saved. Store
+            the urn in the Vault or take it to the chapel for service.
+          </p>
+          <div className="flex flex-wrap gap-2 justify-center">
+            <button
+              type="button"
+              onPointerDown={() => storeUrnInVault()}
+              className="px-5 py-3 bg-amber-500 text-zinc-950 font-bold rounded active:bg-amber-400"
+            >
+              Store in Urn Vault
+            </button>
+            <button
+              type="button"
+              onPointerDown={() => setActiveStation('SHOWROOM')}
+              className="px-5 py-3 bg-violet-700 font-bold rounded active:bg-violet-600"
+            >
+              Move to Chapel
+            </button>
+          </div>
+          <CaseTransferBar currentCase={currentCase} showVault />
+        </div>
       </div>
     );
   }

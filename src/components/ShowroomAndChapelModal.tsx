@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { displayCaseName } from '../types/game';
+import { CaseTransferBar } from './CaseTransferBar';
+import { displayCaseName, decayLabel } from '../types/game';
 import { useGameStore } from '../store/useGameStore';
 
 const FLOWER_TYPES = ['LILIES', 'ROSES', 'WREATH'] as const;
 
 export const ShowroomAndChapelModal: React.FC = () => {
   const {
-    coolerCases,
+    cases,
     activeCaseId,
     showroomInventory,
     placedFlowers,
@@ -16,16 +17,19 @@ export const ShowroomAndChapelModal: React.FC = () => {
     placeFloralSpray,
     finalizeServiceAndNextCase,
     setActiveStation,
+    takeActiveCaseToStation,
   } = useGameStore();
 
   const [tab, setTab] = useState<'BUY' | 'CHAPEL'>('BUY');
   const currentCase =
-    coolerCases.find((c) => c.id === activeCaseId) ?? coolerCases[0] ?? null;
+    cases.find((c) => c.id === activeCaseId) ??
+    cases.find((c) => c.location === 'CHAPEL') ??
+    null;
 
   if (!currentCase) {
     return (
       <div className="fixed inset-0 z-50 bg-violet-950/95 text-violet-50 flex flex-col items-center justify-center gap-4 p-6">
-        <p>No body selected. Choose a cooler bay first.</p>
+        <p>No case staged for chapel. Move remains from Cooler or Prep.</p>
         <button
           type="button"
           onPointerDown={() => setActiveStation('COOLER')}
@@ -37,6 +41,10 @@ export const ShowroomAndChapelModal: React.FC = () => {
     );
   }
 
+  const lateService =
+    currentCase.serviceDateMs != null &&
+    Date.now() > currentCase.serviceDateMs;
+
   return (
     <div className="fixed inset-0 z-50 bg-violet-950/95 text-violet-50 p-4 md:p-6 pb-24 flex flex-col select-none overflow-auto">
       <div className="flex justify-between items-center border-b border-violet-800 pb-3 gap-3">
@@ -46,17 +54,37 @@ export const ShowroomAndChapelModal: React.FC = () => {
           </h2>
           <p className="text-xs text-violet-300/70">
             Prefers {currentCase.preferredFlowers} | Directive:{' '}
-            {currentCase.directive} | Cash: ${cash} | Service boost:{' '}
-            +{serviceRatingBonus}%
+            {currentCase.directive} | Cash: ${cash} | Service boost: +
+            {serviceRatingBonus}%
+            {currentCase.embalmRank
+              ? ` | Embalm ${currentCase.embalmRank}`
+              : ' | Not embalmed'}
+            {currentCase.decayLevel > 5
+              ? ` | ${decayLabel(currentCase.decayLevel)}`
+              : ''}
+            {currentCase.serviceDateMs
+              ? ` | Service ${new Date(currentCase.serviceDateMs).toLocaleString()}`
+              : ''}
+            {lateService ? ' | LATE' : ''}
           </p>
+          <CaseTransferBar currentCase={currentCase} showVault />
         </div>
-        <button
-          type="button"
-          onPointerDown={() => setActiveStation('OVERVIEW')}
-          className="px-4 py-2 bg-violet-900 rounded text-sm active:bg-violet-800"
-        >
-          Main Menu
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onPointerDown={() => takeActiveCaseToStation('COOLER')}
+            className="px-3 py-2 bg-cyan-800 rounded text-sm"
+          >
+            Cooler
+          </button>
+          <button
+            type="button"
+            onPointerDown={() => setActiveStation('OVERVIEW')}
+            className="px-4 py-2 bg-violet-900 rounded text-sm active:bg-violet-800"
+          >
+            Main Menu
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-2 mt-4">
@@ -113,7 +141,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
         <div className="flex-1 flex flex-col gap-4 mt-4">
           <div className="relative h-48 md:h-64 rounded-xl border-2 border-violet-700 bg-gradient-to-b from-violet-900 to-violet-950 overflow-hidden">
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-16 md:w-56 md:h-20 bg-amber-800 rounded-sm border border-amber-600 flex items-center justify-center text-xs font-bold">
-              CASKET / BIER
+              {currentCase.isUrnFilled ? 'URN ON BIER' : 'CASKET / BIER'}
             </div>
             {placedFlowers.map((flower, idx) => (
               <div
