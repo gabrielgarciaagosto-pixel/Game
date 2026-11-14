@@ -526,11 +526,18 @@ export const useGameStore = create<GameState>()(
     const state = get();
     if (!state.cases.some((c) => c.id === caseId)) return;
     if (state.activeCaseId === caseId) return;
+    // Chapel flowers live in per-case layouts (merch already consumed).
+    // Do NOT refund on case switch — that double-refunded when sprays were removed later.
+    const layout = state.chapelLayouts[caseId];
+    const flowersOnCase = (layout?.pieces ?? [])
+      .map((p) => p.kind)
+      .filter((k): k is 'LILIES' | 'ROSES' | 'WREATH' =>
+        k === 'LILIES' || k === 'ROSES' || k === 'WREATH'
+      );
     set({
       activeCaseId: caseId,
-      placedFlowers: [],
+      placedFlowers: flowersOnCase,
       serviceRatingBonus: 0,
-      showroomInventory: returnPlacedFlowers(state),
     });
   },
 
@@ -809,6 +816,17 @@ export const useGameStore = create<GameState>()(
     set((state) => {
       const target = resolveCase(state, caseId);
       if (!target) return state;
+      if (location === 'URN_VAULT' && target.location !== 'URN_VAULT') {
+        const vaultCount = state.cases.filter(
+          (c) => c.location === 'URN_VAULT'
+        ).length;
+        const cap = vaultSlotCapacity(state.facilityLevels.vault || 0);
+        if (vaultCount >= cap) {
+          return {
+            legalAlert: `VAULT FULL (${cap} niches). Expand the columbarium in Emporium Upgrades.`,
+          };
+        }
+      }
       const r = state.retort;
       const retortBusy =
         r.caseId != null &&
@@ -868,6 +886,19 @@ export const useGameStore = create<GameState>()(
       };
       const location = locationMap[station];
       if (!location) return { activeStation: station, activeCaseId: caseId };
+
+      if (location === 'URN_VAULT' && target.location !== 'URN_VAULT') {
+        const vaultCount = state.cases.filter(
+          (c) => c.location === 'URN_VAULT'
+        ).length;
+        const cap = vaultSlotCapacity(state.facilityLevels.vault || 0);
+        if (vaultCount >= cap) {
+          return {
+            legalAlert: `VAULT FULL (${cap} niches). Expand the columbarium in Emporium Upgrades.`,
+            activeCaseId: caseId,
+          };
+        }
+      }
 
       const r = state.retort;
       const retortBusy =
@@ -1318,11 +1349,10 @@ export const useGameStore = create<GameState>()(
         y: 0.7 + Math.floor(stands / 3) * 0.08,
       };
 
-      const preferredMatch = flower === active.preferredFlowers ? 15 : 5;
+      // Preference / arrangement payout comes only from chapel satisfaction score
       return {
         activeCaseId: caseId,
         placedFlowers: [...state.placedFlowers, flower],
-        serviceRatingBonus: state.serviceRatingBonus + preferredMatch,
         showroomInventory: state.showroomInventory.map((i) =>
           i.id === itemId ? { ...i, ownedCount: i.ownedCount - 1 } : i
         ),
@@ -1427,13 +1457,10 @@ export const useGameStore = create<GameState>()(
       });
       const chapelRewards = satisfactionToRewards(chapelScore.total);
 
+      // Chapel score is the single source of truth (preview matches payout)
       const flowerBonus = serviceFailed
         ? 0
-        : Math.round(
-            c.basePayout *
-              ((state.serviceRatingBonus + chapelRewards.payoutBoostPct) /
-                100)
-          );
+        : Math.round((c.basePayout * chapelRewards.payoutBoostPct) / 100);
 
       const urnMatch =
         offered != null && offered.material === c.preferredUrnMaterial;
@@ -1520,7 +1547,6 @@ export const useGameStore = create<GameState>()(
           serviceFailed
             ? state.reputation - 15 - decayRepHit
             : state.reputation +
-                Math.min(20, Math.floor(state.serviceRatingBonus / 5)) +
                 chapelRewards.reputationDelta +
                 urnRep +
                 casketRep -

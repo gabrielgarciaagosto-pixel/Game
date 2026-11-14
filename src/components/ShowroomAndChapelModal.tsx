@@ -581,10 +581,21 @@ function DraggablePiece({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
+  const live = useRef({ x: piece.x, y: piece.y });
+  const [preview, setPreview] = React.useState<{ x: number; y: number } | null>(
+    null
+  );
+
+  React.useEffect(() => {
+    if (!dragging.current) {
+      live.current = { x: piece.x, y: piece.y };
+    }
+  }, [piece.x, piece.y]);
 
   const onPointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
     dragging.current = true;
+    live.current = { x: piece.x, y: piece.y };
     ref.current?.setPointerCapture(e.pointerId);
   };
 
@@ -593,16 +604,24 @@ function DraggablePiece({
     const floor = ref.current?.parentElement;
     if (!floor) return;
     const rect = floor.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
-    onMove(x, y);
+    const x = Math.max(0.05, Math.min(0.95, (e.clientX - rect.left) / rect.width));
+    const y = Math.max(0.08, Math.min(0.92, (e.clientY - rect.top) / rect.height));
+    live.current = { x, y };
+    setPreview({ x, y });
   };
 
   const onPointerUp = () => {
+    if (!dragging.current) return;
     dragging.current = false;
+    const { x, y } = live.current;
+    setPreview(null);
+    // Persist once on release — avoid localStorage writes every move
+    onMove(x, y);
   };
 
   const isFlower = ['LILIES', 'ROSES', 'WREATH'].includes(piece.kind);
+  const x = preview?.x ?? piece.x;
+  const y = preview?.y ?? piece.y;
 
   return (
     <div
@@ -612,7 +631,7 @@ function DraggablePiece({
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
       className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing touch-none z-10"
-      style={{ left: `${piece.x * 100}%`, top: `${piece.y * 100}%` }}
+      style={{ left: `${x * 100}%`, top: `${y * 100}%` }}
     >
       {piece.kind === 'COFFIN' && (
         <div className="relative">

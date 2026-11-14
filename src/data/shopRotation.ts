@@ -213,40 +213,23 @@ export function createShopRotation(): ShopRotationState {
   return { stockByWindow: {} };
 }
 
-function hourInWindow(hour: number, start: number, end: number): boolean {
-  if (start === end) return true;
-  if (start < end) return hour >= start && hour < end;
-  // wraps midnight
-  return hour >= start || hour < end;
-}
-
 /** Minutes since window start; null if outside window+grace. */
 export function minutesIntoAvailability(
   entry: RareScheduleEntry,
   now = new Date()
 ): number | null {
-  const hour = now.getHours();
-  const minute = now.getMinutes();
-  const nowMins = hour * 60 + minute;
-
+  const nowMins = now.getHours() * 60 + now.getMinutes();
   const startMins = entry.startHour * 60;
   let endMins = entry.endHour * 60;
   if (entry.endHour <= entry.startHour) endMins += 24 * 60;
-
-  let cursor = nowMins;
-  // Normalize cursor into a range that can compare against wrapping windows
-  if (entry.endHour <= entry.startHour && hour < entry.endHour) {
-    cursor += 24 * 60;
-  }
-
   const graceEnd = endMins + RARE_GRACE_MINUTES;
 
-  if (cursor >= startMins && cursor < graceEnd) {
-    return cursor - startMins;
-  }
-  // Also allow "still in window" via hour check for simple cases
-  if (hourInWindow(hour, entry.startHour, entry.endHour)) {
-    return Math.max(0, nowMins - startMins);
+  // Check today and today+24h so wrapping windows keep their post-midnight grace
+  // (e.g. 22:00–00:00 still buyable at 00:10).
+  for (const cursor of [nowMins, nowMins + 24 * 60]) {
+    if (cursor >= startMins && cursor < graceEnd) {
+      return cursor - startMins;
+    }
   }
   return null;
 }
@@ -262,15 +245,13 @@ export function isRareAvailableNow(
 export function windowKeyFor(entry: RareScheduleEntry, now = new Date()): string {
   const d = new Date(now);
   const hour = d.getHours();
-  // If we're in the post-midnight part of a wrapping window, attribute to previous day start
-  if (entry.endHour <= entry.startHour && hour < entry.endHour) {
-    d.setDate(d.getDate() - 1);
-  } else if (
+  // Wrapping window past midnight (including grace) belongs to the prior calendar day
+  if (
     entry.endHour <= entry.startHour &&
-    hour < entry.startHour &&
-    !isRareAvailableNow(entry, now)
+    isRareAvailableNow(entry, now) &&
+    hour < entry.startHour
   ) {
-    // outside
+    d.setDate(d.getDate() - 1);
   }
   const y = d.getFullYear();
   const m = d.getMonth() + 1;
