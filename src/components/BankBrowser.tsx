@@ -1,13 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import {
   BANK_LOAN_PRODUCTS,
-  PROPERTY_STATE_CODES,
   earlyPayoffAmount,
-  filterPropertiesByState,
-  getPropertyById,
-  type PropertyListing,
 } from '../data/bankProducts';
-import { US_JURISDICTIONS } from '../data/usPlaces';
 import {
   BANK_FORECLOSURE_AFTER_MS,
   formatFamilyCountdown,
@@ -16,10 +11,10 @@ import { gameNow } from '../utils/gameNow';
 import { useGameStore } from '../store/useGameStore';
 import { TapButton } from './TapButton';
 
-type Tab = 'overview' | 'loans' | 'listings';
+type Tab = 'overview' | 'loans';
 
 /**
- * First National Mortuary Bank — balance, loans, property listings.
+ * First National Mortuary Bank — balance, loans, mortgages (no listings).
  */
 export const BankBrowser: React.FC = () => {
   const cash = useGameStore((s) => s.cash);
@@ -34,11 +29,11 @@ export const BankBrowser: React.FC = () => {
   const takeBankLoan = useGameStore((s) => s.takeBankLoan);
   const payBankLoanInstallment = useGameStore((s) => s.payBankLoanInstallment);
   const earlyPayoffBankLoan = useGameStore((s) => s.earlyPayoffBankLoan);
-  const buyProperty = useGameStore((s) => s.buyProperty);
+  const setComputerOpenApp = useGameStore((s) => s.setComputerOpenApp);
 
-  const [tab, setTab] = useState<Tab>(bankOpenTab ?? 'overview');
-  const [stateFilter, setStateFilter] = useState<string>('ALL');
-  const [detailId, setDetailId] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>(
+    bankOpenTab === 'loans' ? 'loans' : 'overview'
+  );
   const [confirm, setConfirm] = useState<{
     title: string;
     body: string;
@@ -47,21 +42,20 @@ export const BankBrowser: React.FC = () => {
   const [flash, setFlash] = useState<string | null>(null);
 
   React.useEffect(() => {
-    if (bankOpenTab) {
+    if (bankOpenTab === 'loans' || bankOpenTab === 'overview') {
       setTab(bankOpenTab);
       setBankOpenTab(null);
+    } else if (bankOpenTab === 'listings') {
+      // Legacy deep-link → realty app
+      setBankOpenTab(null);
+      setComputerOpenApp('REALTY');
     }
-  }, [bankOpenTab, setBankOpenTab]);
+  }, [bankOpenTab, setBankOpenTab, setComputerOpenApp]);
 
   const used = facilitySpaceUsed();
   const total = facilitySpaceTotal();
-  const listings = useMemo(
-    () => filterPropertiesByState(stateFilter === 'ALL' ? 'ALL' : stateFilter),
-    [stateFilter]
-  );
-  const detail: PropertyListing | null = detailId
-    ? getPropertyById(detailId) ?? null
-    : null;
+  const mortgages = activeLoans.filter((l) => l.kind === 'MORTGAGE');
+  const personal = activeLoans.filter((l) => l.kind === 'PERSONAL');
 
   const debtLabel =
     cash < 0
@@ -120,16 +114,12 @@ export const BankBrowser: React.FC = () => {
         {(
           [
             ['overview', 'Balance'],
-            ['loans', 'Loans'],
-            ['listings', 'Listings'],
+            ['loans', 'Loans & mortgages'],
           ] as const
         ).map(([id, label]) => (
           <TapButton
             key={id}
-            onTap={() => {
-              setTab(id);
-              setDetailId(null);
-            }}
+            onTap={() => setTab(id)}
             className={`shrink-0 px-2.5 py-1 rounded text-[10px] font-bold border ${
               tab === id
                 ? 'bg-emerald-700 border-emerald-400 text-emerald-50'
@@ -152,18 +142,26 @@ export const BankBrowser: React.FC = () => {
           <section className="space-y-3">
             <div className="rounded-xl border border-emerald-900/50 bg-[#101a22] p-3 space-y-1">
               <div className="text-[10px] uppercase tracking-wider text-emerald-400/70">
-                Operating property
+                Collateral / operating property
               </div>
               <div className="font-bold text-emerald-50">{ownedProperty.label}</div>
               <div className="text-[11px] text-slate-300">
                 {ownedProperty.city}, {ownedProperty.stateCode}
               </div>
               <div className="grid grid-cols-2 gap-1 text-[10px] font-mono text-slate-400 mt-1">
-                <span>Space {used}/{ownedProperty.spaceTotal}</span>
+                <span>
+                  Space {used}/{ownedProperty.spaceTotal}
+                </span>
                 <span>Flow ×{ownedProperty.clientFlow}</span>
                 <span>Sales ×{ownedProperty.salesMult}</span>
                 <span>Basis ${ownedProperty.purchasedFor.toLocaleString()}</span>
               </div>
+              <TapButton
+                onTap={() => setComputerOpenApp('REALTY')}
+                className="mt-2 w-full py-1.5 rounded border border-emerald-800/60 text-[10px] font-bold text-emerald-200"
+              >
+                Browse Lychgate Realty listings
+              </TapButton>
             </div>
 
             <div className="rounded-xl border border-slate-700 bg-[#10141c] p-3 space-y-1">
@@ -174,8 +172,8 @@ export const BankBrowser: React.FC = () => {
                 ${cash.toLocaleString()}
               </div>
               <p className="text-[11px] text-slate-400 leading-snug">
-                Overdraft and missed loan drafts share the bank foreclosure
-                timer (2h warning · 4h seize). Keep balances non-negative.
+                Overdraft and missed loan/mortgage drafts share the foreclosure
+                timer (2h warning · 4h seize).
               </p>
               {negativeCashSinceMs != null && cash < 0 && (
                 <p className="text-[11px] text-amber-200 font-mono">
@@ -192,28 +190,40 @@ export const BankBrowser: React.FC = () => {
               )}
             </div>
 
-            <div className="rounded-xl border border-slate-700 bg-[#10141c] p-3">
-              <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
-                Open loan status
+            <div className="rounded-xl border border-slate-700 bg-[#10141c] p-3 space-y-2">
+              <div className="text-[10px] uppercase tracking-wider text-slate-500">
+                Mortgages
               </div>
-              {activeLoans.length === 0 ? (
-                <p className="text-[11px] text-slate-500">No open notes.</p>
+              {mortgages.length === 0 ? (
+                <p className="text-[11px] text-slate-500">
+                  No open mortgage. Purchase homes via Lychgate Realty.
+                </p>
               ) : (
-                <ul className="space-y-2">
-                  {activeLoans.map((l) => (
-                    <li
-                      key={l.id}
-                      className="text-[11px] border-b border-slate-800 pb-1"
-                    >
-                      <div className="font-semibold text-slate-200">{l.label}</div>
-                      <div className="font-mono text-slate-400">
-                        Rem ${l.principalRemaining.toLocaleString()} · pay $
-                        {l.paymentAmount} · missed {l.missedPayments} ·{' '}
-                        {l.aprPct}% APR
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                mortgages.map((l) => (
+                  <div key={l.id} className="text-[11px] border-b border-slate-800 pb-1">
+                    <div className="font-semibold text-slate-200">{l.label}</div>
+                    <div className="font-mono text-slate-400">
+                      Rem ${l.principalRemaining.toLocaleString()} · pay $
+                      {l.paymentAmount} · missed {l.missedPayments}
+                    </div>
+                  </div>
+                ))
+              )}
+              <div className="text-[10px] uppercase tracking-wider text-slate-500 pt-1">
+                Personal notes
+              </div>
+              {personal.length === 0 ? (
+                <p className="text-[11px] text-slate-500">None open.</p>
+              ) : (
+                personal.map((l) => (
+                  <div key={l.id} className="text-[11px]">
+                    <div className="font-semibold text-slate-200">{l.label}</div>
+                    <div className="font-mono text-slate-400">
+                      Rem ${l.principalRemaining.toLocaleString()} · pay $
+                      {l.paymentAmount}
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </section>
@@ -222,8 +232,8 @@ export const BankBrowser: React.FC = () => {
         {tab === 'loans' && (
           <section className="space-y-3">
             <p className="text-[11px] text-slate-400">
-              Products list size, term (family hours), APR, and installment.
-              Drafts auto-pull; shortfalls overdraw and arm foreclosure.
+              Working capital notes. Mortgages appear when you finance a Lychgate
+              purchase. Drafts auto-pull; shortfalls overdraw accounts.
             </p>
             {BANK_LOAN_PRODUCTS.map((p) => (
               <div
@@ -255,7 +265,7 @@ export const BankBrowser: React.FC = () => {
             ))}
 
             <div className="text-[10px] uppercase tracking-wider text-slate-500 pt-2">
-              Your notes — pay / early payoff
+              Your notes &amp; mortgages — pay / early payoff
             </div>
             {activeLoans.length === 0 && (
               <p className="text-[11px] text-slate-500">No active loans.</p>
@@ -265,7 +275,12 @@ export const BankBrowser: React.FC = () => {
                 key={l.id}
                 className="rounded-xl border border-slate-700 bg-[#12161e] p-3 space-y-2"
               >
-                <div className="font-bold text-slate-100">{l.label}</div>
+                <div className="font-bold text-slate-100">
+                  {l.label}
+                  <span className="ml-2 text-[9px] uppercase text-slate-500">
+                    {l.kind}
+                  </span>
+                </div>
                 <div className="text-[10px] font-mono text-slate-400">
                   Rem ${l.principalRemaining.toLocaleString()} · next due{' '}
                   {new Date(l.nextPaymentDueAt).toLocaleString()} · missed{' '}
@@ -300,118 +315,6 @@ export const BankBrowser: React.FC = () => {
                 </div>
               </div>
             ))}
-          </section>
-        )}
-
-        {tab === 'listings' && !detail && (
-          <section className="space-y-2">
-            <div className="flex items-center gap-2">
-              <label className="text-[10px] text-slate-400 shrink-0">
-                State
-              </label>
-              <select
-                value={stateFilter}
-                onChange={(e) => setStateFilter(e.target.value)}
-                className="flex-1 bg-[#0a1018] border border-slate-700 rounded px-2 py-1.5 text-[11px] font-mono"
-              >
-                <option value="ALL">All states</option>
-                {PROPERTY_STATE_CODES.map((code) => {
-                  const name =
-                    US_JURISDICTIONS.find((j) => j.code === code)?.name ?? code;
-                  return (
-                    <option key={code} value={code}>
-                      {code} — {name}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-            <p className="text-[10px] text-slate-500">
-              Showing {Math.min(listings.length, 40)} of {listings.length} ·
-              relocate prefers larger space than your used {used}.
-            </p>
-            {listings.slice(0, 40).map((listing) => (
-              <TapButton
-                key={listing.id}
-                onTap={() => setDetailId(listing.id)}
-                className="w-full text-left rounded-xl border border-slate-700 bg-[#121820] p-3 active:bg-slate-900"
-              >
-                <div className="flex justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="font-bold text-emerald-50 truncate">
-                      {listing.label}
-                    </div>
-                    <div className="text-[10px] text-slate-400">
-                      {listing.city}, {listing.stateCode} · space {listing.space}
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0 font-mono text-[11px] text-amber-100">
-                    ${listing.price.toLocaleString()}
-                  </div>
-                </div>
-                <div className="mt-1 text-[10px] font-mono text-slate-500">
-                  flow ×{listing.clientFlow} · sales ×{listing.salesMult} · rep +
-                  {listing.repBonus}
-                </div>
-              </TapButton>
-            ))}
-          </section>
-        )}
-
-        {tab === 'listings' && detail && (
-          <section className="space-y-3">
-            <TapButton
-              onTap={() => setDetailId(null)}
-              className="text-[11px] text-emerald-300 font-bold"
-            >
-              ← Back to listings
-            </TapButton>
-            <div className="rounded-xl border border-emerald-800/50 bg-[#101a22] p-3 space-y-2">
-              <h3 className="text-base font-black text-emerald-50">
-                {detail.label}
-              </h3>
-              <p className="text-[11px] text-slate-300">{detail.blurb}</p>
-              <div className="grid grid-cols-2 gap-1 text-[10px] font-mono text-slate-400">
-                <span>
-                  {detail.city}, {detail.stateCode}
-                </span>
-                <span>${detail.price.toLocaleString()}</span>
-                <span>Space {detail.space}</span>
-                <span>Flow ×{detail.clientFlow}</span>
-                <span>Sales ×{detail.salesMult}</span>
-                <span>Rep +{detail.repBonus}</span>
-              </div>
-              <p className="text-[10px] text-amber-200/80">
-                Relocate (state choice). Current used space {used} — listing must
-                fit. 20% down on mortgage.
-              </p>
-              <div className="flex gap-2">
-                <TapButton
-                  onTap={() =>
-                    runConfirm(
-                      'Buy cash',
-                      `Pay $${detail.price.toLocaleString()} cash and relocate to ${detail.city}?`,
-                      () => buyProperty(detail.id, 'CASH')
-                    )
-                  }
-                  className="flex-1 py-2.5 rounded-lg bg-emerald-700 text-[11px] font-black"
-                >
-                  Buy cash
-                </TapButton>
-                <TapButton
-                  onTap={() =>
-                    runConfirm(
-                      'Mortgage',
-                      `20% down ($${Math.ceil(detail.price * 0.2).toLocaleString()}) + mortgage for ${detail.city}?`,
-                      () => buyProperty(detail.id, 'MORTGAGE')
-                    )
-                  }
-                  className="flex-1 py-2.5 rounded-lg bg-amber-700 text-[11px] font-black"
-                >
-                  Mortgage
-                </TapButton>
-              </div>
-            </div>
           </section>
         )}
       </main>

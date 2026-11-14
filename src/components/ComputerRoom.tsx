@@ -8,8 +8,10 @@ import { US_PLACE_LABELS } from '../data/usPlaces';
 import { gameDate, subscribeClock } from '../utils/gameNow';
 import { useGameStore } from '../store/useGameStore';
 import { BankBrowser } from './BankBrowser';
+import { DesktopAppIcon } from './DesktopAppIcon';
 import { FakeBrowserChrome } from './FakeBrowserChrome';
 import { FuneraryEmporium } from './FuneraryEmporium';
+import { RealtyBrowser } from './RealtyBrowser';
 
 function digitsOnlyHhmm(raw: string): string {
   return raw.replace(/\D/g, '').slice(0, 4);
@@ -19,10 +21,10 @@ function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-type DesktopApp = 'DESKTOP' | 'VR441' | 'SHOP' | 'BANK';
+type DesktopApp = 'DESKTOP' | 'VR441' | 'SHOP' | 'BANK' | 'REALTY';
 
 /**
- * Office computer: desktop wallpaper + icons, apps open in a fake browser.
+ * Office computer: CRT desktop + icons; apps open in a fake browser.
  * VR-441 draft stays mounted (hidden) so FILES / shop switches don't wipe it.
  */
 export const ComputerRoom: React.FC = () => {
@@ -40,7 +42,8 @@ export const ComputerRoom: React.FC = () => {
   const [app, setApp] = useState<DesktopApp>(() =>
     computerOpenApp === 'SHOP' ||
     computerOpenApp === 'VR441' ||
-    computerOpenApp === 'BANK'
+    computerOpenApp === 'BANK' ||
+    computerOpenApp === 'REALTY'
       ? computerOpenApp
       : 'DESKTOP'
   );
@@ -54,7 +57,8 @@ export const ComputerRoom: React.FC = () => {
     if (
       computerOpenApp === 'SHOP' ||
       computerOpenApp === 'VR441' ||
-      computerOpenApp === 'BANK'
+      computerOpenApp === 'BANK' ||
+      computerOpenApp === 'REALTY'
     ) {
       setApp(computerOpenApp);
     }
@@ -85,7 +89,7 @@ export const ComputerRoom: React.FC = () => {
     setComputerOpenApp(null);
   };
 
-  const openApp = (next: 'VR441' | 'SHOP' | 'BANK') => {
+  const openApp = (next: 'VR441' | 'SHOP' | 'BANK' | 'REALTY') => {
     setApp(next);
     setComputerOpenApp(next);
   };
@@ -103,97 +107,60 @@ export const ComputerRoom: React.FC = () => {
   const clockLabel = `${pad2(clock.getHours())}:${pad2(clock.getMinutes())}`;
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col select-none overflow-hidden text-slate-100">
-      {/* Wallpaper */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            'linear-gradient(165deg, #1a3a4a 0%, #0c1e28 40%, #142018 70%, #0a1210 100%)',
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-0 opacity-30"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle at 20% 30%, rgba(255,255,255,0.08), transparent 40%), radial-gradient(circle at 80% 70%, rgba(56,189,248,0.12), transparent 45%)',
-        }}
-      />
+    <div
+      className="fixed inset-0 z-40 flex flex-col select-none overflow-hidden text-slate-100 crt-desktop"
+      style={{ width: '100%', height: '100%' }}
+    >
+      {/* CRT phosphor wash + bezel (behind UI) */}
+      <div className="absolute inset-0 crt-bezel crt-flicker" aria-hidden />
+      {/* Scanlines / vignette above UI, non-interactive */}
+      <div className="crt-overlay" aria-hidden />
 
       {/* Desktop layer */}
       <div
-        className={`relative flex-1 min-h-0 flex flex-col ${
-          app === 'DESKTOP' ? '' : 'invisible pointer-events-none absolute inset-0'
+        className={`relative flex-1 min-h-0 flex flex-col z-[1] ${
+          app === 'DESKTOP'
+            ? ''
+            : 'invisible pointer-events-none absolute inset-0'
         }`}
-        style={{ paddingTop: 'calc(var(--safe-top) + 0.5rem)' }}
+        style={{ paddingTop: 'calc(var(--safe-top, 0px) + 0.75rem)' }}
       >
         <div className="px-4 flex justify-between items-start">
           <div>
-            <p className="text-[10px] tracking-[0.2em] uppercase text-teal-200/70">
-              Ossuarian OS
+            <p className="text-[9px] tracking-[0.22em] uppercase text-[#7dffb2]/70 crt-phosphor-glow font-mono">
+              Ossuarian OS · CRT-9
             </p>
-            <h1 className="text-lg font-bold text-teal-50">Office Desktop</h1>
+            <h1 className="text-lg font-bold text-[#c8f5d8] crt-phosphor-glow font-mono">
+              Office Desktop
+            </h1>
           </div>
           <button
             type="button"
-            onPointerDown={() => setActiveStation('OVERVIEW')}
-            className="px-3 py-2 rounded border border-teal-700/60 bg-teal-950/70 text-[11px] font-bold"
+            onClick={() => setActiveStation('OVERVIEW')}
+            style={{ touchAction: 'manipulation' }}
+            className="px-3 py-2 rounded border border-[#7dffb2]/40 bg-black/50 text-[11px] font-bold text-[#b8f0d0] font-mono"
           >
             Shut down
           </button>
         </div>
 
-        <div className="flex-1 p-4 grid grid-cols-2 gap-4 content-start max-w-lg">
-          <button
-            type="button"
-            onClick={() => openApp('VR441')}
-            className="flex flex-col items-center gap-2 p-3 rounded-xl active:bg-white/10"
-            style={{ touchAction: 'manipulation' }}
-          >
-            <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-emerald-700 to-teal-950 border border-emerald-400/40 flex items-center justify-center shadow-lg font-mono text-xs font-black text-emerald-50">
-              VR
-            </div>
-            <span className="text-[11px] text-center text-teal-50 font-semibold leading-tight drop-shadow">
-              State Vital Records
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => openApp('SHOP')}
-            className="flex flex-col items-center gap-2 p-3 rounded-xl active:bg-white/10"
-            style={{ touchAction: 'manipulation' }}
-          >
-            <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-amber-600 to-stone-900 border border-amber-300/40 flex items-center justify-center shadow-lg text-lg font-black text-amber-50">
-              $
-            </div>
-            <span className="text-[11px] text-center text-teal-50 font-semibold leading-tight drop-shadow">
-              Funerary Emporium
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => openApp('BANK')}
-            className="flex flex-col items-center gap-2 p-3 rounded-xl active:bg-white/10"
-            style={{ touchAction: 'manipulation' }}
-          >
-            <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-lime-700 to-emerald-950 border border-lime-300/50 flex items-center justify-center shadow-lg font-mono text-[10px] font-black text-lime-50 tracking-tight">
-              BANK
-            </div>
-            <span className="text-[11px] text-center text-teal-50 font-semibold leading-tight drop-shadow">
-              First National Bank
-            </span>
-          </button>
+        <div className="flex-1 p-4 grid grid-cols-2 gap-3 content-start max-w-lg">
+          <DesktopAppIcon kind="VR441" onOpen={() => openApp('VR441')} />
+          <DesktopAppIcon kind="SHOP" onOpen={() => openApp('SHOP')} />
+          <DesktopAppIcon kind="BANK" onOpen={() => openApp('BANK')} />
+          <DesktopAppIcon kind="REALTY" onOpen={() => openApp('REALTY')} />
         </div>
 
-        <div className="shrink-0 h-10 bg-black/55 border-t border-white/10 flex items-center justify-between px-3 backdrop-blur-sm">
+        <div className="crt-taskbar relative z-[7] shrink-0 h-10 flex items-center justify-between px-3">
           <button
             type="button"
-            onPointerDown={() => setActiveStation('OVERVIEW')}
-            className="px-2 py-1 rounded bg-teal-800/80 text-[10px] font-bold"
+            onClick={() => setActiveStation('OVERVIEW')}
+            style={{ touchAction: 'manipulation' }}
+            className="px-2 py-1 rounded-sm bg-[#2a5a40] border border-[#7dffb2]/35 text-[10px] font-bold text-[#d7ffe8]"
           >
             Start
           </button>
-          <div className="font-mono text-[11px] text-teal-100/90">
+          <div className="font-mono text-[11px] text-[#9eecc0] crt-phosphor-glow">
             {clockLabel} · ${cash.toLocaleString()}
           </div>
         </div>
@@ -207,6 +174,12 @@ export const ComputerRoom: React.FC = () => {
             : 'absolute inset-0 z-20 invisible pointer-events-none'
         }
         aria-hidden={app !== 'VR441'}
+        style={{
+          paddingTop: 'calc(var(--safe-top, 0px) + 0.35rem)',
+          paddingBottom: 'calc(var(--safe-bottom, 0px) + 0.35rem)',
+          paddingLeft: '0.35rem',
+          paddingRight: '0.35rem',
+        }}
       >
         <FakeBrowserChrome
           title="State Vital Records — VR-441"
@@ -258,7 +231,10 @@ export const ComputerRoom: React.FC = () => {
                   <input
                     value={form.legalName}
                     onChange={(e) =>
-                      setForm((f) => ({ ...f, legalName: e.target.value }))
+                      setForm((f) => ({
+                        ...f,
+                        legalName: e.target.value,
+                      }))
                     }
                     className="mt-1 w-full bg-[#061018] border border-[#2a4a5c] rounded px-2 py-2 text-sm text-[#e8f5e9] font-mono"
                     autoComplete="off"
@@ -360,7 +336,8 @@ export const ComputerRoom: React.FC = () => {
                 <button
                   type="button"
                   disabled={!canAfford}
-                  onPointerDown={onSubmit}
+                  onClick={onSubmit}
+                  style={{ touchAction: 'manipulation' }}
                   className="w-full py-3 rounded font-bold text-sm bg-[#2f6b4f] text-[#e8f5e9] disabled:opacity-40"
                 >
                   SUBMIT · FEE ${filingFee}
@@ -382,7 +359,10 @@ export const ComputerRoom: React.FC = () => {
                   </div>
                 ))}
                 {financeLedger.slice(0, 4).map((e) => (
-                  <div key={e.id} className="flex justify-between py-0.5 text-[#9bb8a4]">
+                  <div
+                    key={e.id}
+                    className="flex justify-between py-0.5 text-[#9bb8a4]"
+                  >
                     <span className="truncate">{e.label}</span>
                     <span>
                       {e.amount < 0 ? '-' : '+'}${Math.abs(e.amount)}
@@ -396,7 +376,15 @@ export const ComputerRoom: React.FC = () => {
       </div>
 
       {app === 'SHOP' && (
-        <div className="absolute inset-0 z-20">
+        <div
+          className="absolute inset-0 z-20"
+          style={{
+            paddingTop: 'calc(var(--safe-top, 0px) + 0.35rem)',
+            paddingBottom: 'calc(var(--safe-bottom, 0px) + 0.35rem)',
+            paddingLeft: '0.35rem',
+            paddingRight: '0.35rem',
+          }}
+        >
           <FakeBrowserChrome
             title="Funerary Emporium — Catalog"
             url="https://shop.funerary-emporium.biz/catalog"
@@ -408,13 +396,41 @@ export const ComputerRoom: React.FC = () => {
       )}
 
       {app === 'BANK' && (
-        <div className="absolute inset-0 z-20">
+        <div
+          className="absolute inset-0 z-20"
+          style={{
+            paddingTop: 'calc(var(--safe-top, 0px) + 0.35rem)',
+            paddingBottom: 'calc(var(--safe-bottom, 0px) + 0.35rem)',
+            paddingLeft: '0.35rem',
+            paddingRight: '0.35rem',
+          }}
+        >
           <FakeBrowserChrome
             title="First National Mortuary Bank"
             url="https://bank.first-national-mortuary.example/online"
             onClose={goDesktop}
           >
             <BankBrowser />
+          </FakeBrowserChrome>
+        </div>
+      )}
+
+      {app === 'REALTY' && (
+        <div
+          className="absolute inset-0 z-20"
+          style={{
+            paddingTop: 'calc(var(--safe-top, 0px) + 0.35rem)',
+            paddingBottom: 'calc(var(--safe-bottom, 0px) + 0.35rem)',
+            paddingLeft: '0.35rem',
+            paddingRight: '0.35rem',
+          }}
+        >
+          <FakeBrowserChrome
+            title="Lychgate Commercial Realty"
+            url="https://www.lychgate-realty.biz/listings"
+            onClose={goDesktop}
+          >
+            <RealtyBrowser />
           </FakeBrowserChrome>
         </div>
       )}

@@ -247,3 +247,122 @@ canvas {
 .embalm-tank-ripple {
   animation: embalm-tank-ripple 0.55s ease-in-out infinite;
 }
+
+/* ——— CRT office desktop (Computer room) ——— */
+.crt-desktop {
+  --crt-green: #7dffb2;
+  --crt-dim: #1a3d2c;
+  background: #050806;
+  isolation: isolate;
+}
+
+.crt-bezel {
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 3px #1a1f1c,
+    inset 0 0 0 6px #0a0c0b,
+    inset 0 0 48px rgba(0, 0, 0, 0.65);
+  border-radius: 0.65rem;
+  background:
+    radial-gradient(120% 90% at 50% 40%, #163528 0%, #0a1610 55%, #050a08 100%);
+  z-index: 0;
+}
+
+/* Full-viewport phosphor overlay (scanlines + vignette) above content */
+.crt-overlay {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  border-radius: 0.4rem;
+  overflow: hidden;
+}
+
+.crt-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.14) 0px,
+    rgba(0, 0, 0, 0.14) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  opacity: 0.4;
+  mix-blend-mode: multiply;
+}
+
+.crt-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 48%,
+    rgba(0, 0, 0, 0.42) 100%
+  );
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.35);
+}
+
+.crt-phosphor-glow {
+  text-shadow: 0 0 6px rgba(125, 255, 178, 0.35);
+}
+
+.crt-flicker {
+  animation: crt-flicker 7s steps(2, end) infinite;
+}
+
+@keyframes crt-flicker {
+  0%,
+  92%,
+  100% {
+    opacity: 1;
+  }
+  93% {
+    opacity: 0.94;
+  }
+  94% {
+    opacity: 1;
+  }
+  96% {
+    opacity: 0.97;
+  }
+}
+
+.crt-taskbar {
+  background: linear-gradient(180deg, #1c3a2c 0%, #0e1c16 100%);
+  border-top: 1px solid rgba(125, 255, 178, 0.25);
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.4);
+  font-family: ui-monospace, 'Cascadia Mono', monospace;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crt-flicker {
+    animation: none;
+  }
+  .crt-overlay::before {
+    opacity: 0.22;
+  }
+}
+
+/* Android / coarse pointers: lighter CRT so UI stays readable */
+@media (pointer: coarse) {
+  .crt-overlay::before {
+    opacity: 0.22;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.1) 0px,
+      rgba(0, 0, 0, 0.1) 1px,
+      transparent 1px,
+      transparent 4px
+    );
+  }
+  .crt-overlay::after {
+    background: radial-gradient(
+      ellipse at center,
+      transparent 58%,
+      rgba(0, 0, 0, 0.28) 100%
+    );
+  }
+}

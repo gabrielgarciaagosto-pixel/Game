@@ -119,7 +119,7 @@ interface GameState {
    * Which Computer desktop app to open (null = desktop).
    * EMPORIUM redirects here with 'SHOP'. Not persisted.
    */
-  computerOpenApp: 'VR441' | 'SHOP' | 'BANK' | null;
+  computerOpenApp: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | null;
   /** Optional deep-link tab when opening BANK (not persisted) */
   bankOpenTab: 'overview' | 'loans' | 'listings' | null;
   cases: DecedentCase[];
@@ -190,7 +190,9 @@ interface GameState {
   /** Wipe to title. Pass toast text for player-facing resets; omit for DEV default. */
   hardResetGameState: (toast?: string | null) => void;
   setActiveStation: (station: StationId) => void;
-  setComputerOpenApp: (app: 'VR441' | 'SHOP' | 'BANK' | null) => void;
+  setComputerOpenApp: (
+    app: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | null
+  ) => void;
   setBankOpenTab: (tab: 'overview' | 'loans' | 'listings' | null) => void;
   patchRetort: (partial: Partial<RetortMachine>) => void;
   ensureRetortForCase: (caseId: string) => void;
@@ -1803,7 +1805,7 @@ export const useGameStore = create<GameState>()(
         ok: false,
         reason: 'space',
         message:
-          'Needs more facility space — open First National Bank → Property listings to relocate.',
+          'Needs more facility space — open Lychgate Realty to relocate.',
       };
     }
     set({
@@ -1983,7 +1985,7 @@ export const useGameStore = create<GameState>()(
         ...state.financeLedger,
       ].slice(0, 80),
       intakeToast: `Relocated to ${listing.city}, ${listing.stateCode} · space ${used}/${listing.space}`,
-      bankOpenTab: 'listings',
+      computerOpenApp: 'REALTY',
     });
     return { ok: true, message: `Now operating: ${listing.label}` };
   },

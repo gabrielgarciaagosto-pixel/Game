@@ -107,7 +107,6 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
     buyShowroomItem,
     setActiveStation,
     setComputerOpenApp,
-    setBankOpenTab,
     ownedProperty,
   } = useGameStore();
 
@@ -496,17 +495,16 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
               <div className="rounded-lg border border-rose-700/60 bg-rose-950/40 p-2.5 space-y-2">
                 <p className="text-[11px] text-rose-100">
                   {spaceBlock ??
-                    `Needs more facility space (${spaceUsed}/${spaceTotal} used). Relocate via First National Bank listings.`}
+                    `Needs more facility space (${spaceUsed}/${spaceTotal} used). Relocate via Lychgate Realty.`}
                 </p>
                 <TapButton
                   onTap={() => {
-                    setComputerOpenApp('BANK');
-                    setBankOpenTab('listings');
+                    setComputerOpenApp('REALTY');
                     onClose?.();
                   }}
                   className="w-full py-2 rounded-lg bg-emerald-800 text-[11px] font-black text-emerald-50"
                 >
-                  Open property listings
+                  Open Lychgate Realty
                 </TapButton>
               </div>
             )}
@@ -600,7 +598,7 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                         onClick={() => {
                           if (!spaceOk) {
                             setSpaceBlock(
-                              `Needs more facility space (${spaceUsed + next.space} required, ${spaceTotal} available). Relocate via First National Bank listings.`
+                              `Needs more facility space (${spaceUsed + next.space} required, ${spaceTotal} available). Relocate via Lychgate Realty.`
                             );
                             return;
                           }

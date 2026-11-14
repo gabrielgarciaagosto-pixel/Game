@@ -184,7 +184,7 @@ export const STARTER_PROPERTY: PropertyListing = {
   clientFlow: 1,
   salesMult: 1,
   repBonus: 0,
-  blurb: 'Your first licensed parlor. Compact floor plate — expand via bank listings.',
+  blurb: 'Your first licensed parlor. Compact floor plate — expand via Lychgate Realty.',
 };
 
 export interface OwnedProperty {
