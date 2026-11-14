@@ -1,57 +1,46 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { useGameStore } from '../store/useGameStore';
-
-const THEME_SRC = '/audio/ossuarian-theme.m4a';
+import { audioManager, CROSSFADE_MS, unlockGameAudio } from '../utils/audioManager';
 
 /**
- * Loops the Ossuarian theme on the splash only — stops when Start is pressed.
+ * Soft-loops the Ossuarian theme on the splash only — fades out when Start
+ * is pressed. Yields immediately if crematory beds take the bus.
  */
 export const MenuThemeAudio: React.FC = () => {
   const hasStartedGame = useGameStore((s) => s.hasStartedGame);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioMode = useGameStore((s) => s.retort.audioMode);
 
   useEffect(() => {
-    const audio = new Audio(THEME_SRC);
-    audio.loop = true;
-    audio.preload = 'auto';
-    audio.volume = 0.55;
-    audioRef.current = audio;
-
-    const tryPlay = () => {
-      void audio.play().catch(() => {
-        /* wait for a gesture */
-      });
-    };
-
     const unlock = () => {
-      if (!useGameStore.getState().hasStartedGame) tryPlay();
-      window.removeEventListener('pointerdown', unlock);
-      window.removeEventListener('keydown', unlock);
+      void unlockGameAudio();
     };
-
-    tryPlay();
-    window.addEventListener('pointerdown', unlock, { once: true });
+    window.addEventListener('pointerdown', unlock, { once: true, passive: true });
     window.addEventListener('keydown', unlock, { once: true });
-
+    window.addEventListener('touchstart', unlock, { once: true, passive: true });
     return () => {
       window.removeEventListener('pointerdown', unlock);
       window.removeEventListener('keydown', unlock);
-      audio.pause();
-      audio.src = '';
-      audioRef.current = null;
+      window.removeEventListener('touchstart', unlock);
     };
   }, []);
 
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (hasStartedGame) {
-      audio.pause();
-      audio.currentTime = 0;
-    } else {
-      void audio.play().catch(() => undefined);
+    const crematoryOwnsAudio =
+      audioMode === 'START' || audioMode === 'LOOP';
+
+    if (crematoryOwnsAudio) {
+      return;
     }
-  }, [hasStartedGame]);
+
+    if (!hasStartedGame) {
+      void audioManager.crossfadeTo('theme', {
+        loop: true,
+        durationMs: CROSSFADE_MS,
+      });
+    } else if (audioManager.getCurrentId() === 'theme') {
+      void audioManager.fadeOut(CROSSFADE_MS);
+    }
+  }, [hasStartedGame, audioMode]);
 
   return null;
 };

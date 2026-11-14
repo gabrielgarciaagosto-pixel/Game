@@ -1,90 +1,110 @@
 import React, { useEffect, useRef } from 'react';
 import { useGameStore } from '../store/useGameStore';
-
-const START_SRC = '/audio/crematory-start.m4a';
-const LOOP_SRC = '/audio/crematory-loop.m4a';
+import { audioManager, CROSSFADE_MS, unlockGameAudio } from '../utils/audioManager';
 
 /**
- * Plays the one-shot crematory start sting, then loops the normal run bed
- * until the burn finishes (sweep / done / audioMode OFF).
+ * Crematory music — priority seamless chain (Gabriel's audible cutoff):
+ *   start sting  →  (crossfade)  →  gapless run loop  →  (fade out)  →  sweep/complete
+ *
+ * Uses decoded Web Audio buffers so Android WebView gets:
+ * - overlapping GainNode crossfade from start → loop (no hard cut)
+ * - AudioBufferSourceNode.loop for a sample-accurate run bed
+ * - fade-out into sweep / done instead of pause()
  */
 export const CrematoryAudio: React.FC = () => {
   const audioMode = useGameStore((s) => s.retort.audioMode);
   const primaryOn = useGameStore((s) => s.retort.primaryOn);
   const phase = useGameStore((s) => s.retort.phase);
   const patchRetort = useGameStore((s) => s.patchRetort);
-
-  const startRef = useRef<HTMLAudioElement | null>(null);
-  const loopRef = useRef<HTMLAudioElement | null>(null);
+  /** Last bed we asked the manager to play — avoids restarting on re-renders. */
+  const activeBedRef = useRef<'start' | 'loop' | 'off'>('off');
 
   useEffect(() => {
-    const start = new Audio(START_SRC);
-    start.preload = 'auto';
-    start.volume = 0.7;
-    startRef.current = start;
+    const unlock = () => {
+      void unlockGameAudio();
+    };
+    window.addEventListener('pointerdown', unlock, { once: true, passive: true });
+    window.addEventListener('keydown', unlock, { once: true });
+    window.addEventListener('touchstart', unlock, { once: true, passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+      window.removeEventListener('touchstart', unlock);
+    };
+  }, []);
 
-    const loop = new Audio(LOOP_SRC);
-    loop.preload = 'auto';
-    loop.loop = true;
-    loop.volume = 0.55;
-    loopRef.current = loop;
-
-    const onStartEnded = () => {
-      const mode = useGameStore.getState().retort.audioMode;
-      const burning =
-        useGameStore.getState().retort.phase === 'BURN' &&
-        useGameStore.getState().retort.primaryOn;
-      if (mode === 'START' && burning) {
+  // Start sting → loop: fire CROSSFADE_MS before the sting ends
+  useEffect(() => {
+    audioManager.setOneShotNearEndHandler((id) => {
+      if (id !== 'crematoryStart') return;
+      const { audioMode: mode, primaryOn: on, phase: p } =
+        useGameStore.getState().retort;
+      if (mode === 'START' && on && p !== 'SWEEP' && p !== 'DONE') {
+        activeBedRef.current = 'loop';
+        void audioManager.crossfadeTo('crematoryLoop', {
+          loop: true,
+          durationMs: CROSSFADE_MS,
+        });
         patchRetort({ audioMode: 'LOOP' });
       } else if (mode === 'START') {
+        activeBedRef.current = 'off';
+        void audioManager.fadeOut(CROSSFADE_MS);
         patchRetort({ audioMode: 'OFF' });
       }
-    };
-    start.addEventListener('ended', onStartEnded);
-
+    });
     return () => {
-      start.removeEventListener('ended', onStartEnded);
-      start.pause();
-      loop.pause();
-      start.src = '';
-      loop.src = '';
-      startRef.current = null;
-      loopRef.current = null;
+      audioManager.setOneShotNearEndHandler(null);
     };
   }, [patchRetort]);
 
   useEffect(() => {
-    const start = startRef.current;
-    const loop = loopRef.current;
-    if (!start || !loop) return;
+    const shouldSilence =
+      audioMode === 'OFF' ||
+      phase === 'SWEEP' ||
+      phase === 'DONE' ||
+      !primaryOn;
 
-    const stopAll = () => {
-      start.pause();
-      start.currentTime = 0;
-      loop.pause();
-      loop.currentTime = 0;
-    };
-
-    if (audioMode === 'OFF' || phase === 'SWEEP' || phase === 'DONE') {
-      stopAll();
+    if (shouldSilence) {
+      if (activeBedRef.current !== 'off') {
+        activeBedRef.current = 'off';
+        void audioManager.fadeOut(CROSSFADE_MS);
+      }
+      if (audioMode !== 'OFF') {
+        patchRetort({ audioMode: 'OFF' });
+      }
       return;
     }
 
     if (audioMode === 'START') {
-      loop.pause();
-      void start.play().catch(() => undefined);
+      if (activeBedRef.current === 'start') return;
+      activeBedRef.current = 'start';
+      // Short fade-in so theme→start also softens; keep shorter than handoff
+      void audioManager.crossfadeTo('crematoryStart', {
+        loop: false,
+        durationMs: Math.min(400, CROSSFADE_MS),
+      });
       return;
     }
 
     if (audioMode === 'LOOP') {
-      start.pause();
-      if (primaryOn && phase === 'BURN') {
-        void loop.play().catch(() => undefined);
-      } else {
-        loop.pause();
-      }
+      if (activeBedRef.current === 'loop') return;
+      activeBedRef.current = 'loop';
+      void audioManager.crossfadeTo('crematoryLoop', {
+        loop: true,
+        durationMs: CROSSFADE_MS,
+      });
     }
-  }, [audioMode, primaryOn, phase]);
+  }, [audioMode, primaryOn, phase, patchRetort]);
+
+  useEffect(() => {
+    return () => {
+      // Only tear down if we still own the bus (don't kill theme on hot reload oddities)
+      if (activeBedRef.current !== 'off') {
+        audioManager.stopImmediate();
+        activeBedRef.current = 'off';
+      }
+    };
+  }, []);
 
   return null;
 };
