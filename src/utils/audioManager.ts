@@ -56,6 +56,16 @@ class AudioManager {
   private handoffTimer: number | null = null;
   private oneShotHandlers = new Set<(id: MusicBedId) => void>();
   private muted = false;
+  /** Last bed request — restored on unmute so controllers don't stay silent. */
+  private lastRequest: {
+    id: MusicBedId;
+    options?: {
+      loop?: boolean;
+      volume?: number;
+      durationMs?: number;
+      url?: string;
+    };
+  } | null = null;
 
   /** Tunable crossfade length in milliseconds. */
   crossfadeMs = CROSSFADE_MS;
@@ -65,9 +75,18 @@ class AudioManager {
   }
 
   setMuted(muted: boolean) {
-    this.muted = muted;
     if (muted) {
+      this.muted = true;
       this.stopImmediate();
+      return;
+    }
+    this.muted = false;
+    const resume = this.lastRequest;
+    if (resume) {
+      void this.crossfadeTo(resume.id, {
+        ...resume.options,
+        durationMs: resume.options?.durationMs ?? Math.min(400, this.crossfadeMs),
+      });
     }
   }
 
@@ -311,6 +330,7 @@ class AudioManager {
       url?: string;
     }
   ): Promise<void> {
+    this.lastRequest = { id, options };
     if (this.muted) {
       this.currentId = null;
       return;

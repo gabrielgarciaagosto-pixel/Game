@@ -151,7 +151,7 @@ export const DevToolsOverlay: React.FC = () => {
   if (!DEV_TOOLS || !hasStartedGame) return null;
 
   const onPointerDown = (e: React.PointerEvent) => {
-    e.currentTarget.setPointerCapture(e.pointerId);
+    // Set drag state first — some Android WebViews throw on setPointerCapture.
     dragRef.current = {
       pointerId: e.pointerId,
       startX: e.clientX,
@@ -160,6 +160,11 @@ export const DevToolsOverlay: React.FC = () => {
       origY: pos.y,
       moved: false,
     };
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* capture optional — move/up still work without it */
+    }
   };
 
   const onPointerMove = (e: React.PointerEvent) => {

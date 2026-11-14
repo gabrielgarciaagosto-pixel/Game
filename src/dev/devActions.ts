@@ -169,14 +169,20 @@ export function forceFamilyUrnNow() {
 export function instantFinishBurn() {
   const state = useGameStore.getState();
   const r = state.retort;
-  const caseId = r.caseId ?? state.activeCaseId;
+  // Only the case actually loaded in the retort — never fall back to hub
+  // selection (that wrongly cremated cooler/chapel / burial-viewing bodies).
+  const caseId = r.caseId;
   if (!caseId) {
-    toast('No active crematory case');
+    toast('Retort empty — load a burn first');
+    return;
+  }
+  if (r.phase === 'IDLE') {
+    toast('No burn in progress');
     return;
   }
   const active = state.cases.find((c) => c.id === caseId);
   if (!active) {
-    toast('Case missing');
+    toast('Retort case missing from cooler/station list');
     return;
   }
 
@@ -203,7 +209,11 @@ export function instantFinishBurn() {
   });
 
   if (!active.isCremated) {
-    state.completeCremation('A', Math.round(active.weightLbs * 0.035 * 453.6), caseId);
+    state.completeCremation(
+      'A',
+      Math.round(active.weightLbs * 0.035 * 453.6),
+      caseId
+    );
   }
   state.markUrnAshReady(caseId);
   toast('Burn + cremulator finished');
