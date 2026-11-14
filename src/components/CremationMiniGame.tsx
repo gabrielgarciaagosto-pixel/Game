@@ -1,17 +1,23 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CaseTransferBar } from './CaseTransferBar';
-import type { Rank } from '../types/game';
+import type { Rank, SweepTool } from '../types/game';
 import { displayCaseName } from '../types/game';
 import { caseAtLocation, useGameStore } from '../store/useGameStore';
 import { hapticIronRake } from '../utils/haptics';
 import { getCremationTargets } from '../utils/mortuaryMath';
 import {
-  PRIMARY_SP,
-  SECONDARY_SP,
+  PRIMARY_SP_MAX,
+  PRIMARY_SP_MIN,
+  SECONDARY_SP_MAX,
+  SECONDARY_SP_MIN,
   STIR_DOOR_MIN,
   randomPurgeMs,
   retortProgress,
 } from '../retort/retortTypes';
+import { HearthCharge } from './crematory/HearthCharge';
+import { ToolArt } from './crematory/crematoryArt';
+import { SetPointDial } from './crematory/SetPointDial';
+import { ToolDrawer } from './crematory/ToolDrawer';
 
 type BonePhase = 'INTACT' | 'CHARRING' | 'CALCINING' | 'FRAGMENTING' | 'ASH';
 
@@ -118,22 +124,33 @@ function HoldButton({
   disabled?: boolean;
   size?: 'sm' | 'md';
 }) {
+  const startRef = useRef(onHoldStart);
+  const endRef = useRef(onHoldEnd);
+  startRef.current = onHoldStart;
+  endRef.current = onHoldEnd;
+
   return (
     <button
       type="button"
       disabled={disabled}
       onPointerDown={(e) => {
+        if (disabled) return;
         e.stopPropagation();
         e.preventDefault();
-        (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-        onHoldStart();
+        try {
+          (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+        } catch {
+          /* automation and some WebViews reject capture; window listeners still end the jog */
+        }
+        startRef.current();
+        const end = () => {
+          endRef.current();
+          window.removeEventListener('pointerup', end);
+          window.removeEventListener('pointercancel', end);
+        };
+        window.addEventListener('pointerup', end);
+        window.addEventListener('pointercancel', end);
       }}
-      onPointerUp={(e) => {
-        e.stopPropagation();
-        onHoldEnd();
-      }}
-      onPointerCancel={onHoldEnd}
-      onLostPointerCapture={onHoldEnd}
       className={buttonShell(color, size)}
     >
       {label}
@@ -220,13 +237,28 @@ export const CremationMiniGame: React.FC = () => {
     : null;
 
   const [panelZoomed, setPanelZoomed] = useState(false);
-  const [rakeHeld, setRakeHeld] = useState(false);
-  const [rakePos, setRakePos] = useState({ x: 50, y: 40 });
-  const [lastStirAt, setLastStirAt] = useState(0);
+  const [toolMenuOpen, setToolMenuOpen] = useState(false);
+  const [toolHeld, setToolHeld] = useState(false);
+  const [toolPos, setToolPos] = useState({ x: 52, y: 40 });
+  const [toolGlide, setToolGlide] = useState(false);
   const [boneNudge, setBoneNudge] = useState(0);
+  const [hearthHint, setHearthHint] = useState<string | null>(null);
+  const [dialChamber, setDialChamber] = useState<'PRIMARY' | 'SECONDARY'>(
+    'PRIMARY'
+  );
+  const [dust, setDust] = useState<
+    { id: number; x: number; y: number; dx: number; dy: number; size: number; tone: string }[]
+  >([]);
+  const [scrape, setScrape] = useState<{ id: number; x: number; y: number } | null>(
+    null
+  );
 
   const chamberRef = useRef<HTMLDivElement>(null);
   const lastHaptic = useRef(0);
+  const lastStirAt = useRef(0);
+  const dustSeq = useRef(1);
+  const prevToolPoint = useRef<{ x: number; y: number } | null>(null);
+  const strokeRef = useRef({ minY: 100, accum: 0, credited: false });
 
   const {
     blowerOn,
@@ -248,10 +280,12 @@ export const CremationMiniGame: React.FC = () => {
     mediumBonesLeft,
     fineAshLeft,
     activeTool,
+    primarySetPoint,
+    secondarySetPoint,
   } = retort;
 
-  const secondarySp = SECONDARY_SP;
-  const primarySp = PRIMARY_SP;
+  const secondarySp = secondarySetPoint;
+  const primarySp = primarySetPoint;
 
   const progress =
     targets != null
@@ -308,77 +342,196 @@ export const CremationMiniGame: React.FC = () => {
       phase: phase === 'LOAD' || phase === 'IDLE' ? 'BURN' : phase,
       audioMode: retort.audioMode === 'OFF' ? 'START' : retort.audioMode,
     });
-    if (!activeTool) patchRetort({ activeTool: 'STIRRING_ROD' });
   };
 
+  const sweepArmed = useRef(false);
   useEffect(() => {
-    if (phase === 'BURN') {
-      const tool = useGameStore.getState().retort.activeTool;
-      if (
-        tool === 'IRON_RAKE' ||
-        tool === 'BRISTLE_BRUSH' ||
-        tool === 'HAND_BRUSH' ||
-        tool == null
-      ) {
-        patchRetort({ activeTool: 'STIRRING_ROD' });
-      }
-    }
-  }, [phase, patchRetort]);
+    if (progress < 1 || phase !== 'BURN' || sweepArmed.current) return;
+    sweepArmed.current = true;
+    const door = useGameStore.getState().retort.doorOpen;
+    patchRetort({
+      primaryOn: false,
+      secondaryOn: false,
+      audioMode: 'OFF',
+      phase: 'SWEEP',
+      doorMoving: door < 0.72 ? 'UP' : null,
+      largeBonesLeft: 100,
+      mediumBonesLeft: 100,
+      fineAshLeft: 100,
+    });
+    setHearthHint('Calcination finished. Open Tools and sweep downward.');
+  }, [progress, phase, patchRetort]);
 
-  const canStir =
-    doorOpen > STIR_DOOR_MIN &&
-    primaryOn &&
-    phase === 'BURN' &&
-    activeTool === 'STIRRING_ROD';
-
-  const handleRodMove = (clientX: number, clientY: number) => {
-    if (!chamberRef.current || !rakeHeld || !canStir) return;
-    const rect = chamberRef.current.getBoundingClientRect();
-    const x = ((clientX - rect.left) / rect.width) * 100;
-    const y = ((clientY - rect.top) / rect.height) * 100;
-    const prev = rakePos;
-    setRakePos({ x, y });
-    const dist = Math.hypot(x - prev.x, y - prev.y);
-    if (dist > 8 && Date.now() - lastStirAt > 400) {
-      patchRetort({
-        stirCount: stirCount + 1,
-        primaryTemp: Math.max(850, primaryTemp - 55 - doorOpen * 40),
-      });
-      setLastStirAt(Date.now());
-      setBoneNudge((n) => n + 1);
-      if (Date.now() - lastHaptic.current > 180) {
-        lastHaptic.current = Date.now();
-        void hapticIronRake();
-      }
-    }
+  const hintAt = useRef(0);
+  const toolHeldRef = useRef(false);
+  const showHint = (text: string) => {
+    if (Date.now() - hintAt.current < 1100) return;
+    hintAt.current = Date.now();
+    setHearthHint(text);
+    window.setTimeout(() => {
+      setHearthHint((current) => (current === text ? null : current));
+    }, 1600);
   };
 
-  const handleSweepStroke = () => {
+  const spawnDust = (x: number, y: number, kind: 'ash' | 'char') => {
+    const motes = Array.from({ length: kind === 'ash' ? 14 : 7 }).map((_, i) => {
+      const id = dustSeq.current++;
+      const angle = -Math.PI / 2 + (i / 12) * Math.PI - 0.4;
+      const dist = 18 + (i % 5) * 10;
+      return {
+        id,
+        x,
+        y,
+        dx: Math.cos(angle) * dist,
+        dy: Math.sin(angle) * dist - 10,
+        size: kind === 'ash' ? 7 + (i % 4) * 3 : 5 + (i % 3) * 2,
+        tone: kind === 'ash' ? '0.95' : '0.55',
+      };
+    });
+    setDust((prev) => [...prev.slice(-24), ...motes]);
+    window.setTimeout(() => {
+      const ids = new Set(motes.map((m) => m.id));
+      setDust((prev) => prev.filter((m) => !ids.has(m.id)));
+    }, 980);
+    setScrape({ id: dustSeq.current++, x, y });
+  };
+
+  const pointInChamber = (clientX: number, clientY: number) => {
+    const rect = chamberRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const x = Math.min(96, Math.max(4, ((clientX - rect.left) / rect.width) * 100));
+    const y = Math.min(94, Math.max(6, ((clientY - rect.top) / rect.height) * 100));
+    return { x, y };
+  };
+
+  const applyDownstroke = (tool: SweepTool, x: number, y: number) => {
     const live = useGameStore.getState().retort;
-    const tool = live.activeTool;
-    if (!tool) return;
-    setBoneNudge((n) => n + 1);
+    if (live.phase !== 'SWEEP') {
+      showHint('The charge is still calcining.');
+      return;
+    }
+    if (live.doorOpen < 0.35) {
+      showHint('Open the door to reach the hearth.');
+      return;
+    }
     if (tool === 'IRON_RAKE') {
-      useGameStore.setState((s) => {
-        const prev = s.retort.largeBonesLeft;
-        const next = Math.max(0, prev - 20);
-        if (next < prev) void hapticIronRake();
-        return { retort: { ...s.retort, largeBonesLeft: next } };
-      });
-    } else if (tool === 'BRISTLE_BRUSH' && live.largeBonesLeft === 0) {
+      if (live.largeBonesLeft <= 0) {
+        showHint('Large bones are clear. Take the iron brush.');
+        return;
+      }
+      useGameStore.setState((s) => ({
+        retort: {
+          ...s.retort,
+          largeBonesLeft: Math.max(0, s.retort.largeBonesLeft - 20),
+        },
+      }));
+      spawnDust(x, y, 'char');
+      void hapticIronRake();
+    } else if (tool === 'BRISTLE_BRUSH') {
+      if (live.largeBonesLeft > 0) {
+        showHint('Rake the large bones first.');
+        return;
+      }
+      if (live.mediumBonesLeft <= 0) {
+        showHint('Fragments are clear. Take the hand brush.');
+        return;
+      }
       useGameStore.setState((s) => ({
         retort: {
           ...s.retort,
           mediumBonesLeft: Math.max(0, s.retort.mediumBonesLeft - 22),
         },
       }));
-    } else if (tool === 'HAND_BRUSH' && live.mediumBonesLeft === 0) {
+      spawnDust(x, y, 'char');
+      void hapticIronRake();
+    } else if (tool === 'HAND_BRUSH') {
+      if (live.mediumBonesLeft > 0 || live.largeBonesLeft > 0) {
+        showHint('Clear bones and fragments before the ash.');
+        return;
+      }
+      if (live.fineAshLeft <= 0) return;
       useGameStore.setState((s) => ({
         retort: {
           ...s.retort,
           fineAshLeft: Math.max(0, s.retort.fineAshLeft - 25),
         },
       }));
+      spawnDust(x, y, 'ash');
+    }
+    setBoneNudge((n) => n + 1);
+  };
+
+  const selectTool = (tool: SweepTool) => {
+    patchRetort({ activeTool: tool });
+    setToolMenuOpen(false);
+    setPanelZoomed(false);
+    setToolHeld(false);
+    setToolGlide(true);
+    setToolPos({ x: 18, y: 86 });
+    window.setTimeout(() => setToolPos({ x: 54, y: 70 }), 40);
+    window.setTimeout(() => setToolGlide(false), 520);
+  };
+
+  const moveHeldTool = (clientX: number, clientY: number) => {
+    const point = pointInChamber(clientX, clientY);
+    if (!point || !activeTool) return;
+    const prev = prevToolPoint.current ?? point;
+    prevToolPoint.current = point;
+    setToolPos(point);
+
+    const dy = point.y - prev.y;
+    const overHearth =
+      point.x > 14 && point.x < 88 && point.y > 54 && point.y < 96;
+
+    if (activeTool === 'STIRRING_ROD') {
+      const live = useGameStore.getState().retort;
+      const dist = Math.hypot(point.x - prev.x, point.y - prev.y);
+      if (live.doorOpen <= STIR_DOOR_MIN) {
+        if (dist > 6) showHint('Open the door past 16% to stir.');
+        return;
+      }
+      if (
+        live.phase === 'BURN' &&
+        live.primaryOn &&
+        dist > 7 &&
+        Date.now() - lastStirAt.current > 420
+      ) {
+        lastStirAt.current = Date.now();
+        useGameStore.setState((s) => ({
+          retort: {
+            ...s.retort,
+            stirCount: s.retort.stirCount + 1,
+            primaryTemp: Math.max(
+              850,
+              s.retort.primaryTemp - 55 - s.retort.doorOpen * 40
+            ),
+          },
+        }));
+        setBoneNudge((n) => n + 1);
+        if (Date.now() - lastHaptic.current > 180) {
+          lastHaptic.current = Date.now();
+          void hapticIronRake();
+        }
+      }
+      return;
+    }
+
+    if (dy < -1.5) {
+      strokeRef.current = { minY: point.y, accum: 0, credited: false };
+      return;
+    }
+    if (point.y < strokeRef.current.minY) strokeRef.current.minY = point.y;
+    if (dy > 0 && overHearth) {
+      strokeRef.current.accum += dy;
+      const traveled = point.y - strokeRef.current.minY;
+      if (
+        !strokeRef.current.credited &&
+        strokeRef.current.accum >= 11 &&
+        traveled >= 11
+      ) {
+        strokeRef.current.credited = true;
+        applyDownstroke(activeTool, point.x, point.y);
+      }
     }
   };
 
@@ -596,8 +749,8 @@ export const CremationMiniGame: React.FC = () => {
             sp={primarySp}
           />
           <p className="text-[8px] text-center text-zinc-700 mt-1 mb-2">
-            Stirs {stirCount}/{targets.requiredStirs} · Runaways{' '}
-            {thermalWarnings}
+            Dial at the foot of the retort sets this SP. Stirs {stirCount}/
+            {targets.requiredStirs} · Runaways {thermalWarnings}
             {secondaryTemp < 850 && secondaryOn && (
               <span className="block text-amber-800 font-bold">
                 Below 850°F — quality risk
@@ -726,40 +879,49 @@ export const CremationMiniGame: React.FC = () => {
 
             <div
               ref={chamberRef}
-              className="relative flex-1 min-w-0 rounded-lg border-4 border-zinc-700 bg-gradient-to-b from-zinc-900 via-stone-950 to-black overflow-hidden touch-none"
-              onPointerDown={(e) => {
-                if (phase === 'SWEEP') {
-                  handleSweepStroke();
-                  return;
-                }
-                if (
-                  activeTool === 'STIRRING_ROD' &&
-                  doorOpen > STIR_DOOR_MIN &&
-                  primaryOn &&
-                  phase === 'BURN'
-                ) {
-                  setRakeHeld(true);
-                  (e.currentTarget as HTMLElement).setPointerCapture?.(
-                    e.pointerId
-                  );
-                  handleRodMove(e.clientX, e.clientY);
-                }
-              }}
-              onPointerMove={(e) => {
-                if (rakeHeld) handleRodMove(e.clientX, e.clientY);
-              }}
-              onPointerUp={() => setRakeHeld(false)}
-              onPointerCancel={() => setRakeHeld(false)}
+              className="retort-brick relative flex-1 min-w-0 rounded-lg border-4 border-zinc-600 shadow-[inset_0_0_40px_rgba(0,0,0,0.65)] overflow-hidden"
             >
-              {/* Door — does not cover the left control strip */}
+              <div className="absolute top-1 left-2 z-20 text-[8px] tracking-[0.22em] text-zinc-400 font-black pointer-events-none">
+                HEARTH
+              </div>
+
               <div
-                className="absolute inset-x-0 top-0 z-30 bg-gradient-to-b from-zinc-500 via-zinc-600 to-zinc-800 border-b-4 border-zinc-900 shadow-2xl"
+                className="absolute inset-x-0 top-0 z-30 border-b-4 border-zinc-950 shadow-2xl pointer-events-none overflow-hidden"
                 style={{
                   height: `${Math.max(0, (1 - doorOpen) * 100)}%`,
                   transition: doorMoving ? 'none' : 'height 0.05s linear',
+                  background:
+                    'linear-gradient(90deg, #3f3f46 0%, #a1a1aa 8%, #d4d4d8 18%, #71717a 46%, #e4e4e7 52%, #52525b 78%, #27272a 100%)',
                 }}
               >
-                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[9px] font-mono text-zinc-300 tracking-widest whitespace-nowrap">
+                <div
+                  className="absolute inset-0 opacity-70"
+                  style={{
+                    background:
+                      'repeating-linear-gradient(to bottom, rgba(0,0,0,0.28) 0 2px, transparent 2px 22px)',
+                  }}
+                />
+                <div className="absolute left-2 top-2 bottom-2 w-1.5 rounded-full bg-black/40" />
+                <div className="absolute right-2 top-2 bottom-2 w-1.5 rounded-full bg-black/40" />
+                <div className="absolute left-1/2 top-[18%] -translate-x-1/2 w-24 h-14 rounded-md border border-zinc-200/40 bg-zinc-900/35 flex flex-col items-center justify-center">
+                  <span className="text-[8px] font-black tracking-[0.2em] text-zinc-100">
+                    MILLENNIUM
+                  </span>
+                  <span className="text-[7px] text-zinc-300">REFRACTORY</span>
+                </div>
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="absolute w-2 h-2 rounded-full bg-zinc-900 border border-zinc-300"
+                    style={{
+                      left: i < 2 ? 14 : undefined,
+                      right: i >= 2 ? 14 : undefined,
+                      top: i % 2 === 0 ? 18 : undefined,
+                      bottom: i % 2 === 1 ? 28 : undefined,
+                    }}
+                  />
+                ))}
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[9px] font-mono text-zinc-100 tracking-widest whitespace-nowrap drop-shadow">
                   DOOR {Math.round(doorOpen * 100)}%
                 </div>
               </div>
@@ -782,157 +944,176 @@ export const CremationMiniGame: React.FC = () => {
                 </div>
               )}
 
-              <div
-                className="absolute inset-0 z-20 flex items-end justify-center pb-8 pointer-events-none transition-transform duration-200"
-                style={{
-                  transform: `translateX(${(boneNudge % 3) - 1}px) translateY(${(boneNudge % 2)}px)`,
-                }}
-              >
-                {bonePhase === 'INTACT' && (
-                  <div className="w-36 h-14 bg-stone-300/80 rounded-sm shadow-inner" />
-                )}
-                {bonePhase === 'CHARRING' && (
-                  <div className="w-36 h-12 bg-stone-800 rounded-sm border border-orange-700/50" />
-                )}
-                {bonePhase === 'CALCINING' && (
-                  <div className="flex gap-1.5">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className="w-3 h-12 bg-stone-200/70 rounded-sm"
-                        style={{
-                          transform: `rotate(${-20 + i * 10 + boneNudge}deg)`,
-                        }}
-                      />
-                    ))}
-                  </div>
-                )}
-                {bonePhase === 'FRAGMENTING' && (
-                  <div className="flex flex-wrap gap-1 w-40 justify-center">
-                    {Array.from({ length: 12 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className="w-2 h-3 bg-stone-300/80 rounded-sm"
-                        style={{
-                          transform: `translateY(${(boneNudge + i) % 4}px)`,
-                        }}
-                      />
-                    ))}
-                  </div>
-                )}
-                {bonePhase === 'ASH' && (
-                  <div className="w-40 h-7 bg-stone-500/70 rounded-full blur-[1px]" />
-                )}
-              </div>
+              <HearthCharge
+                mode={phase === 'SWEEP' ? 'SWEEP' : 'BURN'}
+                bonePhase={bonePhase}
+                progress={progress}
+                nudge={boneNudge}
+                largeBonesLeft={largeBonesLeft}
+                mediumBonesLeft={mediumBonesLeft}
+                fineAshLeft={fineAshLeft}
+              />
 
-              {activeTool === 'STIRRING_ROD' &&
-                doorOpen > STIR_DOOR_MIN &&
-                phase === 'BURN' && (
-                  <div
-                    className="absolute z-40 pointer-events-none"
-                    style={{
-                      left: `${rakePos.x}%`,
-                      top: `${rakePos.y}%`,
-                      transform: 'translate(-10%, -50%) rotate(-18deg)',
-                    }}
-                  >
-                    <div className="flex items-center">
-                      <div className="w-32 h-1 bg-gradient-to-r from-amber-700 via-zinc-400 to-zinc-600 rounded-full shadow-lg" />
-                      <div className="w-3 h-3 rounded-full border border-zinc-300 bg-zinc-500 -ml-1" />
-                    </div>
-                    {rakeHeld && (
-                      <div className="text-[9px] text-amber-300 mt-1 font-bold">
-                        STIRRING
-                      </div>
-                    )}
-                  </div>
-                )}
+              {dust.map((mote) => (
+                <span
+                  key={mote.id}
+                  className="ash-mote"
+                  style={{
+                    left: `${mote.x}%`,
+                    top: `${mote.y}%`,
+                    width: mote.size,
+                    height: mote.size,
+                    opacity: mote.tone,
+                    ['--dx' as string]: `${mote.dx}px`,
+                    ['--dy' as string]: `${mote.dy}px`,
+                  }}
+                />
+              ))}
+              {scrape && (
+                <span
+                  key={scrape.id}
+                  className="hearth-scrape"
+                  style={{
+                    left: `${scrape.x}%`,
+                    top: `${scrape.y - 8}%`,
+                    height: '18%',
+                  }}
+                />
+              )}
 
-              {activeTool === 'STIRRING_ROD' &&
-                phase === 'BURN' &&
-                doorOpen <= STIR_DOOR_MIN && (
-                  <div className="absolute bottom-3 left-2 right-2 z-40 text-center text-[10px] text-amber-200/90 bg-black/55 rounded px-2 py-1.5 pointer-events-none">
-                    Open door past 16% to insert stirring rod
-                  </div>
-                )}
-
-              {phase === 'SWEEP' && (
-                <div className="absolute inset-0 z-25 flex items-center justify-center bg-black/45 px-3">
-                  <p className="text-center text-amber-200 font-bold text-xs">
-                    Tap chamber to sweep
-                    <br />
-                    <span className="text-[10px] font-normal text-stone-300">
-                      L {largeBonesLeft}% · M {mediumBonesLeft}% · F{' '}
-                      {fineAshLeft}%
-                    </span>
-                  </p>
+              {hearthHint && (
+                <div className="absolute top-6 left-2 right-2 z-40 text-center text-[10px] text-amber-100 bg-black/60 rounded px-2 py-1 pointer-events-none">
+                  {hearthHint}
                 </div>
               )}
 
-              {!panelZoomed && progress >= 1 && phase === 'BURN' && (
-                <button
-                  type="button"
-                  onPointerDown={() => {
-                    patchRetort({
-                      primaryOn: false,
-                      secondaryOn: false,
-                      doorMoving: 'UP',
-                      phase: 'SWEEP',
-                      audioMode: 'OFF',
-                      activeTool: 'IRON_RAKE',
-                      largeBonesLeft: 100,
-                      mediumBonesLeft: 100,
-                      fineAshLeft: 100,
-                    });
-                  }}
-                  className="absolute bottom-2 left-2 right-2 z-50 py-2 bg-emerald-700/95 text-white font-bold rounded text-[11px]"
-                >
-                  Begin Sweep →
-                </button>
+              {phase === 'SWEEP' && (
+                <div className="absolute top-5 left-2 z-20 text-[9px] font-mono text-stone-200/90 bg-black/50 rounded px-1.5 py-1 pointer-events-none leading-tight">
+                  Bone {largeBonesLeft}% · Frag {mediumBonesLeft}% · Ash {fineAshLeft}%
+                </div>
               )}
 
-              {!panelZoomed && phase === 'SWEEP' && fineAshLeft === 0 && (
+              {activeTool && (
+                <div
+                  className={`absolute z-50 touch-none ${
+                    toolHeld || toolGlide ? '' : 'tool-bob'
+                  }`}
+                  style={{
+                    left: `${toolPos.x}%`,
+                    top: `${toolPos.y}%`,
+                    transform:
+                      toolHeld || toolGlide
+                        ? 'translate(-50%, -82%)'
+                        : undefined,
+                    transition: toolHeld
+                      ? 'none'
+                      : 'left 0.45s cubic-bezier(.2,.8,.2,1), top 0.45s cubic-bezier(.2,.8,.2,1)',
+                    filter: 'drop-shadow(0 12px 8px rgba(0,0,0,0.6))',
+                  }}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    (e.currentTarget as HTMLElement).setPointerCapture?.(
+                      e.pointerId
+                    );
+                    toolHeldRef.current = true;
+                    setToolHeld(true);
+                    setToolGlide(false);
+                    const point = pointInChamber(e.clientX, e.clientY);
+                    prevToolPoint.current = point;
+                    strokeRef.current = {
+                      minY: point?.y ?? 40,
+                      accum: 0,
+                      credited: false,
+                    };
+                  }}
+                  onPointerMove={(e) => {
+                    if (!toolHeldRef.current) return;
+                    moveHeldTool(e.clientX, e.clientY);
+                  }}
+                  onPointerUp={() => {
+                    toolHeldRef.current = false;
+                    setToolHeld(false);
+                    prevToolPoint.current = null;
+                  }}
+                  onPointerCancel={() => {
+                    toolHeldRef.current = false;
+                    setToolHeld(false);
+                  }}
+                >
+                  <ToolArt
+                    tool={activeTool}
+                    className="h-48 w-auto max-w-[11rem] pointer-events-none"
+                  />
+                </div>
+              )}
+
+              {!activeTool && (
+                <div className="absolute bottom-2 left-2 right-2 z-20 text-center text-[10px] text-amber-100/90 bg-black/50 rounded px-2 py-1 pointer-events-none">
+                  Open Tools, then hold the tool and move it over the hearth
+                </div>
+              )}
+
+              {phase === 'SWEEP' && fineAshLeft === 0 && (
                 <button
                   type="button"
                   onPointerDown={finishRetortProcess}
-                  className="absolute bottom-2 left-2 right-2 z-50 py-2 bg-amber-500 text-stone-950 font-bold rounded text-[11px]"
+                  className="absolute bottom-2 left-2 right-2 z-[60] py-2 bg-amber-500 text-stone-950 font-bold rounded text-[11px]"
                 >
                   To Urn Processor →
                 </button>
               )}
             </div>
           </div>
+        </div>
+      )}
 
-          <div className="shrink-0 flex gap-1.5 bg-stone-900/90 border border-stone-700 rounded-lg p-1.5">
+      <div className="shrink-0 px-2 pt-1 flex items-end justify-between gap-2">
+        <ToolDrawer
+          open={toolMenuOpen}
+          activeTool={activeTool}
+          attention={phase === 'SWEEP' && !activeTool}
+          onToggle={() => setToolMenuOpen((open) => !open)}
+          onSelect={selectTool}
+        />
+        <div className="flex items-end gap-2 pb-0.5">
+          <div className="flex flex-col gap-1 mb-6">
             {(
-              phase === 'SWEEP'
-                ? ([
-                    { id: 'IRON_RAKE' as const, name: 'Iron Rake' },
-                    { id: 'BRISTLE_BRUSH' as const, name: 'Bristle' },
-                    { id: 'HAND_BRUSH' as const, name: 'Hand Brush' },
-                  ] as const)
-                : ([{ id: 'STIRRING_ROD' as const, name: 'Stirring Rod' }] as const)
-            ).map((tool) => (
+              [
+                ['PRIMARY', 'PRI'],
+                ['SECONDARY', 'SEC'],
+              ] as const
+            ).map(([id, label]) => (
               <button
-                key={tool.id}
+                key={id}
                 type="button"
-                onPointerDown={() =>
-                  patchRetort({
-                    activeTool: activeTool === tool.id ? null : tool.id,
-                  })
-                }
-                className={`flex-1 py-2 px-1 rounded border text-center text-[10px] font-bold ${
-                  activeTool === tool.id
-                    ? 'border-amber-400 bg-amber-950/50'
-                    : 'border-stone-600 bg-stone-800'
+                onPointerDown={() => setDialChamber(id)}
+                className={`px-2 py-1 rounded text-[9px] font-black tracking-wide ${
+                  dialChamber === id
+                    ? 'bg-amber-500 text-stone-950'
+                    : 'bg-zinc-800 text-zinc-300'
                 }`}
               >
-                {tool.name}
+                {label}
               </button>
             ))}
           </div>
+          <SetPointDial
+            size="sm"
+            label={dialChamber === 'PRIMARY' ? 'PRIMARY SP' : 'AFTERBURNER SP'}
+            min={dialChamber === 'PRIMARY' ? PRIMARY_SP_MIN : SECONDARY_SP_MIN}
+            max={dialChamber === 'PRIMARY' ? PRIMARY_SP_MAX : SECONDARY_SP_MAX}
+            value={dialChamber === 'PRIMARY' ? primarySetPoint : secondarySetPoint}
+            onChange={(next) =>
+              patchRetort(
+                dialChamber === 'PRIMARY'
+                  ? { primarySetPoint: next }
+                  : { secondarySetPoint: next }
+              )
+            }
+          />
         </div>
-      )}
+      </div>
     </div>
   );
 };

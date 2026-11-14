@@ -53,7 +53,7 @@ function App() {
       ) : (
         <>
           <header
-            className="shrink-0 z-40 px-3 py-2 border-b border-slate-800 bg-slate-950/95"
+            className="shrink-0 z-40 px-3 py-2 border-b border-amber-900/40 bg-gradient-to-b from-slate-900 to-slate-950"
             style={{ paddingTop: 'calc(var(--safe-top) + 0.25rem)' }}
           >
             <div className="mx-auto max-w-lg grid grid-cols-2 gap-2">

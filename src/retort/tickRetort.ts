@@ -35,13 +35,23 @@ export function stepRetortBurn(
   }
 
   const doorLoss = Math.pow(next.doorOpen, 1.35) * 28;
+  const secondarySp = next.secondarySetPoint || SECONDARY_SP;
+  const primarySp = next.primarySetPoint || PRIMARY_SP;
+
+  const approach = (current: number, target: number, maxStep: number, loss: number) => {
+    const delta = target - current;
+    const step = Math.sign(delta) * Math.min(Math.abs(delta), maxStep);
+    return Math.max(72, current + step - loss);
+  };
 
   if (next.secondaryOn) {
     next.secondaryTemp = Math.min(
-      SECONDARY_SP + 40,
-      Math.max(
-        72,
-        next.secondaryTemp + 18 + Math.random() * 10 - doorLoss * 0.15
+      secondarySp + 40,
+      approach(
+        next.secondaryTemp,
+        secondarySp + 15,
+        18 + Math.random() * 10,
+        doorLoss * 0.15
       )
     );
   } else if (next.blowerOn && next.heated) {
@@ -60,8 +70,8 @@ export function stepRetortBurn(
       next.secondaryTemp < 850 || next.earlyPrimaryStarts > 0 ? 0.55 : 1;
     const gain = (10 + Math.random() * 8) * slow;
     next.primaryTemp = Math.min(
-      PRIMARY_SP + 60,
-      Math.max(72, next.primaryTemp + gain - doorLoss)
+      primarySp + 50,
+      approach(next.primaryTemp, primarySp + 20, gain, doorLoss)
     );
   } else if (next.secondaryOn) {
     next.primaryTemp = Math.max(

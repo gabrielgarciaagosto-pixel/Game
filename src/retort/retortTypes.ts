@@ -27,10 +27,17 @@ export interface RetortMachine {
   mediumBonesLeft: number;
   fineAshLeft: number;
   activeTool: SweepTool | null;
+  /** Operator-calibrated Honeywell set points, °F */
+  primarySetPoint: number;
+  secondarySetPoint: number;
 }
 
 export const SECONDARY_SP = 1700;
 export const PRIMARY_SP = 1600;
+export const PRIMARY_SP_MIN = 1000;
+export const PRIMARY_SP_MAX = 1800;
+export const SECONDARY_SP_MIN = 1200;
+export const SECONDARY_SP_MAX = 1850;
 export const DOOR_STEP = 0.008;
 export const BURN_TICK_MS = 250;
 export const STIR_DOOR_MIN = 0.16;
@@ -57,6 +64,8 @@ export const IDLE_RETORT: RetortMachine = {
   mediumBonesLeft: 100,
   fineAshLeft: 100,
   activeTool: null,
+  primarySetPoint: PRIMARY_SP,
+  secondarySetPoint: SECONDARY_SP,
 };
 
 export function randomPurgeMs(): number {

@@ -122,6 +122,9 @@ export const MainHubMenu: React.FC = () => {
             onPointerDown={() => setActiveStation(tile.id)}
             className={`min-h-[7.5rem] w-full rounded-2xl bg-gradient-to-br ${tile.color} border-2 p-3 flex flex-col justify-between items-start text-left shadow-lg active:scale-95 transition-transform relative overflow-hidden`}
           >
+            <span className="absolute -right-3 -bottom-4 text-5xl opacity-[0.12] font-black pointer-events-none">
+              {tile.title.slice(0, 1)}
+            </span>
             <span className="text-base md:text-lg font-extrabold tracking-wide">
               {tile.title}
             </span>

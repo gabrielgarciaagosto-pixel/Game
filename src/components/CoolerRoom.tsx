@@ -52,7 +52,7 @@ export const CoolerRoom: React.FC = () => {
             return (
               <div
                 key={index}
-                className="min-h-[8.5rem] rounded-xl bg-slate-900/40 border border-dashed border-slate-800 flex items-center justify-center text-[10px] text-slate-600 font-mono"
+                className="min-h-[8.5rem] rounded-xl bg-gradient-to-b from-slate-900/30 to-cyan-950/20 border border-dashed border-cyan-900/50 flex items-center justify-center text-[10px] text-cyan-900 font-mono shadow-[inset_0_0_24px_rgba(34,211,238,0.05)]"
               >
                 BAY #{index + 1} — EMPTY
               </div>
