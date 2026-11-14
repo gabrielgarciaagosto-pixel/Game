@@ -1,21 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  URN_CATALOG,
-  URN_MATERIALS,
-  type UrnCatalogEntry,
-  type UrnMaterial,
-} from '../data/urnCatalog';
-import {
   CASKET_CATALOG,
-  CASKET_MATERIALS,
   type CasketCatalogEntry,
-  type CasketMaterial,
 } from '../data/casketCatalog';
 import { CHAPEL_DECOR_CATALOG } from '../data/chapelDecor';
 import {
   FACILITY_UPGRADES,
   missingCollectionReqs,
   nextFacilityTier,
+  type CollectionReq,
+  type FacilityUpgradeId,
 } from '../data/facilityUpgrades';
 import {
   ALWAYS_CASKET_IDS,
@@ -24,13 +18,65 @@ import {
   getRemainingRareStock,
   liveRares,
   upcomingRares,
+  type ItemRarity,
   type RareScheduleEntry,
 } from '../data/shopRotation';
+import {
+  URN_CATALOG,
+  type UrnCatalogEntry,
+} from '../data/urnCatalog';
 import { useGameStore } from '../store/useGameStore';
-import { UrnVessel } from './urns/UrnVessel';
 import { CasketVessel } from './caskets/CasketVessel';
+import { UrnVessel } from './urns/UrnVessel';
 
-type Tab = 'URNS' | 'CASKETS' | 'CHAPEL' | 'UPGRADES' | 'MERCH';
+type ShopTab = 'URNS' | 'CASKETS' | 'CHAPEL' | 'UPGRADES' | 'MERCH';
+
+type InspectTarget =
+  | { kind: 'urn'; id: string }
+  | { kind: 'casket'; id: string }
+  | null;
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+function formatClock(d: Date): string {
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+function rarityClass(r: ItemRarity): string {
+  switch (r) {
+    case 'LEGENDARY':
+      return 'bg-amber-400 text-stone-950 border-amber-200';
+    case 'RARE':
+      return 'bg-sky-800 text-sky-50 border-sky-500/50';
+    case 'UNCOMMON':
+      return 'bg-emerald-900 text-emerald-100 border-emerald-700/50';
+    default:
+      return 'bg-stone-800 text-stone-300 border-stone-600';
+  }
+}
+
+function catalogUrn(id: string): UrnCatalogEntry | undefined {
+  return URN_CATALOG.find((u) => u.id === id);
+}
+
+function catalogCasket(id: string): CasketCatalogEntry | undefined {
+  return CASKET_CATALOG.find((c) => c.id === id);
+}
+
+function canPurchase(opts: {
+  cash: number;
+  cost: number;
+  reputation: number;
+  reputationRequired: number;
+  stock?: number;
+}): boolean {
+  if (opts.cash < opts.cost) return false;
+  if (opts.reputation < opts.reputationRequired) return false;
+  if (opts.stock != null && opts.stock <= 0) return false;
+  return true;
+}
 
 export const FuneraryEmporium: React.FC = () => {
   const {
@@ -50,97 +96,116 @@ export const FuneraryEmporium: React.FC = () => {
     setActiveStation,
   } = useGameStore();
 
-  const [tab, setTab] = useState<Tab>('URNS');
-  const [urnFilter, setUrnFilter] = useState<UrnMaterial | 'ALL'>('ALL');
-  const [casketFilter, setCasketFilter] = useState<CasketMaterial | 'ALL'>(
-    'ALL'
-  );
-  const [inspectUrnId, setInspectUrnId] = useState<string | null>(null);
-  const [inspectCasketId, setInspectCasketId] = useState<string | null>(null);
-  const [nowTick, setNowTick] = useState(() => Date.now());
+  const [tab, setTab] = useState<ShopTab>('URNS');
+  const [inspect, setInspect] = useState<InspectTarget>(null);
+  const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
-    const id = window.setInterval(() => setNowTick(Date.now()), 30_000);
+    const id = window.setInterval(() => setNow(new Date()), 15_000);
     return () => window.clearInterval(id);
   }, []);
 
-  const now = useMemo(() => new Date(nowTick), [nowTick]);
-  const hourLabel = `${String(now.getHours()).padStart(2, '0')}:${String(
-    now.getMinutes()
-  ).padStart(2, '0')}`;
-
   const live = useMemo(() => liveRares(now), [now]);
-  const upcoming = useMemo(() => upcomingRares(now, 8), [now]);
+  const upcoming = useMemo(() => upcomingRares(now, 6), [now]);
 
   const alwaysUrns = useMemo(
     () =>
-      URN_CATALOG.filter(
-        (u) =>
-          (ALWAYS_URN_IDS as readonly string[]).includes(u.id) &&
-          (urnFilter === 'ALL' || u.material === urnFilter)
+      ALWAYS_URN_IDS.map((id) => catalogUrn(id)).filter(
+        (u): u is UrnCatalogEntry => !!u
       ),
-    [urnFilter]
+    []
+  );
+  const alwaysCaskets = useMemo(
+    () =>
+      ALWAYS_CASKET_IDS.map((id) => catalogCasket(id)).filter(
+        (c): c is CasketCatalogEntry => !!c
+      ),
+    []
   );
 
-  const rareUrnsLive = useMemo(
+  const rareUrnRows = useMemo(
     () =>
       live
         .filter((e) => e.kind === 'urn')
-        .map((e) => ({
-          entry: e,
-          urn: URN_CATALOG.find((u) => u.id === e.id),
-          stock: getRemainingRareStock(shopRotation, e, now),
-        }))
+        .map((entry) => {
+          const urn = catalogUrn(entry.id);
+          if (!urn) return null;
+          return {
+            urn,
+            entry,
+            stock: getRemainingRareStock(shopRotation, entry, now),
+          };
+        })
         .filter(
-          (x): x is { entry: RareScheduleEntry; urn: UrnCatalogEntry; stock: number } =>
-            !!x.urn && x.stock > 0
+          (
+            r
+          ): r is {
+            urn: UrnCatalogEntry;
+            entry: RareScheduleEntry;
+            stock: number;
+          } => !!r
         ),
     [live, shopRotation, now]
   );
 
-  const alwaysCaskets = useMemo(
-    () =>
-      CASKET_CATALOG.filter(
-        (c) =>
-          (ALWAYS_CASKET_IDS as readonly string[]).includes(c.id) &&
-          (casketFilter === 'ALL' || c.material === casketFilter)
-      ),
-    [casketFilter]
-  );
-
-  const rareCasketsLive = useMemo(
+  const rareCasketRows = useMemo(
     () =>
       live
         .filter((e) => e.kind === 'casket')
-        .map((e) => ({
-          entry: e,
-          casket: CASKET_CATALOG.find((c) => c.id === e.id),
-          stock: getRemainingRareStock(shopRotation, e, now),
-        }))
+        .map((entry) => {
+          const casket = catalogCasket(entry.id);
+          if (!casket) return null;
+          return {
+            casket,
+            entry,
+            stock: getRemainingRareStock(shopRotation, entry, now),
+          };
+        })
         .filter(
           (
-            x
-          ): x is {
-            entry: RareScheduleEntry;
+            r
+          ): r is {
             casket: CasketCatalogEntry;
+            entry: RareScheduleEntry;
             stock: number;
-          } => !!x.casket && x.stock > 0
+          } => !!r
         ),
     [live, shopRotation, now]
   );
 
-  const merch = showroomInventory.filter((i) => i.category !== 'URN');
-  const inspectedUrn = URN_CATALOG.find((u) => u.id === inspectUrnId) ?? null;
-  const inspectedCasket =
-    CASKET_CATALOG.find((c) => c.id === inspectCasketId) ?? null;
+  const upcomingUrns = useMemo(
+    () => upcoming.filter((e) => e.kind === 'urn'),
+    [upcoming]
+  );
+  const upcomingCaskets = useMemo(
+    () => upcoming.filter((e) => e.kind === 'casket'),
+    [upcoming]
+  );
 
-  const jumpToRequirement = (kind: 'urn' | 'casket', id: string) => {
-    if (kind === 'urn') {
+  const merch = showroomInventory.filter((i) => i.category !== 'URN');
+  const ownedUrnTotal = Object.values(urnInventory).reduce((a, b) => a + b, 0);
+  const ownedCasketTotal = Object.values(casketInventory).reduce(
+    (a, b) => a + b,
+    0
+  );
+
+  const inspectedUrn =
+    inspect?.kind === 'urn' ? catalogUrn(inspect.id) ?? null : null;
+  const inspectedCasket =
+    inspect?.kind === 'casket' ? catalogCasket(inspect.id) ?? null : null;
+  const inspectedRare =
+    inspect == null
+      ? null
+      : (live.find((e) => e.kind === inspect.kind && e.id === inspect.id) ??
+        null);
+
+  const jumpToCollection = (req: CollectionReq) => {
+    if (req.kind === 'urn') {
       setTab('URNS');
-      setInspectUrnId(id);
+      setInspect({ kind: 'urn', id: req.id });
     } else {
       setTab('CASKETS');
-      setInspectCasketId(id);
+      setInspect({ kind: 'casket', id: req.id });
     }
   };
 
@@ -164,8 +229,12 @@ export const FuneraryEmporium: React.FC = () => {
               Funerary Emporium
             </h2>
             <p className="text-[11px] text-stone-400">
-              Cash ${cash.toLocaleString()} · Rep {reputation} · Clock{' '}
-              <span className="text-amber-200 font-mono">{hourLabel}</span>
+              Own {ownedUrnTotal} urn{ownedUrnTotal === 1 ? '' : 's'} ·{' '}
+              {ownedCasketTotal} casket{ownedCasketTotal === 1 ? '' : 's'} · Cash
+              ${cash.toLocaleString()} · Rep {reputation}
+            </p>
+            <p className="text-[10px] text-amber-200/60 font-mono mt-0.5">
+              Floor clock {formatClock(now)} · rares rotate on the hour
             </p>
           </div>
           <button
@@ -182,7 +251,7 @@ export const FuneraryEmporium: React.FC = () => {
             [
               ['URNS', 'Urns'],
               ['CASKETS', 'Caskets'],
-              ['CHAPEL', 'Chapel Decor'],
+              ['CHAPEL', 'Chapel'],
               ['UPGRADES', 'Upgrades'],
               ['MERCH', 'Merch'],
             ] as const
@@ -199,168 +268,163 @@ export const FuneraryEmporium: React.FC = () => {
 
       <div className="relative flex-1 min-h-0 overflow-y-auto p-2 pb-24">
         {tab === 'URNS' && (
-          <>
-            <HintsRow upcoming={upcoming.filter((u) => u.kind === 'urn')} />
-            <div className="flex gap-1.5 overflow-x-auto pb-2">
-              <FilterChip
-                active={urnFilter === 'ALL'}
-                label="All"
-                onPress={() => setUrnFilter('ALL')}
-              />
-              {URN_MATERIALS.map((m) => (
-                <FilterChip
-                  key={m}
-                  active={urnFilter === m}
-                  label={m}
-                  onPress={() => setUrnFilter(m)}
-                />
-              ))}
-            </div>
-            {rareUrnsLive.length > 0 && (
-              <section className="mb-3">
-                <h3 className="text-[10px] font-black tracking-[0.2em] text-amber-300 mb-1.5">
-                  LIMITED — LIVE NOW (~2h)
-                </h3>
+          <div className="space-y-4">
+            {rareUrnRows.length > 0 && (
+              <section>
+                <SectionLabel>Hour-gated rares</SectionLabel>
                 <div className="grid grid-cols-2 gap-2.5">
-                  {rareUrnsLive.map(({ urn, entry, stock }) => (
+                  {rareUrnRows.map(({ urn, entry, stock }) => (
                     <UrnCard
-                      key={urn.id}
+                      key={`rare-${urn.id}`}
                       urn={urn}
                       owned={urnInventory[urn.id] ?? 0}
                       reputation={reputation}
                       cash={cash}
                       rare={entry}
                       stock={stock}
-                      onInspect={() => setInspectUrnId(urn.id)}
-                      onBuy={() => buyUrn(urn.id)}
+                      onInspect={() => setInspect({ kind: 'urn', id: urn.id })}
+                      onBuy={() => {
+                        buyUrn(urn.id);
+                      }}
                     />
                   ))}
                 </div>
               </section>
             )}
-            <h3 className="text-[10px] font-black tracking-[0.2em] text-stone-400 mb-1.5">
-              FLOOR STOCK
-            </h3>
-            <div className="grid grid-cols-2 gap-2.5">
-              {alwaysUrns.map((urn) => (
-                <UrnCard
-                  key={urn.id}
-                  urn={urn}
-                  owned={urnInventory[urn.id] ?? 0}
-                  reputation={reputation}
-                  cash={cash}
-                  onInspect={() => setInspectUrnId(urn.id)}
-                  onBuy={() => buyUrn(urn.id)}
-                />
-              ))}
-            </div>
-          </>
+
+            <section>
+              <SectionLabel>Always in stock</SectionLabel>
+              <div className="grid grid-cols-2 gap-2.5">
+                {alwaysUrns.map((urn) => (
+                  <UrnCard
+                    key={urn.id}
+                    urn={urn}
+                    owned={urnInventory[urn.id] ?? 0}
+                    reputation={reputation}
+                    cash={cash}
+                    onInspect={() => setInspect({ kind: 'urn', id: urn.id })}
+                    onBuy={() => {
+                      buyUrn(urn.id);
+                    }}
+                  />
+                ))}
+              </div>
+            </section>
+
+            {upcomingUrns.length > 0 && (
+              <ComingUpSection
+                items={upcomingUrns}
+                resolveName={(id) => catalogUrn(id)?.name ?? id}
+              />
+            )}
+          </div>
         )}
 
         {tab === 'CASKETS' && (
-          <>
-            <HintsRow upcoming={upcoming.filter((u) => u.kind === 'casket')} />
-            <div className="flex gap-1.5 overflow-x-auto pb-2">
-              <FilterChip
-                active={casketFilter === 'ALL'}
-                label="All"
-                onPress={() => setCasketFilter('ALL')}
-              />
-              {CASKET_MATERIALS.map((m) => (
-                <FilterChip
-                  key={m}
-                  active={casketFilter === m}
-                  label={m}
-                  onPress={() => setCasketFilter(m)}
-                />
-              ))}
-            </div>
-            {rareCasketsLive.length > 0 && (
-              <section className="mb-3">
-                <h3 className="text-[10px] font-black tracking-[0.2em] text-amber-300 mb-1.5">
-                  LIMITED — LIVE NOW (~2h)
-                </h3>
+          <div className="space-y-4">
+            {rareCasketRows.length > 0 && (
+              <section>
+                <SectionLabel>Hour-gated rares</SectionLabel>
                 <div className="grid grid-cols-2 gap-2.5">
-                  {rareCasketsLive.map(({ casket, entry, stock }) => (
+                  {rareCasketRows.map(({ casket, entry, stock }) => (
                     <CasketCard
-                      key={casket.id}
+                      key={`rare-${casket.id}`}
                       casket={casket}
                       owned={casketInventory[casket.id] ?? 0}
                       reputation={reputation}
                       cash={cash}
                       rare={entry}
                       stock={stock}
-                      onInspect={() => setInspectCasketId(casket.id)}
-                      onBuy={() => buyCasket(casket.id)}
+                      onInspect={() =>
+                        setInspect({ kind: 'casket', id: casket.id })
+                      }
+                      onBuy={() => {
+                        buyCasket(casket.id);
+                      }}
                     />
                   ))}
                 </div>
               </section>
             )}
-            <h3 className="text-[10px] font-black tracking-[0.2em] text-stone-400 mb-1.5">
-              FLOOR STOCK
-            </h3>
-            <div className="grid grid-cols-2 gap-2.5">
-              {alwaysCaskets.map((casket) => (
-                <CasketCard
-                  key={casket.id}
-                  casket={casket}
-                  owned={casketInventory[casket.id] ?? 0}
-                  reputation={reputation}
-                  cash={cash}
-                  onInspect={() => setInspectCasketId(casket.id)}
-                  onBuy={() => buyCasket(casket.id)}
-                />
-              ))}
-            </div>
-          </>
+
+            <section>
+              <SectionLabel>Always in stock</SectionLabel>
+              <div className="grid grid-cols-2 gap-2.5">
+                {alwaysCaskets.map((casket) => (
+                  <CasketCard
+                    key={casket.id}
+                    casket={casket}
+                    owned={casketInventory[casket.id] ?? 0}
+                    reputation={reputation}
+                    cash={cash}
+                    onInspect={() =>
+                      setInspect({ kind: 'casket', id: casket.id })
+                    }
+                    onBuy={() => {
+                      buyCasket(casket.id);
+                    }}
+                  />
+                ))}
+              </div>
+            </section>
+
+            {upcomingCaskets.length > 0 && (
+              <ComingUpSection
+                items={upcomingCaskets}
+                resolveName={(id) => catalogCasket(id)?.name ?? id}
+              />
+            )}
+          </div>
         )}
 
         {tab === 'CHAPEL' && (
           <div className="space-y-2">
-            <p className="text-[11px] text-stone-400 mb-2">
-              Permanent chapel upgrades. Once bought, they stay for every future
-              service and add ongoing satisfaction.
-            </p>
+            <SectionLabel>Permanent chapel upgrades</SectionLabel>
             {CHAPEL_DECOR_CATALOG.map((item) => {
               const owned = chapelOwnedDecor.includes(item.id);
               const canBuy = !owned && cash >= item.cost;
               return (
                 <div
                   key={item.id}
-                  className="rounded-xl border border-amber-900/50 bg-gradient-to-r from-stone-900 to-stone-950 p-3 flex items-center justify-between gap-3"
+                  className="rounded-xl border border-amber-900/50 bg-gradient-to-r from-stone-900 to-stone-950 p-3"
                 >
-                  <div className="min-w-0">
-                    <div className="font-bold text-amber-100 text-sm">
-                      {item.name}
-                      <span className="ml-1 text-[9px] text-stone-500">
-                        T{item.tier} · {item.kind}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-bold text-amber-100 leading-tight">
+                        {item.name}
+                      </div>
+                      <div className="text-[10px] text-stone-400 mt-0.5">
+                        {item.kind} · Tier {item.tier} · Sat +
+                        {item.satisfactionBonus}
+                        {item.standSlots
+                          ? ` · +${item.standSlots} stands`
+                          : ''}
+                      </div>
+                      <p className="text-[11px] text-stone-300 mt-1 leading-snug">
+                        {item.blurb}
+                      </p>
+                    </div>
+                    {owned ? (
+                      <span className="shrink-0 px-2.5 py-1.5 rounded text-[10px] font-black bg-emerald-900/60 text-emerald-200 border border-emerald-700/50">
+                        Owned
                       </span>
-                    </div>
-                    <div className="text-[10px] text-stone-400">{item.blurb}</div>
-                    <div className="text-[10px] text-emerald-400/90 mt-0.5">
-                      +{item.satisfactionBonus} sat
-                      {item.standSlots ? ` · +${item.standSlots} stands` : ''}
-                    </div>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={!canBuy}
+                        onPointerDown={() => {
+                          buyChapelDecor(item.id);
+                        }}
+                        className={`shrink-0 px-3 py-2 rounded font-bold text-xs ${
+                          canBuy
+                            ? 'bg-amber-500 text-stone-950'
+                            : 'bg-stone-800 text-stone-500'
+                        }`}
+                      >
+                        Buy ${item.cost}
+                      </button>
+                    )}
                   </div>
-                  {owned ? (
-                    <span className="text-[10px] font-bold text-emerald-400 shrink-0">
-                      OWNED
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={!canBuy}
-                      onPointerDown={() => buyChapelDecor(item.id)}
-                      className={`px-3 py-2 rounded font-bold text-xs shrink-0 ${
-                        canBuy
-                          ? 'bg-amber-500 text-stone-950'
-                          : 'bg-stone-800 text-stone-500'
-                      }`}
-                    >
-                      Buy ${item.cost}
-                    </button>
-                  )}
                 </div>
               );
             })}
@@ -369,83 +433,111 @@ export const FuneraryEmporium: React.FC = () => {
 
         {tab === 'UPGRADES' && (
           <div className="space-y-3">
-            <p className="text-[11px] text-amber-100/80 bg-amber-950/40 border border-amber-800/50 rounded-lg p-2">
-              Collection requirements are <strong>ownership-only</strong>. Required
-              urns and caskets stay in your collection — upgrades never consume
-              them.
+            <SectionLabel>Facility upgrades</SectionLabel>
+            <p className="text-[10px] text-stone-500 px-0.5">
+              Collection gates are ownership-only — required vessels stay in your
+              inventory.
             </p>
             {FACILITY_UPGRADES.map((def) => {
-              const level = facilityLevels[def.id] ?? 0;
-              const tier = nextFacilityTier(def.id, level);
-              const missing = tier
+              const level = facilityLevels[def.id as FacilityUpgradeId] ?? 0;
+              const next = nextFacilityTier(def.id, level);
+              const missing = next
                 ? missingCollectionReqs(
-                    tier.requires,
+                    next.requires,
                     urnInventory,
                     casketInventory
                   )
                 : [];
-              const canBuy = !!tier && cash >= tier.cost && missing.length === 0;
+              const missingKeys = new Set(
+                missing.map((m) => `${m.kind}:${m.id}`)
+              );
+              const canBuy =
+                !!next && cash >= next.cost && missing.length === 0;
+
               return (
                 <div
                   key={def.id}
-                  className="rounded-xl border border-amber-900/50 bg-stone-950/80 p-3"
+                  className="rounded-xl border border-amber-900/50 bg-gradient-to-b from-[#2a2118] to-[#120e0b] p-3"
                 >
                   <div className="font-bold text-amber-100">{def.name}</div>
-                  <div className="text-[10px] text-stone-400 mb-1">
-                    {def.blurb} · Level {level}/{def.tiers.length}
+                  <div className="text-[10px] text-stone-400">
+                    Level {level}
+                    {next ? ` → ${next.tier}` : ' · Maxed'}
                   </div>
-                  {tier ? (
-                    <>
-                      <div className="text-[11px] text-stone-200 mb-1">
-                        Next: <strong>{tier.label}</strong> — {tier.effect} · $
-                        {tier.cost}
+                  <p className="text-[11px] text-stone-300 mt-1">{def.blurb}</p>
+
+                  {next ? (
+                    <div className="mt-2 rounded-lg border border-stone-800 bg-stone-950/50 p-2.5">
+                      <div className="text-[12px] font-semibold text-amber-50">
+                        {next.label}
                       </div>
-                      {tier.requires.length > 0 && (
-                        <div className="text-[10px] mb-2 space-y-0.5">
-                          <div className="text-stone-400">
+                      <div className="text-[10px] text-stone-400 mt-0.5">
+                        {next.effect} · ${next.cost.toLocaleString()}
+                      </div>
+
+                      {next.requires.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-[10px] text-amber-200/70 font-semibold">
                             Requires owning (not consumed):
-                          </div>
-                          {tier.requires.map((r) => {
-                            const ok = !missing.some((m) => m.id === r.id);
-                            return (
-                              <button
-                                key={r.id}
-                                type="button"
-                                onPointerDown={() =>
-                                  jumpToRequirement(r.kind, r.id)
-                                }
-                                className={`block text-left underline-offset-2 ${
-                                  ok
-                                    ? 'text-emerald-400'
-                                    : 'text-red-300 underline'
-                                }`}
-                              >
-                                {ok ? '✓' : '✗'} {r.label}{' '}
-                                <span className="text-stone-500">
-                                  ({r.kind}) → shop
-                                </span>
-                              </button>
-                            );
-                          })}
+                          </p>
+                          <ul className="mt-1 space-y-1">
+                            {next.requires.map((req) => {
+                              const key = `${req.kind}:${req.id}`;
+                              const have = !missingKeys.has(key);
+                              return (
+                                <li
+                                  key={key}
+                                  className="flex items-center justify-between gap-2 text-[10px]"
+                                >
+                                  <span
+                                    className={
+                                      have
+                                        ? 'text-emerald-300'
+                                        : 'text-rose-300'
+                                    }
+                                  >
+                                    {have ? '✓' : '✗'} {req.label}{' '}
+                                    <span className="text-stone-500">
+                                      ({req.kind})
+                                    </span>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onPointerDown={() => jumpToCollection(req)}
+                                    className="shrink-0 px-2 py-0.5 rounded border border-stone-700 bg-stone-900 text-[9px] font-bold text-amber-100"
+                                  >
+                                    Find in shop
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ul>
                         </div>
                       )}
+
                       <button
                         type="button"
                         disabled={!canBuy}
-                        onPointerDown={() => buyFacilityUpgrade(def.id)}
-                        className={`px-3 py-2 rounded font-bold text-xs ${
+                        onPointerDown={() => {
+                          buyFacilityUpgrade(def.id);
+                        }}
+                        className={`mt-2.5 w-full py-2 rounded-lg text-[11px] font-black ${
                           canBuy
                             ? 'bg-amber-500 text-stone-950'
                             : 'bg-stone-800 text-stone-500'
                         }`}
                       >
-                        Upgrade ${tier.cost}
+                        {missing.length > 0
+                          ? 'Missing collection'
+                          : cash < next.cost
+                            ? 'Insufficient cash'
+                            : `Upgrade · $${next.cost}`}
                       </button>
-                    </>
-                  ) : (
-                    <div className="text-[11px] text-emerald-400 font-bold">
-                      MAXED
                     </div>
+                  ) : (
+                    <p className="mt-2 text-[11px] text-emerald-300/80 font-semibold">
+                      Fully upgraded
+                    </p>
                   )}
                 </div>
               );
@@ -455,6 +547,7 @@ export const FuneraryEmporium: React.FC = () => {
 
         {tab === 'MERCH' && (
           <div className="space-y-2">
+            <SectionLabel>Showroom merch</SectionLabel>
             {merch.map((item) => (
               <div
                 key={item.id}
@@ -470,7 +563,9 @@ export const FuneraryEmporium: React.FC = () => {
                 <button
                   type="button"
                   disabled={cash < item.cost}
-                  onPointerDown={() => buyShowroomItem(item.id)}
+                  onPointerDown={() => {
+                    buyShowroomItem(item.id);
+                  }}
                   className={`px-3 py-2 rounded font-bold text-xs shrink-0 ${
                     cash >= item.cost
                       ? 'bg-amber-500 text-stone-950'
@@ -481,33 +576,95 @@ export const FuneraryEmporium: React.FC = () => {
                 </button>
               </div>
             ))}
+            {merch.length === 0 && (
+              <p className="text-[11px] text-stone-500 text-center py-8">
+                No merch in stock.
+              </p>
+            )}
           </div>
         )}
       </div>
 
       {inspectedUrn && (
-        <InspectUrn
+        <UrnInspectModal
           urn={inspectedUrn}
           owned={urnInventory[inspectedUrn.id] ?? 0}
           reputation={reputation}
           cash={cash}
-          onClose={() => setInspectUrnId(null)}
-          onBuy={() => buyUrn(inspectedUrn.id)}
+          rare={inspectedRare}
+          stock={
+            inspectedRare
+              ? getRemainingRareStock(shopRotation, inspectedRare, now)
+              : undefined
+          }
+          onClose={() => setInspect(null)}
+          onBuy={() => {
+            buyUrn(inspectedUrn.id);
+          }}
         />
       )}
+
       {inspectedCasket && (
-        <InspectCasket
+        <CasketInspectModal
           casket={inspectedCasket}
           owned={casketInventory[inspectedCasket.id] ?? 0}
           reputation={reputation}
           cash={cash}
-          onClose={() => setInspectCasketId(null)}
-          onBuy={() => buyCasket(inspectedCasket.id)}
+          rare={inspectedRare}
+          stock={
+            inspectedRare
+              ? getRemainingRareStock(shopRotation, inspectedRare, now)
+              : undefined
+          }
+          onClose={() => setInspect(null)}
+          onBuy={() => {
+            buyCasket(inspectedCasket.id);
+          }}
         />
       )}
     </div>
   );
 };
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[10px] tracking-[0.2em] uppercase text-amber-200/60 font-semibold mb-1.5 px-0.5">
+      {children}
+    </p>
+  );
+}
+
+function ComingUpSection({
+  items,
+  resolveName,
+}: {
+  items: Array<RareScheduleEntry & { hoursUntil: number }>;
+  resolveName: (id: string) => string;
+}) {
+  return (
+    <section className="rounded-xl border border-stone-800/80 bg-stone-950/40 p-2.5">
+      <SectionLabel>Coming up</SectionLabel>
+      <ul className="space-y-1.5">
+        {items.map((e) => (
+          <li key={e.id} className="text-[11px] text-stone-400 leading-snug">
+            <span className="text-stone-300 font-semibold">
+              {resolveName(e.id)}
+            </span>
+            <span className="text-stone-500"> · </span>
+            <span className="text-amber-200/80">{e.rarity}</span>
+            <span className="text-stone-500">
+              {' '}
+              · ~{e.hoursUntil}h · {formatHourRange(e)}
+            </span>
+            <span className="block text-[10px] text-stone-500 italic">
+              {e.hint}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 function FilterChip({
   active,
@@ -533,41 +690,21 @@ function FilterChip({
   );
 }
 
-function HintsRow({
-  upcoming,
-}: {
-  upcoming: Array<RareScheduleEntry & { hoursUntil: number }>;
-}) {
-  if (upcoming.length === 0) return null;
+function LockBadge({ required }: { required: number }) {
   return (
-    <div className="mb-2 rounded-lg border border-stone-800 bg-stone-950/70 p-2 text-[10px] text-stone-400 space-y-0.5">
-      <div className="text-stone-500 font-bold tracking-wide">COMING UP</div>
-      {upcoming.slice(0, 3).map((e) => (
-        <div key={e.id}>
-          ~{e.hoursUntil}h · {e.hint}{' '}
-          <span className="text-stone-600">({formatHourRange(e)})</span>
-        </div>
-      ))}
-    </div>
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-black tracking-wide bg-stone-950/80 text-rose-200 border border-rose-800/60">
+      LOCK · Rep {required}
+    </span>
   );
 }
 
-function RepLock({
-  required,
-  reputation,
-}: {
-  required: number;
-  reputation: number;
-}) {
-  if (required <= 0 || reputation >= required) return null;
+function RarityBadge({ rarity }: { rarity: ItemRarity }) {
   return (
-    <div className="absolute inset-0 z-10 rounded-2xl bg-black/65 flex flex-col items-center justify-center text-center p-2">
-      <div className="text-lg">🔒</div>
-      <div className="text-[10px] font-bold text-amber-200">
-        Requires Rep {required}
-      </div>
-      <div className="text-[9px] text-stone-400">You have {reputation}</div>
-    </div>
+    <span
+      className={`inline-flex px-1.5 py-0.5 rounded text-[8px] font-black tracking-wide border ${rarityClass(rarity)}`}
+    >
+      {rarity}
+    </span>
   );
 }
 
@@ -591,36 +728,57 @@ function UrnCard({
   onBuy: () => void;
 }) {
   const locked = reputation < (urn.reputationRequired ?? 0);
-  const canBuy = !locked && cash >= urn.cost && (stock == null || stock > 0);
+  const canBuy = canPurchase({
+    cash,
+    cost: urn.cost,
+    reputation,
+    reputationRequired: urn.reputationRequired ?? 0,
+    stock,
+  });
+
   return (
-    <div className="relative rounded-2xl border border-amber-900/40 bg-gradient-to-b from-[#2a2118] to-[#120e0b] p-2 flex flex-col min-h-[15rem]">
-      <RepLock required={urn.reputationRequired ?? 0} reputation={reputation} />
-      {rare && (
-        <div className="absolute top-2 left-2 z-[5] text-[8px] font-black px-1.5 py-0.5 rounded bg-amber-500 text-stone-950">
-          {rare.rarity} · {stock} left · {formatHourRange(rare)}
-        </div>
-      )}
-      <button type="button" onPointerDown={onInspect} className="flex-1">
-        <UrnVessel urn={urn} size="sm" className="mx-auto" />
-        <div className="text-[11px] font-bold text-amber-50 mt-1 leading-tight">
-          {urn.name}
-        </div>
-        <div className="text-[9px] text-stone-400">
-          {urn.material} · Own {owned}
-        </div>
-      </button>
+    <div className="rounded-2xl border border-amber-900/40 bg-gradient-to-b from-[#2a2118] to-[#120e0b] p-2 flex flex-col min-h-[15rem]">
       <button
         type="button"
-        disabled={!canBuy}
-        onPointerDown={onBuy}
-        className={`mt-2 w-full py-2 rounded font-bold text-xs ${
-          canBuy
-            ? 'bg-amber-500 text-stone-950'
-            : 'bg-stone-800 text-stone-500'
-        }`}
+        onPointerDown={onInspect}
+        className="flex-1 flex flex-col items-center justify-end pb-1"
       >
-        {locked ? `Rep ${urn.reputationRequired}` : `Buy $${urn.cost}`}
+        <div className="w-full flex justify-between items-start gap-1 mb-1 px-0.5 min-h-[1.1rem]">
+          {rare ? <RarityBadge rarity={rare.rarity} /> : <span />}
+          {locked && <LockBadge required={urn.reputationRequired} />}
+        </div>
+        <UrnVessel urn={urn} size="sm" />
+        <div className="mt-1 text-center px-1">
+          <div className="text-[12px] font-bold text-amber-50 leading-tight">
+            {urn.name}
+          </div>
+          <div className="text-[9px] text-stone-400">
+            {urn.material} · {urn.finish}
+          </div>
+          {rare && (
+            <div className="text-[9px] text-amber-200/70 mt-0.5 font-mono">
+              {formatHourRange(rare)} · {stock ?? 0} left
+            </div>
+          )}
+        </div>
       </button>
+      <div className="flex items-center justify-between gap-1 mt-1">
+        <span className="text-[10px] text-amber-200/80 font-mono">
+          Own {owned}
+        </span>
+        <button
+          type="button"
+          disabled={!canBuy}
+          onPointerDown={onBuy}
+          className={`px-2.5 py-1.5 rounded text-[10px] font-black ${
+            canBuy
+              ? 'bg-amber-500 text-stone-950'
+              : 'bg-stone-800 text-stone-500'
+          }`}
+        >
+          {locked ? `Rep ${urn.reputationRequired}` : `$${urn.cost}`}
+        </button>
+      </div>
     </div>
   );
 }
@@ -645,48 +803,68 @@ function CasketCard({
   onBuy: () => void;
 }) {
   const locked = reputation < (casket.reputationRequired ?? 0);
-  const canBuy = !locked && cash >= casket.cost && (stock == null || stock > 0);
+  const canBuy = canPurchase({
+    cash,
+    cost: casket.cost,
+    reputation,
+    reputationRequired: casket.reputationRequired ?? 0,
+    stock,
+  });
+
   return (
-    <div className="relative rounded-2xl border border-amber-900/40 bg-gradient-to-b from-[#2a2118] to-[#120e0b] p-2 flex flex-col min-h-[14rem]">
-      <RepLock
-        required={casket.reputationRequired ?? 0}
-        reputation={reputation}
-      />
-      {rare && (
-        <div className="absolute top-2 left-2 z-[5] text-[8px] font-black px-1.5 py-0.5 rounded bg-amber-500 text-stone-950">
-          {rare.rarity} · {stock} left · {formatHourRange(rare)}
-        </div>
-      )}
-      <button type="button" onPointerDown={onInspect} className="flex-1">
-        <CasketVessel casket={casket} size="sm" className="mx-auto" />
-        <div className="text-[11px] font-bold text-amber-50 mt-1 leading-tight">
-          {casket.name}
-        </div>
-        <div className="text-[9px] text-stone-400">
-          {casket.material} · Own {owned}
-        </div>
-      </button>
+    <div className="rounded-2xl border border-amber-900/40 bg-gradient-to-b from-[#2a2118] to-[#120e0b] p-2 flex flex-col min-h-[15rem]">
       <button
         type="button"
-        disabled={!canBuy}
-        onPointerDown={onBuy}
-        className={`mt-2 w-full py-2 rounded font-bold text-xs ${
-          canBuy
-            ? 'bg-amber-500 text-stone-950'
-            : 'bg-stone-800 text-stone-500'
-        }`}
+        onPointerDown={onInspect}
+        className="flex-1 flex flex-col items-center justify-end pb-1"
       >
-        {locked ? `Rep ${casket.reputationRequired}` : `Buy $${casket.cost}`}
+        <div className="w-full flex justify-between items-start gap-1 mb-1 px-0.5 min-h-[1.1rem]">
+          {rare ? <RarityBadge rarity={rare.rarity} /> : <span />}
+          {locked && <LockBadge required={casket.reputationRequired} />}
+        </div>
+        <CasketVessel casket={casket} size="sm" />
+        <div className="mt-1 text-center px-1">
+          <div className="text-[12px] font-bold text-amber-50 leading-tight">
+            {casket.name}
+          </div>
+          <div className="text-[9px] text-stone-400">
+            {casket.material} · {casket.finish}
+          </div>
+          {rare && (
+            <div className="text-[9px] text-amber-200/70 mt-0.5 font-mono">
+              {formatHourRange(rare)} · {stock ?? 0} left
+            </div>
+          )}
+        </div>
       </button>
+      <div className="flex items-center justify-between gap-1 mt-1">
+        <span className="text-[10px] text-amber-200/80 font-mono">
+          Own {owned}
+        </span>
+        <button
+          type="button"
+          disabled={!canBuy}
+          onPointerDown={onBuy}
+          className={`px-2.5 py-1.5 rounded text-[10px] font-black ${
+            canBuy
+              ? 'bg-amber-500 text-stone-950'
+              : 'bg-stone-800 text-stone-500'
+          }`}
+        >
+          {locked ? `Rep ${casket.reputationRequired}` : `$${casket.cost}`}
+        </button>
+      </div>
     </div>
   );
 }
 
-function InspectUrn({
+function UrnInspectModal({
   urn,
   owned,
   reputation,
   cash,
+  rare,
+  stock,
   onClose,
   onBuy,
 }: {
@@ -694,49 +872,99 @@ function InspectUrn({
   owned: number;
   reputation: number;
   cash: number;
+  rare: RareScheduleEntry | null;
+  stock?: number;
   onClose: () => void;
   onBuy: () => void;
 }) {
   const locked = reputation < (urn.reputationRequired ?? 0);
+  const canBuy = canPurchase({
+    cash,
+    cost: urn.cost,
+    reputation,
+    reputationRequired: urn.reputationRequired ?? 0,
+    stock: rare ? stock : undefined,
+  });
+
   return (
-    <div className="absolute inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-3">
-      <div className="w-full max-w-md rounded-2xl border border-amber-800 bg-[#1a1410] p-4">
-        <div className="flex justify-between gap-2">
-          <h3 className="font-black text-amber-100">{urn.name}</h3>
-          <button type="button" onPointerDown={onClose} className="text-stone-400">
-            ✕
+    <div className="fixed inset-0 z-[70] bg-black/80 flex items-end sm:items-center justify-center p-3">
+      <div className="w-full max-w-md rounded-2xl border border-amber-700/50 bg-gradient-to-b from-[#2b2118] to-[#100c09] p-4 shadow-2xl">
+        <div className="flex justify-between items-start gap-2">
+          <div>
+            <div className="flex flex-wrap gap-1 mb-1">
+              {rare && <RarityBadge rarity={rare.rarity} />}
+              {locked && <LockBadge required={urn.reputationRequired} />}
+            </div>
+            <h3 className="text-lg font-black text-amber-100">{urn.name}</h3>
+            <p className="text-[11px] text-stone-400">
+              {urn.material} · {urn.silhouette.replace('_', ' ')}
+            </p>
+          </div>
+          <button
+            type="button"
+            onPointerDown={onClose}
+            className="px-2 py-1 rounded bg-stone-900 text-xs"
+          >
+            Close
           </button>
         </div>
-        <UrnVessel urn={urn} size="md" className="mx-auto my-3" />
-        <p className="text-[11px] text-stone-300">{urn.blurb}</p>
-        <p className="text-[10px] text-stone-500 mt-1">
-          {urn.finish} · {urn.decoration} · Own {owned}
-          {(urn.reputationRequired ?? 0) > 0
-            ? ` · Rep ${urn.reputationRequired}+`
-            : ''}
+
+        <div className="my-4 flex justify-center">
+          <div className="relative">
+            <div className="absolute inset-0 blur-2xl bg-amber-600/20 rounded-full" />
+            <UrnVessel urn={urn} size="lg" className="relative" />
+          </div>
+        </div>
+
+        <p className="text-sm text-stone-200 leading-snug">{urn.blurb}</p>
+        <p className="text-[11px] text-amber-200/80 mt-2">
+          Finish: {urn.finish}. Decheets: {urn.decoration}.
         </p>
+        <p className="text-[11px] text-stone-400 mt-1">
+          Resale to families ${urn.resaleValue} · Prestige +{urn.prestigeBonus} ·
+          Owned {owned}
+        </p>
+        {rare && (
+          <p className="text-[11px] text-amber-200/70 mt-1 font-mono">
+            Window {formatHourRange(rare)} · {stock ?? 0} remaining this window
+          </p>
+        )}
+        {locked && (
+          <p className="text-[11px] text-rose-300 mt-1">
+            Requires reputation {urn.reputationRequired} (you have {reputation})
+          </p>
+        )}
+
         <button
           type="button"
-          disabled={locked || cash < urn.cost}
+          disabled={!canBuy}
           onPointerDown={onBuy}
-          className={`mt-3 w-full py-2.5 rounded font-bold text-sm ${
-            !locked && cash >= urn.cost
+          className={`mt-4 w-full py-3 rounded-xl font-black ${
+            canBuy
               ? 'bg-amber-500 text-stone-950'
               : 'bg-stone-800 text-stone-500'
           }`}
         >
-          {locked ? `Locked — Rep ${urn.reputationRequired}` : `Buy $${urn.cost}`}
+          {locked
+            ? `Locked · Rep ${urn.reputationRequired}`
+            : canBuy
+              ? `Purchase for $${urn.cost}`
+              : rare && (stock ?? 0) <= 0
+                ? 'Sold out this window'
+                : 'Insufficient cash'}
         </button>
       </div>
     </div>
   );
 }
 
-function InspectCasket({
+function CasketInspectModal({
   casket,
   owned,
   reputation,
   cash,
+  rare,
+  stock,
   onClose,
   onBuy,
 }: {
@@ -744,40 +972,87 @@ function InspectCasket({
   owned: number;
   reputation: number;
   cash: number;
+  rare: RareScheduleEntry | null;
+  stock?: number;
   onClose: () => void;
   onBuy: () => void;
 }) {
   const locked = reputation < (casket.reputationRequired ?? 0);
+  const canBuy = canPurchase({
+    cash,
+    cost: casket.cost,
+    reputation,
+    reputationRequired: casket.reputationRequired ?? 0,
+    stock: rare ? stock : undefined,
+  });
+
   return (
-    <div className="absolute inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-3">
-      <div className="w-full max-w-md rounded-2xl border border-amber-800 bg-[#1a1410] p-4">
-        <div className="flex justify-between gap-2">
-          <h3 className="font-black text-amber-100">{casket.name}</h3>
-          <button type="button" onPointerDown={onClose} className="text-stone-400">
-            ✕
+    <div className="fixed inset-0 z-[70] bg-black/80 flex items-end sm:items-center justify-center p-3">
+      <div className="w-full max-w-md rounded-2xl border border-amber-700/50 bg-gradient-to-b from-[#2b2118] to-[#100c09] p-4 shadow-2xl">
+        <div className="flex justify-between items-start gap-2">
+          <div>
+            <div className="flex flex-wrap gap-1 mb-1">
+              {rare && <RarityBadge rarity={rare.rarity} />}
+              {locked && <LockBadge required={casket.reputationRequired} />}
+            </div>
+            <h3 className="text-lg font-black text-amber-100">{casket.name}</h3>
+            <p className="text-[11px] text-stone-400">
+              {casket.material} · {casket.silhouette.replace('_', ' ')}
+            </p>
+          </div>
+          <button
+            type="button"
+            onPointerDown={onClose}
+            className="px-2 py-1 rounded bg-stone-900 text-xs"
+          >
+            Close
           </button>
         </div>
-        <CasketVessel casket={casket} size="md" className="mx-auto my-3" />
-        <p className="text-[11px] text-stone-300">{casket.blurb}</p>
-        <p className="text-[10px] text-stone-500 mt-1">
-          {casket.finish} · {casket.hardware} · Own {owned}
-          {(casket.reputationRequired ?? 0) > 0
-            ? ` · Rep ${casket.reputationRequired}+`
-            : ''}
+
+        <div className="my-4 flex justify-center">
+          <div className="relative">
+            <div className="absolute inset-0 blur-2xl bg-amber-600/20 rounded-full" />
+            <CasketVessel casket={casket} size="lg" className="relative" />
+          </div>
+        </div>
+
+        <p className="text-sm text-stone-200 leading-snug">{casket.blurb}</p>
+        <p className="text-[11px] text-amber-200/80 mt-2">
+          Finish: {casket.finish}. Hardware: {casket.hardware}.
         </p>
+        <p className="text-[11px] text-stone-400 mt-1">
+          Resale ${casket.resaleValue} · Prestige +{casket.prestigeBonus} · Owned{' '}
+          {owned}
+        </p>
+        {rare && (
+          <p className="text-[11px] text-amber-200/70 mt-1 font-mono">
+            Window {formatHourRange(rare)} · {stock ?? 0} remaining this window
+          </p>
+        )}
+        {locked && (
+          <p className="text-[11px] text-rose-300 mt-1">
+            Requires reputation {casket.reputationRequired} (you have{' '}
+            {reputation})
+          </p>
+        )}
+
         <button
           type="button"
-          disabled={locked || cash < casket.cost}
+          disabled={!canBuy}
           onPointerDown={onBuy}
-          className={`mt-3 w-full py-2.5 rounded font-bold text-sm ${
-            !locked && cash >= casket.cost
+          className={`mt-4 w-full py-3 rounded-xl font-black ${
+            canBuy
               ? 'bg-amber-500 text-stone-950'
               : 'bg-stone-800 text-stone-500'
           }`}
         >
           {locked
-            ? `Locked — Rep ${casket.reputationRequired}`
-            : `Buy $${casket.cost}`}
+            ? `Locked · Rep ${casket.reputationRequired}`
+            : canBuy
+              ? `Purchase for $${casket.cost}`
+              : rare && (stock ?? 0) <= 0
+                ? 'Sold out this window'
+                : 'Insufficient cash'}
         </button>
       </div>
     </div>
