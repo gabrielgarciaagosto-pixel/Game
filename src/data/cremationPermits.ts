@@ -29,7 +29,8 @@ export interface PermitFormDraft {
   legalName: string;
   dateOfBirth: string; // YYYY-MM-DD
   dateOfDeath: string;
-  timeOfDeath: string; // HH:MM
+  /** 24h time — VR-441 uses 4-digit HHMM; HH:MM also accepted when matching. */
+  timeOfDeath: string;
   placeOfBirth: string;
 }
 
@@ -61,15 +62,25 @@ export function emptyPermitForm(): PermitFormDraft {
   };
 }
 
-/** Normalize TOD so "9:05" and "09:05" compare equal. */
+/**
+ * Normalize TOD for exact match: strip colons → 4-digit HHMM with leading zeros.
+ * "09:30" and "0930" both → "0930". "930" / "9:30" → null (leading zero required).
+ */
+export function normalizeTodToHhmm(raw: string): string | null {
+  const digits = raw.trim().replace(/:/g, '');
+  if (!/^\d{4}$/.test(digits)) return null;
+  const h = Number(digits.slice(0, 2));
+  const min = Number(digits.slice(2, 4));
+  if (!Number.isFinite(h) || !Number.isFinite(min)) return null;
+  if (h < 0 || h > 23 || min < 0 || min > 59) return null;
+  return digits;
+}
+
+/** @deprecated Prefer normalizeTodToHhmm — kept for callers expecting HH:MM. */
 export function normalizeTodInput(raw: string): string {
-  const m = raw.trim().match(/^(\d{1,2}):(\d{2})$/);
-  if (!m) return raw.trim();
-  const h = Number(m[1]);
-  const min = Number(m[2]);
-  if (!Number.isFinite(h) || !Number.isFinite(min)) return raw.trim();
-  if (h < 0 || h > 23 || min < 0 || min > 59) return raw.trim();
-  return formatTod(h, min);
+  const hhmm = normalizeTodToHhmm(raw);
+  if (!hhmm) return raw.trim();
+  return formatTod(Number(hhmm.slice(0, 2)), Number(hhmm.slice(2, 4)));
 }
 
 export function findPermitMismatches(
@@ -88,7 +99,9 @@ export function findPermitMismatches(
   if (form.dateOfDeath.trim() !== expected.dateOfDeath) {
     mismatches.push({ field: 'dateOfDeath', label: 'Date of death' });
   }
-  if (normalizeTodInput(form.timeOfDeath) !== expected.timeOfDeath) {
+  const formTod = normalizeTodToHhmm(form.timeOfDeath);
+  const expectedTod = normalizeTodToHhmm(expected.timeOfDeath);
+  if (formTod == null || expectedTod == null || formTod !== expectedTod) {
     mismatches.push({ field: 'timeOfDeath', label: 'Time of death' });
   }
   if (form.placeOfBirth.trim() !== expected.placeOfBirth) {

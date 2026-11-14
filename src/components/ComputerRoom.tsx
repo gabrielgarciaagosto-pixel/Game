@@ -7,6 +7,11 @@ import {
 import { US_PLACE_LABELS } from '../data/usPlaces';
 import { useGameStore } from '../store/useGameStore';
 
+/** Digits-only HHMM for Android numeric keypads (no ':' needed). */
+function digitsOnlyHhmm(raw: string): string {
+  return raw.replace(/\D/g, '').slice(0, 4);
+}
+
 /**
  * Period Vital Records portal — VR-441 with no case selector.
  * Identify the decedent only by typing vitals exactly; fee every submit.
@@ -167,18 +172,29 @@ export const ComputerRoom: React.FC = () => {
           </div>
 
           <label className="block text-[10px] text-[#9bb8a4]">
-            Time of death (24h HH:MM)
+            Time of death (24h HHMM)
             <input
               value={form.timeOfDeath}
-              placeholder="HH:MM"
               onChange={(e) =>
-                setForm((f) => ({ ...f, timeOfDeath: e.target.value }))
+                setForm((f) => ({
+                  ...f,
+                  timeOfDeath: digitsOnlyHhmm(e.target.value),
+                }))
               }
-              className="mt-1 w-full bg-[#061018] border border-[#2a4a5c] rounded px-2 py-2 text-sm text-[#e8f5e9] font-mono"
+              placeholder="1030"
+              maxLength={4}
+              className="mt-1 w-full bg-[#061018] border border-[#2a4a5c] rounded px-2 py-2 text-sm text-[#e8f5e9] font-mono tracking-widest"
               inputMode="numeric"
+              pattern="[0-9]*"
+              enterKeyHint="done"
               autoComplete="off"
+              autoCorrect="off"
               spellCheck={false}
+              aria-label="Time of death HHMM"
             />
+            <span className="mt-0.5 block text-[9px] text-[#6f947a]">
+              Four digits, leading zeros required (e.g. 0745, 2215)
+            </span>
           </label>
 
           <label className="block text-[10px] text-[#9bb8a4]">

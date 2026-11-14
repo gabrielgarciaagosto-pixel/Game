@@ -163,10 +163,13 @@ export const CaseInboxWidget: React.FC = () => {
                         <span className="text-slate-500">TOD</span>
                         <div className="font-mono text-amber-200">
                           {activeFile.dateOfDeathMs != null
-                            ? formatTod(
-                                activeFile.timeOfDeathHour ?? 0,
-                                activeFile.timeOfDeathMinute ?? 0
-                              )
+                            ? (() => {
+                                const colon = formatTod(
+                                  activeFile.timeOfDeathHour ?? 0,
+                                  activeFile.timeOfDeathMinute ?? 0
+                                );
+                                return `${colon} · ${colon.replace(':', '')}`;
+                              })()
                             : '—'}
                         </div>
                       </div>
