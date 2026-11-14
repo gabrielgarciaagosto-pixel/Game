@@ -121,7 +121,6 @@ export const UrnFillingMiniGame: React.FC = () => {
   );
   const [magnetPos, setMagnetPos] = useState({ x: 50, y: 50 });
   const [urnFill, setUrnFill] = useState(0);
-  const [isTilting, setIsTilting] = useState(false);
   const [tilt, setTilt] = useState(0);
   const [ashPouring, setAshPouring] = useState(false);
   const [spillGrams, setSpillGrams] = useState(0);
