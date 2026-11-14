@@ -13,7 +13,7 @@ import { UrnStartScreen } from './components/UrnStartScreen';
 import { UrnVaultRoom } from './components/UrnVaultRoom';
 import { useIntakeSpawner } from './hooks/useIntakeSpawner';
 import { useRetortEngine } from './hooks/useRetortEngine';
-import { displayCaseName } from './types/game';
+import { directiveLabel, displayCaseName } from './types/game';
 import { useGameStore } from './store/useGameStore';
 
 function App() {
@@ -104,7 +104,7 @@ function App() {
                     : 'None selected'}
                 </div>
                 <div className="font-mono text-xs text-sky-300 truncate">
-                  {activeCase?.directive ?? '—'}
+                  {activeCase ? directiveLabel(activeCase.directive) : '—'}
                   {activeCase?.location ? ` · ${activeCase.location}` : ''}
                 </div>
               </div>

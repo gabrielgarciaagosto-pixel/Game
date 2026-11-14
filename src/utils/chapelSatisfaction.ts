@@ -30,6 +30,8 @@ export interface ChapelScoreBreakdown {
   preference: number;
   freshness: number;
   decor: number;
+  /** Prestige of the offered urn on the stand (memorial services) */
+  urnVessel: number;
   clutter: number;
   total: number;
 }
@@ -53,6 +55,7 @@ function dist(a: { x: number; y: number }, b: { x: number; y: number }) {
  * @param theme           Themes selected for this service (owned pieces only)
  * @param decayLevel      Case decay 0–100 — freshness proxy
  * @param flowerAgeMinutes Avg minutes since each spray was placed (0 = fresh)
+ * @param urnPrestige      Catalog prestigeBonus of the urn on the stand (0 if none)
  */
 export function scoreChapelArrangement(opts: {
   pieces: ChapelLayoutPiece[];
@@ -61,12 +64,15 @@ export function scoreChapelArrangement(opts: {
   theme: ChapelThemeSelection;
   decayLevel: number;
   flowerAgeMinutes?: number;
+  urnPrestige?: number;
 }): ChapelScoreBreakdown {
   const { pieces, preferred, ownedDecorIds, theme, decayLevel } = opts;
   const flowerAgeMinutes = opts.flowerAgeMinutes ?? 0;
+  const urnPrestige = opts.urnPrestige ?? 0;
 
+  // Focal is bier or urn stand — proximity / symmetry revolve around it
   const focal =
-    pieces.find((p) => p.kind === 'COFFIN' || p.kind === 'URN') ?? {
+    pieces.find((p) => p.kind === 'URN' || p.kind === 'COFFIN') ?? {
       x: 0.5,
       y: 0.42,
     };
@@ -147,6 +153,7 @@ export function scoreChapelArrangement(opts: {
     theme.draperyId,
     theme.lightingId,
     theme.pewsId,
+    theme.urnPedestalId,
     ...theme.ornamentIds,
   ].filter(Boolean) as string[];
   // Using owned décor in the active theme: +0.35 of that piece's bonus again
@@ -159,6 +166,9 @@ export function scoreChapelArrangement(opts: {
     activeThemeExtra += ownedDecorBonus([id]) * 0.35;
   }
   const decor = clamp(ownedBonus * 0.45 + activeThemeExtra, 0, 28);
+
+  // --- Vessel on the stand: rarer / prettier urns add a small presentation bonus ---
+  const urnVessel = clamp(urnPrestige * 0.4, 0, 12);
 
   // --- Clutter: pairwise too-close flowers + overcrowding (penalty) ---
   let clutter = 0;
@@ -179,7 +189,8 @@ export function scoreChapelArrangement(opts: {
     variety +
     preference +
     freshness +
-    decor -
+    decor +
+    urnVessel -
     clutter;
   const total = Math.round(clamp(raw, 0, 100));
 
@@ -191,6 +202,7 @@ export function scoreChapelArrangement(opts: {
     preference: Math.round(preference * 10) / 10,
     freshness: Math.round(freshness * 10) / 10,
     decor: Math.round(decor * 10) / 10,
+    urnVessel: Math.round(urnVessel * 10) / 10,
     clutter: Math.round(clutter * 10) / 10,
     total,
   };

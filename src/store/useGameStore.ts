@@ -53,6 +53,12 @@ import {
   satisfactionToRewards,
   scoreChapelArrangement,
 } from '../utils/chapelSatisfaction';
+import { rollFamilyUrnDueAt } from '../data/familyUrnTiming';
+import {
+  caseUsesUrnStand,
+  directiveNeedsUrn,
+  pickFamilyUrnRequest,
+} from '../data/familyUrnPick';
 
 const TAG_WINDOW_MS = 60_000;
 const INTAKE_MIN_MS = 180_000;
@@ -120,6 +126,8 @@ interface GameState {
   receiveNewIntake: () => boolean;
   expireUntaggedNames: () => void;
   tickDecay: () => void;
+  /** Fire due family urn requests → toast + case file update */
+  tickFamilyUrnChoices: () => void;
   getActiveCase: () => DecedentCase | null;
   moveCaseTo: (caseId: string, location: CaseLocation) => void;
   /** @deprecated prefer moveCaseTo(caseId, location) */
@@ -136,7 +144,11 @@ interface GameState {
     boneAshGrams: number,
     caseId: string
   ) => void;
-  completeUrnFilling: (bonusCash: number, caseId: string) => void;
+  completeUrnFilling: (
+    bonusCash: number,
+    caseId: string,
+    pourQuality?: number
+  ) => void;
   storeUrnInVault: (caseId: string) => void;
   buyShowroomItem: (itemId: string) => void;
   buyUrn: (urnId: string) => boolean;
@@ -263,6 +275,7 @@ export function generateRandomCase(now = Date.now()): DecedentCase {
     'BURIAL_VIEWING',
     'CREMATION_DIRECT',
     'VIEWING_THEN_CREMATION',
+    'CREMATION_THEN_VIEWING',
   ];
   const flowers: DecedentCase['preferredFlowers'][] = [
     'LILIES',
@@ -273,24 +286,37 @@ export function generateRandomCase(now = Date.now()): DecedentCase {
   const casketMats = CASKET_MATERIALS as PreferredCasketMaterial[];
 
   const pickedCond = conditions[Math.floor(Math.random() * conditions.length)];
+  const directive = directives[Math.floor(Math.random() * directives.length)];
+  const payoutByDirective: Record<DecedentCase['directive'], number> = {
+    CREMATION_DIRECT: 950,
+    BURIAL_VIEWING: 1350,
+    VIEWING_THEN_CREMATION: 1650,
+    // Cremate → urn → chapel gathering: between burial viewing and dual-path
+    CREMATION_THEN_VIEWING: 1550,
+  };
   return {
     id: Math.random().toString(36).substring(2, 8).toUpperCase(),
     name: randomDecedentName(),
     weightLbs: weights[Math.floor(Math.random() * weights.length)],
     tissueCondition: pickedCond.cond,
     dehydrationFactor: pickedCond.factor,
-    directive: directives[Math.floor(Math.random() * directives.length)],
+    directive,
     preferredFlowers: flowers[Math.floor(Math.random() * flowers.length)],
     preferredUrnMaterial: urnMats[Math.floor(Math.random() * urnMats.length)],
     preferredCasketMaterial:
       casketMats[Math.floor(Math.random() * casketMats.length)],
     offeredUrnId: null,
     offeredCasketId: null,
+    familyRequestedUrnId: null,
+    familyUrnDueAt: directiveNeedsUrn(directive)
+      ? rollFamilyUrnDueAt(now)
+      : null,
+    urnPourQuality: 0,
     location: 'COOLER',
     isEmbalmed: false,
     isCremated: false,
     isUrnFilled: false,
-    basePayout: 1200,
+    basePayout: payoutByDirective[directive],
     arrivedAt: now,
     tagExpiresAt: now + TAG_WINDOW_MS,
     isTagged: false,
@@ -312,6 +338,24 @@ function toInboxFile(c: DecedentCase): CaseInboxFile {
     preferredFlowers: c.preferredFlowers,
     isRead: false,
     serviceDateMs: c.serviceDateMs,
+    familyRequestedUrnId: c.familyRequestedUrnId,
+  };
+}
+
+function normalizeCase(c: DecedentCase): DecedentCase {
+  return {
+    ...c,
+    preferredUrnMaterial: c.preferredUrnMaterial ?? URN_MATERIALS[0],
+    preferredCasketMaterial: c.preferredCasketMaterial ?? CASKET_MATERIALS[0],
+    offeredUrnId: c.offeredUrnId ?? null,
+    offeredCasketId: c.offeredCasketId ?? null,
+    familyRequestedUrnId: c.familyRequestedUrnId ?? null,
+    familyUrnDueAt:
+      c.familyUrnDueAt ??
+      (directiveNeedsUrn(c.directive) && !c.familyRequestedUrnId
+        ? rollFamilyUrnDueAt(c.arrivedAt ?? Date.now())
+        : null),
+    urnPourQuality: c.urnPourQuality ?? 0,
   };
 }
 
@@ -806,6 +850,46 @@ export const useGameStore = create<GameState>()(
       return changed ? { cases } : state;
     }),
 
+  tickFamilyUrnChoices: () =>
+    set((state) => {
+      const now = Date.now();
+      let toast: string | null = null;
+      let any = false;
+      const cases = state.cases.map((c) => {
+        if (c.familyRequestedUrnId) return c;
+        if (c.familyUrnDueAt == null || now < c.familyUrnDueAt) return c;
+        if (!directiveNeedsUrn(c.directive)) return c;
+        const urnId = pickFamilyUrnRequest(c);
+        const urn = getUrnById(urnId);
+        any = true;
+        toast = urn
+          ? `Family selected ${urn.name} for ${c.isTagged ? c.name : 'their loved one'}`
+          : 'Family sent a vessel request';
+        return {
+          ...c,
+          familyRequestedUrnId: urnId,
+          familyUrnDueAt: null,
+        };
+      });
+      if (!any) return state;
+      const inboxFiles = state.inboxFiles.map((f) => {
+        const match = cases.find((c) => c.id === f.id);
+        if (!match || match.familyRequestedUrnId === f.familyRequestedUrnId) {
+          return f;
+        }
+        return {
+          ...f,
+          familyRequestedUrnId: match.familyRequestedUrnId,
+          isRead: false,
+        };
+      });
+      return {
+        cases,
+        inboxFiles,
+        intakeToast: toast ?? state.intakeToast,
+      };
+    }),
+
   moveCaseTo: (caseId, location) =>
     set((state) => {
       const target = resolveCase(state, caseId);
@@ -1052,17 +1136,19 @@ export const useGameStore = create<GameState>()(
     });
   },
 
-  completeUrnFilling: (bonusCash, caseId) =>
+  completeUrnFilling: (bonusCash, caseId, pourQuality = 50) =>
     set((state) => {
       const active = resolveCase(state, caseId);
       if (!active || active.isUrnFilled) {
         return { activeStation: 'URN_FILLING', activeCaseId: caseId };
       }
+      const quality = Math.max(0, Math.min(100, Math.round(pourQuality)));
       return {
         activeCaseId: caseId,
         cases: updateCaseById(state.cases, caseId, (c) => ({
           ...c,
           isUrnFilled: true,
+          urnPourQuality: quality,
           location: 'URN_FILLING',
         })),
         cash: state.cash + bonusCash,
@@ -1258,12 +1344,10 @@ export const useGameStore = create<GameState>()(
       if (state.chapelLayouts[caseId]) return state;
       const active = resolveCase(state, caseId);
       if (!active) return state;
-      const isCremationDisplay =
-        active.isUrnFilled || active.directive === 'CREMATION_DIRECT';
       return {
         chapelLayouts: {
           ...state.chapelLayouts,
-          [caseId]: defaultChapelLayout(caseId, isCremationDisplay),
+          [caseId]: defaultChapelLayout(caseId, caseUsesUrnStand(active)),
         },
       };
     }),
@@ -1286,6 +1370,7 @@ export const useGameStore = create<GameState>()(
       nextTheme.draperyId = gate(nextTheme.draperyId);
       nextTheme.lightingId = gate(nextTheme.lightingId);
       nextTheme.pewsId = gate(nextTheme.pewsId);
+      nextTheme.urnPedestalId = gate(nextTheme.urnPedestalId);
       nextTheme.ornamentIds = (nextTheme.ornamentIds ?? []).filter((id) =>
         owned.has(id)
       );
@@ -1326,10 +1411,7 @@ export const useGameStore = create<GameState>()(
 
       const layout =
         state.chapelLayouts[caseId] ??
-        defaultChapelLayout(
-          caseId,
-          active.isUrnFilled || active.directive === 'CREMATION_DIRECT'
-        );
+        defaultChapelLayout(caseId, caseUsesUrnStand(active));
       const stands = layout.pieces.filter((p) =>
         ['LILIES', 'ROSES', 'WREATH'].includes(p.kind)
       ).length;
@@ -1424,6 +1506,17 @@ export const useGameStore = create<GameState>()(
       ) {
         fine = 1200;
         alertMsg = `COMPLIANCE FINE ($1,200): Direct cremation finalized without completing the retort burn!`;
+      } else if (c.directive === 'CREMATION_THEN_VIEWING') {
+        if (chosenDisposition === 'BURIAL') {
+          fine = 900;
+          alertMsg = `CONTRACT MISMATCH ($900): Family booked an Ossuary Memorial, not burial.`;
+        } else if (!c.isCremated || !c.isUrnFilled) {
+          fine = 1400;
+          alertMsg = `BREACH ($1,400): Ossuary Memorial requires cremation and urned remains before chapel.`;
+        } else if (!c.offeredUrnId) {
+          fine = 600;
+          alertMsg = `PRESENTATION FINE ($600): No urn on the pedestal for the memorial gathering.`;
+        }
       }
 
       const offered = getUrnById(c.offeredUrnId);
@@ -1445,9 +1538,11 @@ export const useGameStore = create<GameState>()(
           draperyId: null,
           lightingId: null,
           pewsId: null,
+          urnPedestalId: null,
           ornamentIds: [],
         },
         decayLevel: c.decayLevel,
+        urnPrestige: offered?.prestigeBonus ?? 0,
       });
       const chapelRewards = satisfactionToRewards(chapelScore.total);
 
@@ -1482,7 +1577,10 @@ export const useGameStore = create<GameState>()(
         alertMsg = `FAMILY OUTRAGE: Remains showed advanced decomposition (decay ${Math.round(c.decayLevel)}%).`;
       }
 
-      const tipCash = serviceFailed ? 0 : chapelRewards.tipCash;
+      const pourTip = serviceFailed
+        ? 0
+        : Math.round((c.urnPourQuality ?? 0) * 1.1);
+      const tipCash = serviceFailed ? 0 : chapelRewards.tipCash + pourTip;
 
       const netPayout = serviceFailed
         ? -(fine + lateFine)
@@ -1583,7 +1681,36 @@ export const useGameStore = create<GameState>()(
 }),
     {
       name: 'ossuarian-first-urn-v1',
-      version: 1,
+      version: 2,
+      migrate: (persisted, version) => {
+        const p = (persisted ?? {}) as Record<string, unknown>;
+        if (version >= 2) return p as never;
+        const rawCases = (p.cases as DecedentCase[] | undefined) ?? [];
+        const cases = rawCases.map((c) => normalizeCase(c));
+        const chapelLayouts = {
+          ...((p.chapelLayouts as Record<string, ChapelServiceLayout>) ?? {}),
+        };
+        for (const key of Object.keys(chapelLayouts)) {
+          const layout = chapelLayouts[key];
+          if (!layout) continue;
+          chapelLayouts[key] = {
+            ...layout,
+            theme: {
+              ...layout.theme,
+              urnPedestalId: layout.theme?.urnPedestalId ?? null,
+            },
+          };
+        }
+        const rawInbox = (p.inboxFiles as CaseInboxFile[] | undefined) ?? [];
+        const inboxFiles = rawInbox.map((f) => ({
+          ...f,
+          familyRequestedUrnId:
+            f.familyRequestedUrnId ??
+            cases.find((c) => c.id === f.id)?.familyRequestedUrnId ??
+            null,
+        }));
+        return { ...p, cases, chapelLayouts, inboxFiles } as never;
+      },
       partialize: (state) => ({
         hasStartedGame: state.hasStartedGame,
         cash: state.cash,
@@ -1612,23 +1739,37 @@ export const useGameStore = create<GameState>()(
       }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<GameState>;
-        const cases = (p.cases ?? current.cases).map((c) => ({
-          ...c,
-          preferredUrnMaterial:
-            c.preferredUrnMaterial ?? URN_MATERIALS[0],
-          preferredCasketMaterial:
-            c.preferredCasketMaterial ?? CASKET_MATERIALS[0],
-          offeredUrnId: c.offeredUrnId ?? null,
-          offeredCasketId: c.offeredCasketId ?? null,
+        const cases = (p.cases ?? current.cases).map((c) =>
+          normalizeCase(c as DecedentCase)
+        );
+        const chapelLayouts = { ...(p.chapelLayouts ?? current.chapelLayouts) };
+        for (const key of Object.keys(chapelLayouts)) {
+          const layout = chapelLayouts[key];
+          if (!layout?.theme) continue;
+          chapelLayouts[key] = {
+            ...layout,
+            theme: {
+              ...layout.theme,
+              urnPedestalId: layout.theme.urnPedestalId ?? null,
+            },
+          };
+        }
+        const inboxFiles = (p.inboxFiles ?? current.inboxFiles).map((f) => ({
+          ...f,
+          familyRequestedUrnId:
+            f.familyRequestedUrnId ??
+            cases.find((c) => c.id === f.id)?.familyRequestedUrnId ??
+            null,
         }));
         return {
           ...current,
           ...p,
           cases,
+          inboxFiles,
+          chapelLayouts,
           urnInventory: p.urnInventory ?? current.urnInventory,
           casketInventory: p.casketInventory ?? current.casketInventory,
           chapelOwnedDecor: p.chapelOwnedDecor ?? current.chapelOwnedDecor,
-          chapelLayouts: p.chapelLayouts ?? current.chapelLayouts,
           facilityLevels: {
             ...DEFAULT_FACILITY_LEVELS,
             ...(p.facilityLevels ?? {}),

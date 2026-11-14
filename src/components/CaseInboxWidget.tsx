@@ -1,5 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
+import { directiveBlurb, directiveLabel } from '../types/game';
+import { getUrnById } from '../data/urnCatalog';
+import { UrnVessel } from './urns/UrnVessel';
 
 function startOfDay(ms: number): number {
   const d = new Date(ms);
@@ -136,9 +139,12 @@ export const CaseInboxWidget: React.FC = () => {
                   </p>
                   <p>
                     <span className="text-slate-400">Family Directive:</span>{' '}
-                    <strong className="text-amber-300 font-mono">
-                      {activeFile.directive}
+                    <strong className="text-amber-300">
+                      {directiveLabel(activeFile.directive)}
                     </strong>
+                    <span className="block text-[10px] text-slate-500 mt-0.5 leading-snug">
+                      {directiveBlurb(activeFile.directive)}
+                    </span>
                   </p>
                   <p>
                     <span className="text-slate-400">Flower Arrangement:</span>{' '}
@@ -146,6 +152,41 @@ export const CaseInboxWidget: React.FC = () => {
                       {activeFile.preferredFlowers}
                     </strong>
                   </p>
+                  {(() => {
+                    const requestedId =
+                      linkedCase?.familyRequestedUrnId ??
+                      activeFile.familyRequestedUrnId;
+                    const urn = getUrnById(requestedId);
+                    return (
+                      <div className="p-2 rounded-lg border border-slate-700 bg-slate-950/70">
+                        <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+                          Family vessel
+                        </div>
+                        {urn ? (
+                          <div className="flex items-center gap-2">
+                            <UrnVessel
+                              urn={urn}
+                              size="sm"
+                              showPlaque={false}
+                              className="shrink-0 h-12 w-12"
+                            />
+                            <div className="min-w-0">
+                              <div className="text-xs font-bold text-amber-200 truncate">
+                                {urn.name}
+                              </div>
+                              <div className="text-[10px] text-slate-400">
+                                {urn.material} · ${urn.cost}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-slate-400 italic">
+                            Awaiting family selection
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {linkedCase && (
                     <p>
                       <span className="text-slate-400">Status:</span>{' '}

@@ -10,6 +10,7 @@ export function useIntakeSpawner() {
   const receiveNewIntake = useGameStore((s) => s.receiveNewIntake);
   const expireUntaggedNames = useGameStore((s) => s.expireUntaggedNames);
   const tickDecay = useGameStore((s) => s.tickDecay);
+  const tickFamilyUrnChoices = useGameStore((s) => s.tickFamilyUrnChoices);
 
   useEffect(() => {
     if (!hasStartedGame) return;
@@ -31,6 +32,7 @@ export function useIntakeSpawner() {
     const expireTick = setInterval(() => {
       expireUntaggedNames();
       tickDecay();
+      tickFamilyUrnChoices();
     }, 1000);
 
     return () => {
@@ -38,5 +40,11 @@ export function useIntakeSpawner() {
       clearTimeout(timeoutId);
       clearInterval(expireTick);
     };
-  }, [hasStartedGame, receiveNewIntake, expireUntaggedNames, tickDecay]);
+  }, [
+    hasStartedGame,
+    receiveNewIntake,
+    expireUntaggedNames,
+    tickDecay,
+    tickFamilyUrnChoices,
+  ]);
 }

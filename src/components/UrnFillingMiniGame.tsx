@@ -7,14 +7,21 @@ import {
   useGameStore,
 } from '../store/useGameStore';
 import { hapticHammer } from '../utils/haptics';
+import { getUrnById, URN_CATALOG } from '../data/urnCatalog';
+import { UrnVessel } from './urns/UrnVessel';
+import { startAshPourSfx, stopAshPourSfx } from '../utils/soundEffects';
 
 type Phase =
   | 'CRUSH'
   | 'MAGNET'
   | 'HATCH'
   | 'PROCESSOR'
+  | 'SELECT_URN'
   | 'POUR'
   | 'DONE';
+
+const FILL_LINE = 92;
+const SPILL_TILT = 62;
 
 interface BoneChunk {
   id: number;
@@ -41,11 +48,13 @@ export const UrnFillingMiniGame: React.FC = () => {
     moveCaseTo,
     setActiveStation,
     focusCase,
+    offerUrnToCase,
     cremulatorOwned,
     cremulatorDamaged,
     damageCremulator,
     buyReplacementCremulator,
     cash,
+    urnInventory,
   } = useGameStore();
   const currentCase = caseAtLocation(cases, 'URN_FILLING', activeCaseId);
 
@@ -89,10 +98,24 @@ export const UrnFillingMiniGame: React.FC = () => {
   const [isTilting, setIsTilting] = useState(false);
   const [tilt, setTilt] = useState(0);
   const [ashPouring, setAshPouring] = useState(false);
+  const [spillGrams, setSpillGrams] = useState(0);
+  const [particles, setParticles] = useState<
+    Array<{ id: number; x: number; y: number; life: number }>
+  >([]);
+  const particleId = useRef(0);
 
   const trayRef = useRef<HTMLDivElement>(null);
   const pourRef = useRef<HTMLDivElement>(null);
   const lastHammer = useRef(0);
+
+  const familyUrn = getUrnById(currentCase?.familyRequestedUrnId ?? null);
+  const offeredUrn = getUrnById(currentCase?.offeredUrnId ?? null);
+  const familyOwned =
+    familyUrn != null && (urnInventory[familyUrn.id] ?? 0) > 0;
+  const ownedUrns = useMemo(
+    () => URN_CATALOG.filter((u) => (urnInventory[u.id] ?? 0) > 0),
+    [urnInventory]
+  );
 
   const crushProgress = useMemo(() => {
     if (bones.length === 0) return 100;
@@ -280,21 +303,73 @@ export const UrnFillingMiniGame: React.FC = () => {
     if (!isTilting || !pourRef.current) return;
     const rect = pourRef.current.getBoundingClientRect();
     const normY = 1 - (e.clientY - rect.top) / rect.height;
-    const nextTilt = Math.max(0, Math.min(75, normY * 75));
+    const nextTilt = Math.max(0, Math.min(78, normY * 78));
     setTilt(nextTilt);
-    if (nextTilt > 20) {
+    if (nextTilt > 18) {
       setAshPouring(true);
-      const rate = ((nextTilt - 20) / 55) * 2.2;
-      setUrnFill((v) => Math.min(100, +(v + rate).toFixed(1)));
+      startAshPourSfx(0.12 + (nextTilt / 78) * 0.18);
+      const rate = ((nextTilt - 18) / 60) * 1.85;
+      const spilling = nextTilt >= SPILL_TILT && urnFill >= FILL_LINE - 4;
+      if (spilling) {
+        setSpillGrams((s) => Math.min(40, +(s + rate * 0.35).toFixed(1)));
+        setUrnFill((v) => Math.min(100, +(v + rate * 0.25).toFixed(1)));
+      } else {
+        setUrnFill((v) => Math.min(100, +(v + rate).toFixed(1)));
+      }
+      // Ash particles
+      if (Math.random() < 0.55) {
+        const id = ++particleId.current;
+        const x = 42 + Math.random() * 16 + (spilling ? 18 : 0);
+        setParticles((prev) =>
+          [
+            ...prev.slice(-28),
+            { id, x, y: 28 + Math.random() * 8, life: 1 },
+          ]
+        );
+      }
     } else {
       setAshPouring(false);
+      stopAshPourSfx();
     }
   };
 
+  useEffect(() => {
+    if (particles.length === 0) return;
+    const id = window.setInterval(() => {
+      setParticles((prev) =>
+        prev
+          .map((p) => ({ ...p, y: p.y + 3.5, life: p.life - 0.08 }))
+          .filter((p) => p.life > 0 && p.y < 92)
+      );
+    }, 40);
+    return () => clearInterval(id);
+  }, [particles.length > 0]);
+
+  useEffect(() => {
+    return () => stopAshPourSfx();
+  }, []);
+
+  const pourQuality = useMemo(() => {
+    const fillScore =
+      urnFill >= FILL_LINE - 6 && urnFill <= FILL_LINE + 4
+        ? 100
+        : urnFill >= 70
+          ? Math.max(40, 100 - Math.abs(urnFill - FILL_LINE) * 3.2)
+          : Math.max(0, urnFill);
+    const spillPenalty = Math.min(55, spillGrams * 2.2);
+    return Math.max(0, Math.min(100, Math.round(fillScore - spillPenalty)));
+  }, [urnFill, spillGrams]);
+
   const finish = () => {
-    if (!currentCase) return;
-    const pourBonus = urnFill >= 95 ? 120 : urnFill >= 70 ? 60 : 20;
-    completeUrnFilling(collectedBonus + pourBonus, currentCase.id);
+    if (!currentCase || !currentCase.offeredUrnId) return;
+    stopAshPourSfx();
+    const pourBonus =
+      pourQuality >= 90 ? 140 : pourQuality >= 70 ? 90 : pourQuality >= 50 ? 50 : 20;
+    completeUrnFilling(
+      collectedBonus + pourBonus,
+      currentCase.id,
+      pourQuality
+    );
     setPhase('DONE');
   };
 
@@ -316,6 +391,9 @@ export const UrnFillingMiniGame: React.FC = () => {
   }
 
   if (phase === 'DONE' || currentCase.isUrnFilled) {
+    const memorial = currentCase.directive === 'CREMATION_THEN_VIEWING';
+    const direct = currentCase.directive === 'CREMATION_DIRECT';
+    const sealed = getUrnById(currentCase.offeredUrnId);
     return (
       <div className="safe-screen fixed inset-0 z-50 bg-zinc-950/95 text-zinc-100 flex flex-col select-none">
         <div className="flex justify-between items-center border-b border-zinc-800 pb-3">
@@ -330,22 +408,44 @@ export const UrnFillingMiniGame: React.FC = () => {
             Back
           </button>
         </div>
-        <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center">
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-4">
+          {sealed && (
+            <UrnVessel urn={sealed} size="md" showPlaque className="mx-auto" />
+          )}
+          <p className="text-xs text-zinc-400 max-w-sm">
+            Pour quality {currentCase.urnPourQuality || pourQuality}/100
+            {memorial
+              ? ' — stage the vessel on the chapel pedestal for the Ossuary Memorial.'
+              : direct
+                ? ' — ready for family pickup or vault storage.'
+                : ' — vault, chapel, or continue the case.'}
+          </p>
           <div className="flex flex-wrap gap-2 justify-center">
+            {memorial ? (
+              <button
+                type="button"
+                onPointerDown={() => moveCaseTo(currentCase.id, 'CHAPEL')}
+                className="px-5 py-3 bg-violet-600 font-bold rounded"
+              >
+                Chapel — Ossuary Memorial
+              </button>
+            ) : null}
             <button
               type="button"
               onPointerDown={() => storeUrnInVault(currentCase.id)}
               className="px-5 py-3 bg-amber-500 text-zinc-950 font-bold rounded"
             >
-              Store in Urn Vault
+              {direct ? 'Family Pickup / Vault' : 'Store in Urn Vault'}
             </button>
-            <button
-              type="button"
-              onPointerDown={() => moveCaseTo(currentCase.id, 'CHAPEL')}
-              className="px-5 py-3 bg-violet-700 font-bold rounded"
-            >
-              Move to Chapel
-            </button>
+            {!memorial && (
+              <button
+                type="button"
+                onPointerDown={() => moveCaseTo(currentCase.id, 'CHAPEL')}
+                className="px-5 py-3 bg-violet-800 font-bold rounded"
+              >
+                Move to Chapel
+              </button>
+            )}
           </div>
           <CaseTransferBar currentCase={currentCase} showVault />
         </div>
@@ -711,24 +811,127 @@ export const UrnFillingMiniGame: React.FC = () => {
           {cremulatorProgress >= 100 && (
             <button
               type="button"
-              onPointerDown={() => setPhase('POUR')}
+              onPointerDown={() => setPhase('SELECT_URN')}
               className="w-full py-3 bg-emerald-600 rounded font-bold"
             >
-              Transfer Ash to Funnel →
+              Choose Vessel & Pour →
             </button>
           )}
         </div>
       )}
 
-      {phase === 'POUR' && (
-        <div className="flex-1 min-h-0 flex flex-col gap-3 mt-2">
+      {phase === 'SELECT_URN' && (
+        <div className="flex-1 min-h-0 flex flex-col gap-3 mt-2 overflow-y-auto pb-3">
           <p className="text-[11px] text-zinc-400">
-            Hold and drag upward on the funnel to pour ash into the urn.
+            Ash is ready. Stage the vessel before pouring — family requests must
+            be in your collection.
+          </p>
+          {familyUrn ? (
+            <div className="rounded-xl border border-amber-700/60 bg-amber-950/30 p-3">
+              <div className="text-[10px] uppercase tracking-wider text-amber-400/90 mb-1">
+                Family request
+              </div>
+              <div className="flex items-center gap-3">
+                <UrnVessel
+                  urn={familyUrn}
+                  size="sm"
+                  showPlaque={false}
+                  className="shrink-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="font-bold text-amber-100 text-sm truncate">
+                    {familyUrn.name}
+                  </div>
+                  <div className="text-[10px] text-zinc-400">
+                    {familyUrn.material} · prestige {familyUrn.prestigeBonus}
+                  </div>
+                  {familyOwned ? (
+                    <button
+                      type="button"
+                      onPointerDown={() => {
+                        offerUrnToCase(currentCase.id, familyUrn.id);
+                        setPhase('POUR');
+                      }}
+                      className="mt-2 px-3 py-1.5 rounded bg-emerald-600 text-xs font-bold"
+                    >
+                      Use family&apos;s urn
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onPointerDown={() => setActiveStation('EMPORIUM')}
+                      className="mt-2 px-3 py-1.5 rounded bg-amber-500 text-zinc-950 text-xs font-bold"
+                    >
+                      Buy in Emporium (${familyUrn.cost})
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-[11px] text-zinc-500 italic">
+              No family selection yet — pick any vessel from your collection.
+            </p>
+          )}
+
+          <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+            Your collection
+          </div>
+          {ownedUrns.length === 0 ? (
+            <button
+              type="button"
+              onPointerDown={() => setActiveStation('EMPORIUM')}
+              className="py-3 rounded bg-amber-600 text-zinc-950 font-bold text-sm"
+            >
+              No urns owned — open Emporium
+            </button>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {ownedUrns.map((urn) => {
+                const preferred =
+                  urn.material === currentCase.preferredUrnMaterial;
+                return (
+                  <button
+                    key={urn.id}
+                    type="button"
+                    onPointerDown={() => {
+                      offerUrnToCase(currentCase.id, urn.id);
+                      setPhase('POUR');
+                    }}
+                    className={`rounded-xl border p-1.5 text-center ${
+                      preferred
+                        ? 'border-emerald-500/70 bg-zinc-900'
+                        : 'border-zinc-700 bg-zinc-900'
+                    }`}
+                  >
+                    <UrnVessel
+                      urn={urn}
+                      size="sm"
+                      showPlaque={false}
+                      className="mx-auto h-14"
+                    />
+                    <div className="text-[9px] font-bold leading-tight mt-0.5 truncate">
+                      {urn.name}
+                      {preferred ? ' ★' : ''}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {phase === 'POUR' && offeredUrn && (
+        <div className="flex-1 min-h-0 flex flex-col gap-2 mt-2">
+          <p className="text-[11px] text-zinc-400">
+            Drag up to tilt the funnel. Fill to the line — spill costs quality.
           </p>
           <div
             ref={pourRef}
-            className="relative flex-1 rounded-xl border-2 border-zinc-700 bg-zinc-900 flex items-end justify-center pb-8 touch-none overflow-hidden"
+            className="relative flex-1 rounded-xl border-2 border-zinc-700 bg-gradient-to-b from-zinc-900 to-zinc-950 flex items-end justify-center pb-6 touch-none overflow-hidden"
             onPointerDown={(e) => {
+              e.currentTarget.setPointerCapture?.(e.pointerId);
               setIsTilting(true);
               handlePourMove(e);
             }}
@@ -736,39 +939,85 @@ export const UrnFillingMiniGame: React.FC = () => {
             onPointerUp={() => {
               setIsTilting(false);
               setAshPouring(false);
+              stopAshPourSfx();
             }}
-            onPointerLeave={() => {
+            onPointerCancel={() => {
               setIsTilting(false);
               setAshPouring(false);
+              stopAshPourSfx();
             }}
           >
+            {/* Funnel */}
             <div
-              className="absolute top-10 w-28 h-20 bg-zinc-600 transition-transform"
+              className="absolute top-8 left-1/2 -translate-x-1/2 w-32 h-24 bg-zinc-600/95 border border-zinc-500 transition-transform"
               style={{
-                clipPath: 'polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%)',
-                transform: `rotate(${tilt * 0.3}deg)`,
+                clipPath: 'polygon(18% 0%, 82% 0%, 100% 100%, 0% 100%)',
+                transform: `rotate(${tilt * 0.35}deg)`,
                 transformOrigin: 'bottom center',
               }}
             />
+            {/* Ash stream */}
             {ashPouring && (
-              <div className="absolute top-28 left-1/2 -translate-x-1/2 w-2 h-16 bg-gradient-to-b from-stone-400 to-transparent animate-pulse opacity-80" />
-            )}
-            <div className="relative w-24 h-32 border-4 border-stone-400 rounded-b-2xl bg-stone-950 flex flex-col justify-end overflow-hidden">
               <div
-                className="w-full bg-stone-500 transition-all"
-                style={{ height: `${urnFill}%` }}
+                className="absolute top-[7.5rem] left-1/2 -translate-x-1/2 w-2.5 rounded-full opacity-90"
+                style={{
+                  height: `${28 + tilt * 0.35}px`,
+                  background:
+                    'linear-gradient(to bottom, #a8a29e, transparent)',
+                  transform:
+                    tilt >= SPILL_TILT
+                      ? 'translateX(14px) rotate(8deg)'
+                      : undefined,
+                }}
               />
-              <span className="absolute inset-0 flex items-center justify-center text-xs font-mono">
-                {Math.round(urnFill)}%
-              </span>
+            )}
+            {particles.map((p) => (
+              <span
+                key={p.id}
+                className="absolute w-1.5 h-1.5 rounded-full bg-stone-400 pointer-events-none"
+                style={{
+                  left: `${p.x}%`,
+                  top: `${p.y}%`,
+                  opacity: p.life,
+                }}
+              />
+            ))}
+            {/* Vessel + fill line */}
+            <div className="relative flex flex-col items-center">
+              <div className="relative">
+                <UrnVessel
+                  urn={offeredUrn}
+                  size="md"
+                  showPlaque={false}
+                  className="relative z-10"
+                />
+                <div
+                  className="absolute left-0 right-0 border-t border-dashed border-amber-300/80 pointer-events-none z-20"
+                  style={{ bottom: `${FILL_LINE * 0.42}%` }}
+                  title="Fill line"
+                />
+                <div
+                  className="absolute inset-x-3 bottom-2 rounded-b-xl overflow-hidden pointer-events-none z-0 opacity-70"
+                  style={{ height: '55%' }}
+                >
+                  <div
+                    className="absolute inset-x-0 bottom-0 bg-stone-500/80 transition-all"
+                    style={{ height: `${urnFill}%` }}
+                  />
+                </div>
+              </div>
+              <div className="mt-1 text-[10px] font-mono text-amber-200">
+                {Math.round(urnFill)}% · line {FILL_LINE}%
+                {spillGrams > 0 ? ` · spilled ${Math.round(spillGrams)}g` : ''}
+              </div>
             </div>
-            <div className="absolute top-3 left-3 text-sm font-mono text-amber-300">
-              Funnel tilt: {Math.round(tilt)}°
+            <div className="absolute top-2 left-2 text-[10px] font-mono text-amber-300/90">
+              Tilt {Math.round(tilt)}° · Quality {pourQuality}
             </div>
           </div>
           <button
             type="button"
-            disabled={urnFill < 70}
+            disabled={urnFill < 70 || !currentCase.offeredUrnId}
             onPointerDown={() => urnFill >= 70 && finish()}
             className={`w-full py-3 rounded font-bold ${
               urnFill >= 70
@@ -776,7 +1025,20 @@ export const UrnFillingMiniGame: React.FC = () => {
                 : 'bg-zinc-800 text-zinc-500'
             }`}
           >
-            Seal Urn & Collect Bonus (${collectedBonus}+)
+            Seal Urn (quality {pourQuality}) · +${collectedBonus}
+          </button>
+        </div>
+      )}
+
+      {phase === 'POUR' && !offeredUrn && (
+        <div className="flex-1 flex flex-col items-center justify-center gap-3">
+          <p className="text-sm text-zinc-400">No vessel staged.</p>
+          <button
+            type="button"
+            onPointerDown={() => setPhase('SELECT_URN')}
+            className="px-4 py-2 bg-amber-600 text-zinc-950 rounded font-bold"
+          >
+            Choose urn
           </button>
         </div>
       )}

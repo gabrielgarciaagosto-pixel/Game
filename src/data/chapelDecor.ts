@@ -10,6 +10,7 @@ export type ChapelDecorKind =
   | 'LIGHTING'
   | 'PEWS'
   | 'STANDS'
+  | 'URN_PEDESTAL'
   | 'ORNAMENT';
 
 export type FlowerKind = 'LILIES' | 'ROSES' | 'WREATH';
@@ -32,6 +33,10 @@ export interface ChapelDecorItem {
     drapery?: string;
     lighting?: string;
     pews?: string;
+    /** Pedestal body / plinth fill */
+    pedestal?: string;
+    /** Pedestal trim / capital accent */
+    pedestalAccent?: string;
   };
 }
 
@@ -220,6 +225,36 @@ export const CHAPEL_DECOR_CATALOG: ChapelDecorItem[] = [
     blurb: '+4 gallery-tier stands for large families.',
   },
   {
+    id: 'pedestal_oak_column',
+    name: 'Oak Column Pedestal',
+    kind: 'URN_PEDESTAL',
+    tier: 1,
+    cost: 240,
+    satisfactionBonus: 3,
+    blurb: 'Simple turned oak column — honest urn presentation.',
+    style: { pedestal: '#4a3218', pedestalAccent: '#c4a574' },
+  },
+  {
+    id: 'pedestal_marble_plinth',
+    name: 'Carrara Plinth',
+    kind: 'URN_PEDESTAL',
+    tier: 2,
+    cost: 680,
+    satisfactionBonus: 6,
+    blurb: 'Cool marble plinth with a stepped capital.',
+    style: { pedestal: '#8a8e96', pedestalAccent: '#e8e6e1' },
+  },
+  {
+    id: 'pedestal_bronze_caryatid',
+    name: 'Bronze Caryatid Stand',
+    kind: 'URN_PEDESTAL',
+    tier: 3,
+    cost: 1480,
+    satisfactionBonus: 10,
+    blurb: 'Cast bronze stand with a quiet caryatid silhouette.',
+    style: { pedestal: '#5c3a14', pedestalAccent: '#d4a017' },
+  },
+  {
     id: 'ornament_brass_cross',
     name: 'Brass Altar Cross',
     kind: 'ORNAMENT',
@@ -275,6 +310,8 @@ export interface ChapelThemeSelection {
   draperyId: string | null;
   lightingId: string | null;
   pewsId: string | null;
+  /** Permanent urn pedestal style for Ossuary Memorial services */
+  urnPedestalId: string | null;
   ornamentIds: string[];
 }
 
@@ -284,7 +321,14 @@ export const DEFAULT_CHAPEL_THEME: ChapelThemeSelection = {
   draperyId: null,
   lightingId: null,
   pewsId: null,
+  urnPedestalId: null,
   ornamentIds: [],
+};
+
+/** Free baseline pedestal colors when no upgrade is selected. */
+export const BASIC_URN_PEDESTAL = {
+  pedestal: '#3a2a1a',
+  pedestalAccent: '#8a7048',
 };
 
 export interface ChapelLayoutPiece {

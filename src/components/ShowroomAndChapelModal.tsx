@@ -5,6 +5,7 @@ import { caseAtLocation, useGameStore } from '../store/useGameStore';
 import { getUrnById, URN_CATALOG } from '../data/urnCatalog';
 import { CASKET_CATALOG, getCasketById } from '../data/casketCatalog';
 import {
+  BASIC_URN_PEDESTAL,
   CHAPEL_DECOR_CATALOG,
   getChapelDecorById,
   maxFlowerStands,
@@ -15,6 +16,8 @@ import {
   scoreChapelArrangement,
   satisfactionToRewards,
 } from '../utils/chapelSatisfaction';
+import { caseUsesUrnStand } from '../data/familyUrnPick';
+import { directiveLabel } from '../types/game';
 import { UrnVessel } from './urns/UrnVessel';
 import { CasketVessel } from './caskets/CasketVessel';
 
@@ -93,6 +96,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
     [casketInventory, currentCase?.offeredCasketId]
   );
 
+  const offeredForScore = getUrnById(currentCase?.offeredUrnId ?? null);
   const score = useMemo(() => {
     if (!currentCase || !layout) {
       return null;
@@ -103,8 +107,9 @@ export const ShowroomAndChapelModal: React.FC = () => {
       ownedDecorIds: chapelOwnedDecor,
       theme: layout.theme,
       decayLevel: currentCase.decayLevel,
+      urnPrestige: offeredForScore?.prestigeBonus ?? 0,
     });
-  }, [currentCase, layout, chapelOwnedDecor, scoredPieces]);
+  }, [currentCase, layout, chapelOwnedDecor, scoredPieces, offeredForScore]);
 
   const rewards = score ? satisfactionToRewards(score.total) : null;
 
@@ -141,6 +146,8 @@ export const ShowroomAndChapelModal: React.FC = () => {
     Date.now() > currentCase.serviceDateMs;
   const offered = getUrnById(currentCase.offeredUrnId);
   const offeredCasket = getCasketById(currentCase.offeredCasketId);
+  const urnStandService = caseUsesUrnStand(currentCase);
+  const isMemorial = currentCase.directive === 'CREMATION_THEN_VIEWING';
   const urnMatch =
     offered != null && offered.material === currentCase.preferredUrnMaterial;
   const casketMatch =
@@ -152,6 +159,9 @@ export const ShowroomAndChapelModal: React.FC = () => {
   const drapery = getChapelDecorById(layout?.theme.draperyId ?? '');
   const lighting = getChapelDecorById(layout?.theme.lightingId ?? '');
   const pews = getChapelDecorById(layout?.theme.pewsId ?? '');
+  const pedestalDecor = getChapelDecorById(
+    layout?.theme.urnPedestalId ?? ''
+  );
 
   const wallGrad =
     wall?.style?.wall ?? 'from-violet-900 via-violet-950 to-[#12081a]';
@@ -179,9 +189,13 @@ export const ShowroomAndChapelModal: React.FC = () => {
             CHAPEL — {displayCaseName(currentCase)}
           </h2>
           <p className="text-[10px] text-violet-300/70 leading-snug">
-            Prefers {currentCase.preferredFlowers} · Urn{' '}
-            {currentCase.preferredUrnMaterial} · Casket{' '}
-            {currentCase.preferredCasketMaterial} · ${cash}
+            {directiveLabel(currentCase.directive)} · Prefers{' '}
+            {currentCase.preferredFlowers} · Urn{' '}
+            {currentCase.preferredUrnMaterial}
+            {!urnStandService
+              ? ` · Casket ${currentCase.preferredCasketMaterial}`
+              : ''}{' '}
+            · ${cash}
             {lateService ? ' · LATE' : ''}
             {currentCase.decayLevel > 5
               ? ` · ${decayLabel(currentCase.decayLevel)}`
@@ -248,6 +262,13 @@ export const ShowroomAndChapelModal: React.FC = () => {
                 piece={displayPiece}
                 offeredUrn={offered}
                 offeredCasket={offeredCasket}
+                pedestalColor={
+                  pedestalDecor?.style?.pedestal ?? BASIC_URN_PEDESTAL.pedestal
+                }
+                pedestalAccent={
+                  pedestalDecor?.style?.pedestalAccent ??
+                  BASIC_URN_PEDESTAL.pedestalAccent
+                }
                 onPreview={(x, y) =>
                   setDragOverrides((prev) => ({
                     ...prev,
@@ -291,6 +312,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
               <span>Preference +{score.preference}</span>
               <span>Freshness +{score.freshness}</span>
               <span>Decor +{score.decor}</span>
+              <span>Vessel +{score.urnVessel}</span>
               <span className="text-red-300">Clutter −{score.clutter}</span>
             </div>
             <div className="mt-1 text-violet-300/80">
@@ -341,6 +363,16 @@ export const ShowroomAndChapelModal: React.FC = () => {
             setChapelTheme(currentCase.id, { pewsId: id })
           }
         />
+        {urnStandService && (
+          <ThemeRow
+            label="Urn pedestal"
+            options={ownedByKind('URN_PEDESTAL')}
+            selected={layout?.theme.urnPedestalId ?? null}
+            onPick={(id) =>
+              setChapelTheme(currentCase.id, { urnPedestalId: id })
+            }
+          />
+        )}
 
         {chapelOwnedDecor.length === 0 && (
           <button
@@ -403,7 +435,8 @@ export const ShowroomAndChapelModal: React.FC = () => {
           })}
         </OfferStrip>
 
-        {/* Caskets */}
+        {/* Caskets — burial / viewing-first only */}
+        {!urnStandService && (
         <OfferStrip
           title="OFFER CASKET"
           empty="No caskets in stock."
@@ -456,11 +489,15 @@ export const ShowroomAndChapelModal: React.FC = () => {
             );
           })}
         </OfferStrip>
+        )}
 
         <div className="text-[10px] text-violet-300">
           Flower stands {flowerCount}/{maxStands}
           {urnMatch ? ' · Urn taste matched ★' : ''}
-          {casketMatch ? ' · Casket taste matched ★' : ''}
+          {casketMatch && !urnStandService ? ' · Casket taste matched ★' : ''}
+          {currentCase.urnPourQuality > 0
+            ? ` · Pour ${currentCase.urnPourQuality}`
+            : ''}
         </div>
 
         <div className="grid grid-cols-3 gap-2">
@@ -493,25 +530,43 @@ export const ShowroomAndChapelModal: React.FC = () => {
           })}
         </div>
 
-        <div className="mt-auto grid grid-cols-2 gap-3 pb-2">
-          <button
-            type="button"
-            onPointerDown={() =>
-              finalizeServiceAndNextCase('BURIAL', currentCase.id)
-            }
-            className="py-3 bg-sky-600 active:bg-sky-500 rounded font-bold text-sm"
-          >
-            Finalize Burial
-          </button>
-          <button
-            type="button"
-            onPointerDown={() =>
-              finalizeServiceAndNextCase('CREMATION', currentCase.id)
-            }
-            className="py-3 bg-orange-600 active:bg-orange-500 rounded font-bold text-sm"
-          >
-            Finalize Cremation
-          </button>
+        <div
+          className={`mt-auto grid gap-3 pb-2 ${
+            isMemorial ? 'grid-cols-1' : 'grid-cols-2'
+          }`}
+        >
+          {isMemorial ? (
+            <button
+              type="button"
+              onPointerDown={() =>
+                finalizeServiceAndNextCase('CREMATION', currentCase.id)
+              }
+              className="py-3 bg-violet-600 active:bg-violet-500 rounded font-bold text-sm"
+            >
+              Complete Ossuary Memorial
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onPointerDown={() =>
+                  finalizeServiceAndNextCase('BURIAL', currentCase.id)
+                }
+                className="py-3 bg-sky-600 active:bg-sky-500 rounded font-bold text-sm"
+              >
+                Finalize Burial
+              </button>
+              <button
+                type="button"
+                onPointerDown={() =>
+                  finalizeServiceAndNextCase('CREMATION', currentCase.id)
+                }
+                className="py-3 bg-orange-600 active:bg-orange-500 rounded font-bold text-sm"
+              >
+                Finalize Cremation
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -601,6 +656,8 @@ function DraggablePiece({
   piece,
   offeredUrn,
   offeredCasket,
+  pedestalColor,
+  pedestalAccent,
   onPreview,
   onCommit,
   onRemoveFlower,
@@ -608,6 +665,8 @@ function DraggablePiece({
   piece: ChapelLayoutPiece;
   offeredUrn: ReturnType<typeof getUrnById>;
   offeredCasket: ReturnType<typeof getCasketById>;
+  pedestalColor: string;
+  pedestalAccent: string;
   onPreview: (x: number, y: number) => void;
   onCommit: (x: number, y: number) => void;
   onRemoveFlower: () => void;
@@ -708,14 +767,34 @@ function DraggablePiece({
         </div>
       )}
       {piece.kind === 'URN' && (
-        <div>
+        <div className="flex flex-col items-center">
           {offeredUrn ? (
             <UrnVessel urn={offeredUrn} size="sm" showPlaque={false} />
           ) : (
-            <div className="w-16 h-16 rounded-full bg-stone-700 border border-stone-500 flex items-center justify-center text-[9px] font-bold">
+            <div className="w-14 h-14 rounded-full bg-stone-700 border border-stone-500 flex items-center justify-center text-[9px] font-bold">
               URN
             </div>
           )}
+          {/* Pedestal / plinth under the vessel */}
+          <div className="relative -mt-0.5 flex flex-col items-center">
+            <div
+              className="w-16 h-2 rounded-sm border border-black/30"
+              style={{ background: pedestalAccent }}
+            />
+            <div
+              className="w-12 h-10 rounded-sm border border-black/40 shadow-md"
+              style={{
+                background: `linear-gradient(180deg, ${pedestalAccent} 0%, ${pedestalColor} 35%, ${pedestalColor} 100%)`,
+              }}
+            />
+            <div
+              className="w-20 h-2.5 rounded-sm border border-black/40 -mt-0.5"
+              style={{ background: pedestalColor }}
+            />
+            <span className="text-[7px] font-bold tracking-wide text-violet-200/70 mt-0.5">
+              STAND
+            </span>
+          </div>
         </div>
       )}
       {isFlower && (
