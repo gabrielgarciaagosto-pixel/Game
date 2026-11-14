@@ -3,10 +3,8 @@ import { useGameStore } from '../store/useGameStore';
 import {
   audioManager,
   CROSSFADE_MS,
-  isCrematoryBed,
   unlockGameAudio,
 } from '../utils/audioManager';
-import { isServiceBedId } from '../data/servicePlaylist';
 import {
   isMenuBedId,
   isMenuOrThemeBedId,
@@ -20,6 +18,9 @@ import {
  * Title + main-hub BGM (Gabriel menu playlist).
  * Random track on menu open; on end, another random (avoid immediate repeat).
  * Crossfades out when entering gameplay rooms; respects mute/unmute.
+ *
+ * Generation tokens cancel in-flight starts so leaving hub / Reset Game cannot
+ * resurrect a menu bed inside Cooler / Chapel / Crematory.
  */
 export const MenuThemeAudio: React.FC = () => {
   const hasStartedGame = useGameStore((s) => s.hasStartedGame);
@@ -29,7 +30,7 @@ export const MenuThemeAudio: React.FC = () => {
   const manifestRef = useRef<MenuPlaylistManifest | null>(null);
   const currentTrackRef = useRef<string | null>(null);
   const playingRef = useRef(false);
-  /** Bumps when leaving menu so in-flight crossfades don't re-assert. */
+  /** Bumps on leave / remount so in-flight crossfades abort. */
   const genRef = useRef(0);
 
   const menuActive =
@@ -39,11 +40,16 @@ export const MenuThemeAudio: React.FC = () => {
   const menuActiveRef = useRef(menuActive);
   menuActiveRef.current = menuActive;
 
-  const playTrack = async (trackId: string, fadeMs: number) => {
+  const isStale = (gen: number) =>
+    gen !== genRef.current || !menuActiveRef.current;
+
+  const playTrack = async (trackId: string, fadeMs: number, gen: number) => {
+    if (isStale(gen)) return;
     const manifest = manifestRef.current;
     if (!manifest) return;
     const track = manifest.tracks.find((t) => t.id === trackId);
     if (!track) return;
+
     currentTrackRef.current = trackId;
     playingRef.current = true;
     await audioManager.crossfadeTo(menuBedId(trackId), {
@@ -52,14 +58,25 @@ export const MenuThemeAudio: React.FC = () => {
       volume: manifest.volume,
       durationMs: fadeMs,
     });
+
+    // Leave / Reset raced the crossfade — pull menu back off the bus.
+    if (isStale(gen) && isMenuBedId(audioManager.getCurrentId())) {
+      playingRef.current = false;
+      void audioManager.fadeOut(fadeMs);
+    }
   };
 
-  const startRandom = async (fadeMs: number, avoid: string | null = null) => {
+  const startRandom = async (
+    fadeMs: number,
+    avoid: string | null,
+    gen: number
+  ) => {
     const manifest = await loadMenuPlaylist();
+    if (isStale(gen)) return;
     manifestRef.current = manifest;
     const next = pickRandomMenuTrackId(manifest, avoid);
     if (!next) return;
-    await playTrack(next, fadeMs);
+    await playTrack(next, fadeMs, gen);
   };
 
   useEffect(() => {
@@ -81,10 +98,11 @@ export const MenuThemeAudio: React.FC = () => {
       if (!isMenuBedId(id)) return;
       if (!playingRef.current || !manifestRef.current) return;
       if (!menuActiveRef.current) return;
-      const avoid = currentTrackRef.current;
+      const gen = genRef.current;
       void startRandom(
         manifestRef.current.crossfadeMs ?? CROSSFADE_MS,
-        avoid
+        currentTrackRef.current,
+        gen
       );
     };
     audioManager.addOneShotNearEndHandler(onNearEnd);
@@ -95,9 +113,11 @@ export const MenuThemeAudio: React.FC = () => {
     const onUnmute = () => {
       if (!menuActiveRef.current) return;
       playingRef.current = false;
+      const gen = genRef.current;
       void startRandom(
         manifestRef.current?.crossfadeMs ?? CROSSFADE_MS,
-        currentTrackRef.current
+        currentTrackRef.current,
+        gen
       );
     };
     audioManager.addUnmuteHandler(onUnmute);
@@ -105,45 +125,30 @@ export const MenuThemeAudio: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    const gen = ++genRef.current;
     const fadeMs = manifestRef.current?.crossfadeMs ?? CROSSFADE_MS;
 
-    const run = async () => {
-      if (!menuActive) {
-        if (playingRef.current || isMenuOrThemeBedId(audioManager.getCurrentId())) {
-          playingRef.current = false;
-          // Leave chapel / crematory beds alone — only fade our own beds.
-          const id = audioManager.getCurrentId();
-          if (id == null || isMenuOrThemeBedId(id)) {
-            await audioManager.fadeOut(fadeMs);
-          }
+    if (!menuActive) {
+      // Invalidate any in-flight startRandom / near-end handoff.
+      genRef.current += 1;
+      if (playingRef.current || isMenuOrThemeBedId(audioManager.getCurrentId())) {
+        playingRef.current = false;
+        const id = audioManager.getCurrentId();
+        if (id == null || isMenuOrThemeBedId(id)) {
+          void audioManager.fadeOut(fadeMs);
         }
-        return;
       }
+      return;
+    }
 
-      // Already on a menu bed (e.g. splash → hub) — keep playing.
-      if (
-        playingRef.current &&
-        isMenuBedId(audioManager.getCurrentId())
-      ) {
-        return;
-      }
+    // Already on a menu bed (e.g. splash → hub) — keep playing.
+    if (playingRef.current && isMenuBedId(audioManager.getCurrentId())) {
+      return;
+    }
 
-      // Don't clobber chapel / crematory if somehow active.
-      const current = audioManager.getCurrentId();
-      if (isServiceBedId(current) || isCrematoryBed(current)) {
-        return;
-      }
-
-      await startRandom(fadeMs, null);
-      if (cancelled || gen !== genRef.current) return;
-    };
-
-    void run();
-    return () => {
-      cancelled = true;
-    };
+    // Hub / title owns the bus: crossfade over leftover chapel/crematory beds
+    // so returning from Chapel is never stuck silent.
+    const gen = ++genRef.current;
+    void startRandom(fadeMs, null, gen);
   }, [menuActive]);
 
   return null;
