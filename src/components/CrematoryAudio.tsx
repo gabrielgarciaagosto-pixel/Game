@@ -1,22 +1,26 @@
 import React, { useEffect, useRef } from 'react';
 import { useGameStore } from '../store/useGameStore';
-import { audioManager, CROSSFADE_MS, unlockGameAudio } from '../utils/audioManager';
+import {
+  audioManager,
+  CROSSFADE_MS,
+  isCrematoryBed,
+  unlockGameAudio,
+} from '../utils/audioManager';
+import { isServiceBedId } from '../data/servicePlaylist';
 
 /**
- * Crematory music — priority seamless chain (Gabriel's audible cutoff):
- *   start sting  →  (crossfade)  →  gapless run loop  →  (fade out)  →  sweep/complete
+ * Crematory burn beds — always crossfade, never hard-cut:
+ *   start sting → gapless run loop → fade on finish / leave room / chapel music
  *
- * Uses decoded Web Audio buffers so Android WebView gets:
- * - overlapping GainNode crossfade from start → loop (no hard cut)
- * - AudioBufferSourceNode.loop for a sample-accurate run bed
- * - fade-out into sweep / done instead of pause()
+ * Burn state (audioMode) stays LOOP while the retort runs even if the player
+ * leaves the crematory; audible output only resumes when they return.
  */
 export const CrematoryAudio: React.FC = () => {
   const audioMode = useGameStore((s) => s.retort.audioMode);
   const primaryOn = useGameStore((s) => s.retort.primaryOn);
   const phase = useGameStore((s) => s.retort.phase);
+  const activeStation = useGameStore((s) => s.activeStation);
   const patchRetort = useGameStore((s) => s.patchRetort);
-  /** Last bed we asked the manager to play — avoids restarting on re-renders. */
   const activeBedRef = useRef<'start' | 'loop' | 'off'>('off');
 
   useEffect(() => {
@@ -33,52 +37,69 @@ export const CrematoryAudio: React.FC = () => {
     };
   }, []);
 
-  // Start sting → loop: fire CROSSFADE_MS before the sting ends
+  // Start sting → loop handoff
   useEffect(() => {
-    audioManager.setOneShotNearEndHandler((id) => {
+    const onNearEnd = (id: string) => {
       if (id !== 'crematoryStart') return;
-      const { audioMode: mode, primaryOn: on, phase: p } =
-        useGameStore.getState().retort;
+      const state = useGameStore.getState();
+      const { audioMode: mode, primaryOn: on, phase: p } = state.retort;
+      const inCrematory = state.activeStation === 'CREMATION';
       if (mode === 'START' && on && p !== 'SWEEP' && p !== 'DONE') {
-        activeBedRef.current = 'loop';
-        void audioManager.crossfadeTo('crematoryLoop', {
-          loop: true,
-          durationMs: CROSSFADE_MS,
-        });
         patchRetort({ audioMode: 'LOOP' });
+        if (inCrematory && !isServiceBedId(audioManager.getCurrentId())) {
+          activeBedRef.current = 'loop';
+          void audioManager.crossfadeTo('crematoryLoop', {
+            loop: true,
+            durationMs: CROSSFADE_MS,
+          });
+        } else {
+          // Left the room or chapel music owns the bus — keep mode, stay silent
+          activeBedRef.current = 'off';
+        }
       } else if (mode === 'START') {
         activeBedRef.current = 'off';
         void audioManager.fadeOut(CROSSFADE_MS);
         patchRetort({ audioMode: 'OFF' });
       }
-    });
-    return () => {
-      audioManager.setOneShotNearEndHandler(null);
     };
+    audioManager.addOneShotNearEndHandler(onNearEnd);
+    return () => audioManager.removeOneShotNearEndHandler(onNearEnd);
   }, [patchRetort]);
 
   useEffect(() => {
-    const shouldSilence =
+    const burnEnded =
       audioMode === 'OFF' ||
       phase === 'SWEEP' ||
       phase === 'DONE' ||
       !primaryOn;
+    const inCrematory = activeStation === 'CREMATION';
+    const chapelMusicOwns = isServiceBedId(audioManager.getCurrentId());
 
-    if (shouldSilence) {
-      if (activeBedRef.current !== 'off') {
+    // Burn finished — fade out and clear mode
+    if (burnEnded) {
+      if (activeBedRef.current !== 'off' || isCrematoryBed(audioManager.getCurrentId())) {
         activeBedRef.current = 'off';
         void audioManager.fadeOut(CROSSFADE_MS);
       }
-      if (audioMode !== 'OFF') {
+      if (audioMode !== 'OFF' && (phase === 'SWEEP' || phase === 'DONE' || !primaryOn)) {
         patchRetort({ audioMode: 'OFF' });
       }
       return;
     }
 
+    // Left crematory or chapel service music is playing — fade out, keep audioMode
+    if (!inCrematory || chapelMusicOwns) {
+      if (activeBedRef.current !== 'off') {
+        activeBedRef.current = 'off';
+        void audioManager.fadeOut(CROSSFADE_MS);
+      }
+      return;
+    }
+
+    // In crematory with an active burn — fade beds back in
     if (audioMode === 'START') {
       if (activeBedRef.current === 'start') return;
       activeBedRef.current = 'start';
-      // Short fade-in so theme→start also softens; keep shorter than handoff
       void audioManager.crossfadeTo('crematoryStart', {
         loop: false,
         durationMs: Math.min(400, CROSSFADE_MS),
@@ -94,11 +115,10 @@ export const CrematoryAudio: React.FC = () => {
         durationMs: CROSSFADE_MS,
       });
     }
-  }, [audioMode, primaryOn, phase, patchRetort]);
+  }, [audioMode, primaryOn, phase, activeStation, patchRetort]);
 
   useEffect(() => {
     return () => {
-      // Only tear down if we still own the bus (don't kill theme on hot reload oddities)
       if (activeBedRef.current !== 'off') {
         audioManager.stopImmediate();
         activeBedRef.current = 'off';

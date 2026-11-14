@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "playback": "shuffle",
+  "volume": 0.26,
+  "crossfadeMs": 1400,
+  "tracks": [
+    {
+      "id": "placeholder-chapel-theme",
+      "file": "/audio/ossuarian-theme.m4a",
+      "title": "Soft theme (placeholder — replace with service tracks)"
+    }
+  ]
+}

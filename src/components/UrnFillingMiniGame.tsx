@@ -378,7 +378,6 @@ export const UrnFillingMiniGame: React.FC = () => {
   const endPour = () => {
     if (!tiltingRef.current) return;
     tiltingRef.current = false;
-    setIsTilting(false);
     setAshPouring(false);
     stopAshPourSfx();
   };
@@ -1021,7 +1020,6 @@ export const UrnFillingMiniGame: React.FC = () => {
             onPointerDown={(e) => {
               e.preventDefault();
               tiltingRef.current = true;
-              setIsTilting(true);
               try {
                 e.currentTarget.setPointerCapture(e.pointerId);
               } catch {

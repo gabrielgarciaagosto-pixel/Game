@@ -125,6 +125,18 @@ canvas {
   }
 }
 
+@keyframes chapel-mourner-breathe {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.42;
+  }
+  50% {
+    transform: translateY(-2px);
+    opacity: 0.58;
+  }
+}
+
 .tool-bob {
   animation: tool-bob 2.8s ease-in-out infinite;
 }

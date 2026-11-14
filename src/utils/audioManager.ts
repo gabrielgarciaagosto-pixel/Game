@@ -4,24 +4,35 @@
  * Decoded Web Audio buffers + GainNodes give Android WebView:
  * - sample-accurate gapless looping for run beds (AudioBufferSourceNode.loop)
  * - short overlapping crossfades between sequential clips (no hard cut)
+ * - custom URL beds for Chapel service playlists (service:*)
  */
 
 /** Default overlap when handing one bed to the next. Tune freely. */
 export const CROSSFADE_MS = 900;
 
-export type MusicBedId = 'theme' | 'crematoryStart' | 'crematoryLoop';
+export type BuiltinBedId = 'theme' | 'crematoryStart' | 'crematoryLoop';
+/** Built-in beds or dynamic `service:<trackId>` playlist entries. */
+export type MusicBedId = BuiltinBedId | string;
 
-const BED_URLS: Record<MusicBedId, string> = {
+const BED_URLS: Record<BuiltinBedId, string> = {
   theme: '/audio/ossuarian-theme.m4a',
   crematoryStart: '/audio/crematory-start.m4a',
   crematoryLoop: '/audio/crematory-loop.m4a',
 };
 
-const DEFAULT_VOLUME: Record<MusicBedId, number> = {
+const DEFAULT_VOLUME: Record<BuiltinBedId, number> = {
   theme: 0.55,
   crematoryStart: 0.7,
   crematoryLoop: 0.55,
 };
+
+function isBuiltin(id: string): id is BuiltinBedId {
+  return id === 'theme' || id === 'crematoryStart' || id === 'crematoryLoop';
+}
+
+export function isCrematoryBed(id: string | null | undefined): boolean {
+  return id === 'crematoryStart' || id === 'crematoryLoop';
+}
 
 type Voice = {
   id: MusicBedId;
@@ -35,20 +46,31 @@ type Voice = {
 
 class AudioManager {
   private ctx: AudioContext | null = null;
-  private buffers = new Map<MusicBedId, AudioBuffer>();
-  private loadPromises = new Map<MusicBedId, Promise<AudioBuffer>>();
+  private buffers = new Map<string, AudioBuffer>();
+  private loadPromises = new Map<string, Promise<AudioBuffer>>();
+  private urlById = new Map<string, string>();
   private voices: Voice[] = [];
   private currentId: MusicBedId | null = null;
   private unlocked = false;
   private generation = 0;
   private handoffTimer: number | null = null;
-  private onOneShotNearEnd: ((id: MusicBedId) => void) | null = null;
+  private oneShotHandlers = new Set<(id: MusicBedId) => void>();
 
   /** Tunable crossfade length in milliseconds. */
   crossfadeMs = CROSSFADE_MS;
 
+  /** @deprecated prefer add/removeOneShotNearEndHandler for multi-listeners */
   setOneShotNearEndHandler(handler: ((id: MusicBedId) => void) | null) {
-    this.onOneShotNearEnd = handler;
+    this.oneShotHandlers.clear();
+    if (handler) this.oneShotHandlers.add(handler);
+  }
+
+  addOneShotNearEndHandler(handler: (id: MusicBedId) => void) {
+    this.oneShotHandlers.add(handler);
+  }
+
+  removeOneShotNearEndHandler(handler: (id: MusicBedId) => void) {
+    this.oneShotHandlers.delete(handler);
   }
 
   private getOrCreateContext(): AudioContext {
@@ -72,12 +94,20 @@ class AudioManager {
       }
     }
     this.unlocked = true;
-    // Prefer crematory assets first — that handoff is the audible problem
     await Promise.all([
       this.preload('crematoryStart').catch(() => undefined),
       this.preload('crematoryLoop').catch(() => undefined),
       this.preload('theme').catch(() => undefined),
     ]);
+  }
+
+  registerUrl(id: string, url: string) {
+    const prev = this.urlById.get(id);
+    if (prev === url) return;
+    this.urlById.set(id, url);
+    // Invalidate cached buffer if URL changed
+    this.buffers.delete(id);
+    this.loadPromises.delete(id);
   }
 
   async preload(id: MusicBedId): Promise<AudioBuffer> {
@@ -86,9 +116,14 @@ class AudioManager {
     const inflight = this.loadPromises.get(id);
     if (inflight) return inflight;
 
+    const url = isBuiltin(id) ? BED_URLS[id] : this.urlById.get(id);
+    if (!url) {
+      throw new Error(`No URL registered for bed "${id}"`);
+    }
+
     const promise = (async () => {
       const ctx = this.getOrCreateContext();
-      const res = await fetch(BED_URLS[id]);
+      const res = await fetch(url);
       const raw = await res.arrayBuffer();
       const buffer = await ctx.decodeAudioData(raw.slice(0));
       this.buffers.set(id, buffer);
@@ -111,7 +146,6 @@ class AudioManager {
     }
   }
 
-  /** True when a later crossfadeTo/fadeOut/stop invalidated this call. */
   private isStale(gen: number): boolean {
     return gen !== this.generation;
   }
@@ -160,7 +194,6 @@ class AudioManager {
         voice.gain.gain.linearRampToValueAtTime(0.0001, t + durationSec);
         this.stopVoice(voice, t + durationSec + 0.03);
         voice.endsAt = t + durationSec + 0.03;
-        // Native looping sources must be stopped; mark non-loop end
         voice.loop = false;
       } catch {
         /* ignore */
@@ -182,7 +215,6 @@ class AudioManager {
     const source = ctx.createBufferSource();
     const gain = ctx.createGain();
     source.buffer = buffer;
-    // Gapless for decoded PCM — preferred for the crematory run bed
     source.loop = opts.loop;
     source.connect(gain);
     gain.connect(ctx.destination);
@@ -211,19 +243,14 @@ class AudioManager {
     return voice;
   }
 
-  /**
-   * Fire onOneShotNearEnd when AudioContext time reaches
-   * voice.startedAt + duration - crossfade — not wall-clock.
-   * If the context is suspended (no gesture / backgrounded), currentTime
-   * freezes and we wait until it advances again.
-   */
   private scheduleOneShotNearEnd(
     id: MusicBedId,
     buffer: AudioBuffer,
-    voice: Voice
+    voice: Voice,
+    crossfadeMs: number
   ) {
     this.clearHandoffTimer();
-    const fadeSec = this.crossfadeMs / 1000;
+    const fadeSec = crossfadeMs / 1000;
     const handoffAt =
       voice.startedAt + Math.max(0.05, buffer.duration - fadeSec);
 
@@ -234,7 +261,6 @@ class AudioManager {
       if (!ctx) return;
 
       if (ctx.state === 'suspended' || ctx.currentTime < handoffAt) {
-        // Poll until the audio clock reaches the handoff point
         const remainingSec =
           ctx.state === 'suspended'
             ? 0.1
@@ -246,7 +272,13 @@ class AudioManager {
         return;
       }
 
-      this.onOneShotNearEnd?.(id);
+      for (const h of this.oneShotHandlers) {
+        try {
+          h(id);
+        } catch {
+          /* ignore listener errors */
+        }
+      }
     };
 
     this.handoffTimer = window.setTimeout(tick, 40);
@@ -255,24 +287,34 @@ class AudioManager {
   /**
    * Crossfade to a bed (or fade in from silence).
    * Loop beds use AudioBufferSourceNode.loop (gapless).
-   * One-shots fire onOneShotNearEnd CROSSFADE_MS before they finish.
+   * One-shots fire onOneShotNearEnd before they finish.
    */
   async crossfadeTo(
     id: MusicBedId,
-    options?: { loop?: boolean; volume?: number; durationMs?: number }
+    options?: {
+      loop?: boolean;
+      volume?: number;
+      durationMs?: number;
+      /** Required for non-builtin beds */
+      url?: string;
+    }
   ): Promise<void> {
+    if (options?.url) {
+      this.registerUrl(id, options.url);
+    }
+
     const loop =
       options?.loop ?? (id === 'theme' || id === 'crematoryLoop');
-    const volume = options?.volume ?? DEFAULT_VOLUME[id];
+    const volume =
+      options?.volume ??
+      (isBuiltin(id) ? DEFAULT_VOLUME[id] : 0.28);
     const fadeMs = options?.durationMs ?? this.crossfadeMs;
     const fadeSec = Math.max(0.05, fadeMs / 1000);
 
-    // Already on this looping bed — leave it alone (avoids restart clicks)
     if (this.currentId === id && loop) {
       return;
     }
 
-    // Invalidate any in-flight crossfade before awaiting unlock/preload
     this.generation += 1;
     const gen = this.generation;
 
@@ -305,7 +347,7 @@ class AudioManager {
     });
 
     if (!loop) {
-      this.scheduleOneShotNearEnd(id, buffer, voice);
+      this.scheduleOneShotNearEnd(id, buffer, voice, fadeMs);
     }
 
     window.setTimeout(() => this.pruneVoices(), fadeMs + 100);

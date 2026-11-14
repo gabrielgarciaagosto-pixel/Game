@@ -7,6 +7,7 @@ import { EmbalmingMiniGame } from './components/EmbalmingMiniGame';
 import { MainHubMenu } from './components/MainHubMenu';
 import { MenuThemeAudio } from './components/MenuThemeAudio';
 import { FuneraryEmporium } from './components/FuneraryEmporium';
+import { ServiceMusicAudio } from './components/ServiceMusicAudio';
 import { ShowroomAndChapelModal } from './components/ShowroomAndChapelModal';
 import { UrnFillingMiniGame } from './components/UrnFillingMiniGame';
 import { UrnStartScreen } from './components/UrnStartScreen';
@@ -61,6 +62,7 @@ function App() {
     <>
       <MenuThemeAudio />
       <CrematoryAudio />
+      <ServiceMusicAudio />
       {!hasStartedGame ? (
         <UrnStartScreen
           title="OSSUARIAN"

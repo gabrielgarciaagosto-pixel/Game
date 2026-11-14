@@ -18,6 +18,7 @@ import {
 } from '../utils/chapelSatisfaction';
 import { caseUsesUrnStand } from '../data/familyUrnPick';
 import { directiveLabel } from '../types/game';
+import { ChapelMourners } from './ChapelMourners';
 import { UrnVessel } from './urns/UrnVessel';
 import { CasketVessel } from './caskets/CasketVessel';
 
@@ -148,6 +149,10 @@ export const ShowroomAndChapelModal: React.FC = () => {
   const offeredCasket = getCasketById(currentCase.offeredCasketId);
   const urnStandService = caseUsesUrnStand(currentCase);
   const isMemorial = currentCase.directive === 'CREMATION_THEN_VIEWING';
+  const viewingService =
+    currentCase.directive === 'BURIAL_VIEWING' ||
+    currentCase.directive === 'VIEWING_THEN_CREMATION' ||
+    currentCase.directive === 'CREMATION_THEN_VIEWING';
   const urnMatch =
     offered != null && offered.material === currentCase.preferredUrnMaterial;
   const casketMatch =
@@ -250,6 +255,8 @@ export const ShowroomAndChapelModal: React.FC = () => {
             className="absolute left-3 right-3 bottom-2 h-3 rounded-sm opacity-80 pointer-events-none"
             style={{ background: pewColor }}
           />
+
+          <ChapelMourners active={viewingService} />
 
           {layout?.pieces.map((piece) => {
             const override = dragOverrides[piece.id];
