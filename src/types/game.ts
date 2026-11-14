@@ -93,6 +93,19 @@ export interface DecedentCase {
   dehydrationFactor: number;
   directive: DispositionDirective;
   preferredFlowers: 'LILIES' | 'ROSES' | 'WREATH';
+  /**
+   * Family chapel dressing wishes (walls/floor/drapery/lighting/pews/music).
+   * Matching is bonus-only — missing prefs never penalize.
+   */
+  familyChapelPrefs: {
+    wallId: string | null;
+    floorId: string | null;
+    draperyId: string | null;
+    lightingId: string | null;
+    pewsId: string | null;
+    musicTrackId: string | null;
+    flowers: 'LILIES' | 'ROSES' | 'WREATH';
+  };
   /** Family taste when selecting a vessel for cremains */
   preferredUrnMaterial: PreferredUrnMaterial;
   /** Family taste when selecting a casket for burial viewing */
@@ -162,6 +175,7 @@ export interface CaseInboxFile {
   tissueCondition: TissueCondition;
   directive: DispositionDirective;
   preferredFlowers: 'LILIES' | 'ROSES' | 'WREATH';
+  familyChapelPrefs?: DecedentCase['familyChapelPrefs'];
   isRead: boolean;
   serviceDateMs: number | null;
   /** Mirrors case.familyRequestedUrnId for the case file UI */

@@ -42,6 +42,11 @@ import {
   vaultSlotCapacity,
 } from '../data/facilityUpgrades';
 import {
+  BANK_FORECLOSURE_AFTER_MS,
+  BANK_WARNING_AFTER_MS,
+  BANK_WARNING_MESSAGE,
+} from '../data/bankForeclosure';
+import {
   directiveNeedsCremationPermit,
   findExactPermitCaseMatch,
   initialPermitStatus,
@@ -56,6 +61,12 @@ import {
   type PermitFormDraft,
   type PermitSubmissionRecord,
 } from '../data/cremationPermits';
+import {
+  chapelPrefMatchBonus,
+  evaluateChapelPrefMatches,
+  rollFamilyChapelPreferences,
+  type FamilyChapelPreferences,
+} from '../data/familyChapelPrefs';
 import {
   generateDecedentVitals,
   type CremationPermitStatus,
@@ -92,6 +103,11 @@ interface GameState {
   reputation: number;
   ossilegiumCommuneGrams: number;
   activeStation: StationId;
+  /**
+   * Which Computer desktop app to open (null = desktop).
+   * EMPORIUM redirects here with 'SHOP'. Not persisted.
+   */
+  computerOpenApp: 'VR441' | 'SHOP' | null;
   cases: DecedentCase[];
   activeCaseId: string | null;
   inboxFiles: CaseInboxFile[];
@@ -112,12 +128,31 @@ interface GameState {
   placedFlowers: Array<'LILIES' | 'ROSES' | 'WREATH'>;
   serviceRatingBonus: number;
   legalAlert: string | null;
+  /** Post-service family feedback (honored prefs + boost) — not persisted */
+  serviceFeedback: {
+    decedentName: string;
+    honored: string[];
+    missed: string[];
+    prefBonus: number;
+    tipCash: number;
+    payoutBoostPct: number;
+    reputationDelta: number;
+  } | null;
   /** Computer portal — cremation permit filing history (wiped on Reset Game) */
   permitSubmissions: PermitSubmissionRecord[];
   /** Consecutive rejected permit filings → streak fine */
   permitWrongStreak: number;
   /** Simple cash ledger (permit fees, fines, …) — wiped on Reset Game */
   financeLedger: FinanceLedgerEntry[];
+  /**
+   * gameNow() when cash first went negative; null when cash >= 0.
+   * Persisted so debt time survives restarts.
+   */
+  negativeCashSinceMs: number | null;
+  /** True after the 2h bank warning toast was issued for this debt stretch */
+  bankWarningIssued: boolean;
+  /** True when 4h debt triggered foreclosure game-over */
+  bankForeclosed: boolean;
   /** Working cremulator available for urn processing */
   cremulatorOwned: boolean;
   cremulatorDamaged: boolean;
@@ -136,6 +171,7 @@ interface GameState {
    */
   hardResetGameState: () => void;
   setActiveStation: (station: StationId) => void;
+  setComputerOpenApp: (app: 'VR441' | 'SHOP' | null) => void;
   patchRetort: (partial: Partial<RetortMachine>) => void;
   ensureRetortForCase: (caseId: string) => void;
   resetRetort: () => void;
@@ -161,6 +197,10 @@ interface GameState {
   tickFamilyUrnChoices: () => void;
   /** Resolve pending cremation permit evaluations that are due */
   tickPermitEvaluations: () => void;
+  /** Track continuous negative cash → bank warning → foreclosure */
+  tickBankForeclosure: () => void;
+  /** Player dismisses foreclosure → wipe save like Reset Game */
+  acknowledgeBankForeclosure: () => void;
   /** File a cremation permit from the Computer portal (vitals-only match + fee) */
   submitCremationPermit: (
     form: PermitFormDraft,
@@ -202,6 +242,7 @@ interface GameState {
     caseId: string,
     theme: Partial<ChapelThemeSelection>
   ) => void;
+  setChapelServiceMusic: (caseId: string, musicTrackId: string | null) => void;
   moveChapelPiece: (
     caseId: string,
     pieceId: string,
@@ -218,6 +259,7 @@ interface GameState {
     caseId: string
   ) => void;
   clearLegalAlert: () => void;
+  clearServiceFeedback: () => void;
   damageCremulator: () => void;
   buyReplacementCremulator: () => boolean;
   coolerCapacity: () => number;
@@ -335,6 +377,8 @@ export function generateRandomCase(now = gameNow()): DecedentCase {
     CREMATION_THEN_VIEWING: 1550,
   };
   const vitals = generateDecedentVitals(now);
+  const preferredFlowers =
+    flowers[Math.floor(Math.random() * flowers.length)]!;
   return {
     id: Math.random().toString(36).substring(2, 8).toUpperCase(),
     name: randomDecedentName(),
@@ -342,7 +386,8 @@ export function generateRandomCase(now = gameNow()): DecedentCase {
     tissueCondition: pickedCond.cond,
     dehydrationFactor: pickedCond.factor,
     directive,
-    preferredFlowers: flowers[Math.floor(Math.random() * flowers.length)],
+    preferredFlowers,
+    familyChapelPrefs: rollFamilyChapelPreferences(preferredFlowers),
     preferredUrnMaterial: urnMats[Math.floor(Math.random() * urnMats.length)],
     preferredCasketMaterial:
       casketMats[Math.floor(Math.random() * casketMats.length)],
@@ -384,6 +429,7 @@ export function toInboxFile(c: DecedentCase): CaseInboxFile {
     tissueCondition: c.tissueCondition,
     directive: c.directive,
     preferredFlowers: c.preferredFlowers,
+    familyChapelPrefs: c.familyChapelPrefs,
     isRead: false,
     serviceDateMs: c.serviceDateMs,
     familyRequestedUrnId: c.familyRequestedUrnId,
@@ -423,8 +469,16 @@ function normalizeCase(c: DecedentCase): DecedentCase {
       : generateDecedentVitals(arrivedAt);
   const permitStatus: CremationPermitStatus =
     c.cremationPermitStatus ?? initialPermitStatus(c.directive);
+  const flowers = (c.preferredFlowers ?? 'LILIES') as FlowerKind;
+  const prefs: FamilyChapelPreferences =
+    c.familyChapelPrefs ?? rollFamilyChapelPreferences(flowers);
   return {
     ...c,
+    preferredFlowers: flowers,
+    familyChapelPrefs: {
+      ...prefs,
+      flowers: prefs.flowers ?? flowers,
+    },
     preferredUrnMaterial: c.preferredUrnMaterial ?? URN_MATERIALS[0],
     preferredCasketMaterial: c.preferredCasketMaterial ?? CASKET_MATERIALS[0],
     offeredUrnId: c.offeredUrnId ?? null,
@@ -624,6 +678,9 @@ export function freshPersistedGameFields() {
     permitSubmissions: [] as PermitSubmissionRecord[],
     permitWrongStreak: 0,
     financeLedger: [] as FinanceLedgerEntry[],
+    negativeCashSinceMs: null as number | null,
+    bankWarningIssued: false,
+    bankForeclosed: false,
   };
 }
 
@@ -649,8 +706,10 @@ export const useGameStore = create<GameState>()(
   persist(
     (set, get) => ({
   ...freshPersistedGameFields(),
+  computerOpenApp: null,
   intakeToast: null,
   legalAlert: null,
+  serviceFeedback: null,
 
   getActiveCase: () => resolveActiveCase(get()),
 
@@ -680,11 +739,26 @@ export const useGameStore = create<GameState>()(
   hardResetGameState: () =>
     set({
       ...freshPersistedGameFields(),
+      computerOpenApp: null,
       intakeToast: '[DEV] Game reset — back at title.',
       legalAlert: null,
+      serviceFeedback: null,
     }),
 
-  setActiveStation: (station) => set({ activeStation: station }),
+  setActiveStation: (station) => {
+    // Emporium lives on the Computer as a shop browser tab
+    if (station === 'EMPORIUM') {
+      set({ activeStation: 'COMPUTER', computerOpenApp: 'SHOP' });
+      return;
+    }
+    if (station === 'COMPUTER') {
+      set({ activeStation: 'COMPUTER', computerOpenApp: null });
+      return;
+    }
+    set({ activeStation: station });
+  },
+
+  setComputerOpenApp: (app) => set({ computerOpenApp: app }),
 
   selectActiveCase: (caseId) => {
     const state = get();
@@ -1039,7 +1113,7 @@ export const useGameStore = create<GameState>()(
         toast =
           'Cremation permit REJECTED — vital records could not be verified.';
         if (wrongStreak >= PERMIT_ERROR_STREAK_LIMIT) {
-          cash = Math.max(0, cash - PERMIT_ERROR_STREAK_FINE);
+          cash = cash - PERMIT_ERROR_STREAK_FINE;
           reputation = Math.max(0, reputation - PERMIT_ERROR_STREAK_REP_HIT);
           financeLedger = [
             {
@@ -1184,6 +1258,70 @@ export const useGameStore = create<GameState>()(
       ok: true,
       message: `Submission received. Filing fee $${fee} charged. Vital Records will evaluate shortly.`,
     };
+  },
+
+  tickBankForeclosure: () =>
+    set((state) => {
+      if (!state.hasStartedGame || state.bankForeclosed) return state;
+      const now = gameNow();
+
+      if (state.cash >= 0) {
+        if (state.negativeCashSinceMs == null && !state.bankWarningIssued) {
+          return state;
+        }
+        return {
+          negativeCashSinceMs: null,
+          bankWarningIssued: false,
+        };
+      }
+
+      let negativeCashSinceMs = state.negativeCashSinceMs;
+      if (negativeCashSinceMs == null) {
+        return { negativeCashSinceMs: now };
+      }
+
+      const elapsed = now - negativeCashSinceMs;
+      if (elapsed >= BANK_FORECLOSURE_AFTER_MS) {
+        return {
+          bankForeclosed: true,
+          intakeToast: 'BANK FORECLOSURE — the funeral home has been seized.',
+          legalAlert: null,
+        };
+      }
+
+      if (elapsed >= BANK_WARNING_AFTER_MS && !state.bankWarningIssued) {
+        return {
+          bankWarningIssued: true,
+          intakeToast: BANK_WARNING_MESSAGE,
+        };
+      }
+
+      return state;
+    }),
+
+  acknowledgeBankForeclosure: () => {
+    pauseGamePersistWrites();
+    try {
+      resumeGamePersistWrites();
+      useGameStore.persist.clearStorage();
+    } catch {
+      /* ignore */
+    }
+    try {
+      localStorage.removeItem('ossuarian-first-urn-v1');
+    } catch {
+      /* ignore */
+    }
+    pauseGamePersistWrites();
+    get().hardResetGameState();
+    window.setTimeout(() => {
+      try {
+        resumeGamePersistWrites();
+        useGameStore.setState((s) => ({ intakeToast: s.intakeToast }));
+      } catch {
+        /* ignore */
+      }
+    }, 150);
   },
 
   moveCaseTo: (caseId, location) =>
@@ -1430,7 +1568,7 @@ export const useGameStore = create<GameState>()(
         ? syncInboxPermit(state.inboxFiles, caseId, { isRead: false })
         : state.inboxFiles,
       cash: unpermitted
-        ? Math.max(0, state.cash - UNPERMITTED_CREMATION_FINE)
+        ? state.cash - UNPERMITTED_CREMATION_FINE
         : state.cash,
       reputation: unpermitted
         ? Math.max(0, state.reputation - UNPERMITTED_CREMATION_REP_HIT)
@@ -1708,6 +1846,19 @@ export const useGameStore = create<GameState>()(
       };
     }),
 
+  setChapelServiceMusic: (caseId, musicTrackId) =>
+    set((state) => {
+      const layout =
+        state.chapelLayouts[caseId] ??
+        defaultChapelLayout(caseId, false);
+      return {
+        chapelLayouts: {
+          ...state.chapelLayouts,
+          [caseId]: { ...layout, serviceMusicId: musicTrackId },
+        },
+      };
+    }),
+
   moveChapelPiece: (caseId, pieceId, x, y) =>
     set((state) => {
       const layout = state.chapelLayouts[caseId];
@@ -1854,21 +2005,37 @@ export const useGameStore = create<GameState>()(
       const serviceFailed = failedService || lateFine > 0;
 
       const layout = state.chapelLayouts[c.id];
+      const theme = layout?.theme ?? {
+        wallId: null,
+        floorId: null,
+        draperyId: null,
+        lightingId: null,
+        pewsId: null,
+        urnPedestalId: null,
+        ornamentIds: [],
+      };
+      const flowerKinds = (layout?.pieces ?? [])
+        .map((p) => p.kind)
+        .filter((k): k is FlowerKind =>
+          k === 'LILIES' || k === 'ROSES' || k === 'WREATH'
+        );
+      const prefMatches = evaluateChapelPrefMatches({
+        prefs: c.familyChapelPrefs,
+        theme,
+        flowersPlaced: flowerKinds,
+        serviceMusicId: layout?.serviceMusicId ?? null,
+      });
+      const prefBonusPts = serviceFailed
+        ? 0
+        : chapelPrefMatchBonus(prefMatches);
       const chapelScore = scoreChapelArrangement({
         pieces: layout?.pieces ?? [],
         preferred: c.preferredFlowers,
         ownedDecorIds: state.chapelOwnedDecor,
-        theme: layout?.theme ?? {
-          wallId: null,
-          floorId: null,
-          draperyId: null,
-          lightingId: null,
-          pewsId: null,
-          urnPedestalId: null,
-          ornamentIds: [],
-        },
+        theme,
         decayLevel: c.decayLevel,
         urnPrestige: offered?.prestigeBonus ?? 0,
+        familyPrefBonus: prefBonusPts,
       });
       const chapelRewards = satisfactionToRewards(chapelScore.total);
 
@@ -1958,6 +2125,13 @@ export const useGameStore = create<GameState>()(
 
       const { [c.id]: _removedLayout, ...restLayouts } = state.chapelLayouts;
 
+      const honored = prefMatches
+        .filter((m) => m.matched)
+        .map((m) => `${m.label}: ${m.preferredName}`);
+      const missed = prefMatches
+        .filter((m) => !m.matched)
+        .map((m) => `${m.label}: ${m.preferredName}`);
+
       return {
         cash: state.cash + netPayout,
         reputation: Math.max(
@@ -1971,6 +2145,23 @@ export const useGameStore = create<GameState>()(
                 decayRepHit
         ),
         legalAlert: alertMsg,
+        serviceFeedback: serviceFailed
+          ? null
+          : {
+              decedentName: c.name,
+              honored,
+              missed,
+              prefBonus: prefBonusPts,
+              tipCash,
+              payoutBoostPct: chapelRewards.payoutBoostPct,
+              reputationDelta:
+                chapelRewards.reputationDelta + urnRep + casketRep,
+            },
+        intakeToast: serviceFailed
+          ? state.intakeToast
+          : honored.length > 0
+            ? `Family thanks — honored ${honored.length} preference${honored.length === 1 ? '' : 's'} (+${chapelRewards.payoutBoostPct}% / tip $${tipCash})`
+            : `Service complete — tip $${tipCash}`,
         cases: remaining,
         inboxFiles: state.inboxFiles.filter((f) => f.id !== c.id),
         urnInventory: inventory,
@@ -1984,6 +2175,7 @@ export const useGameStore = create<GameState>()(
     }),
 
   clearLegalAlert: () => set({ legalAlert: null }),
+  clearServiceFeedback: () => set({ serviceFeedback: null }),
 
   damageCremulator: () =>
     set({
@@ -2059,6 +2251,9 @@ export const useGameStore = create<GameState>()(
             permitSubmissions: p.permitSubmissions ?? [],
             permitWrongStreak: p.permitWrongStreak ?? 0,
             financeLedger: p.financeLedger ?? [],
+            negativeCashSinceMs: p.negativeCashSinceMs ?? null,
+            bankWarningIssued: p.bankWarningIssued ?? false,
+            bankForeclosed: p.bankForeclosed ?? false,
           } as never;
         }
         return {
@@ -2069,6 +2264,9 @@ export const useGameStore = create<GameState>()(
           permitSubmissions: [],
           permitWrongStreak: 0,
           financeLedger: [],
+          negativeCashSinceMs: null,
+          bankWarningIssued: false,
+          bankForeclosed: false,
         } as never;
       },
       partialize: (state) => ({
@@ -2099,6 +2297,9 @@ export const useGameStore = create<GameState>()(
         permitSubmissions: state.permitSubmissions,
         permitWrongStreak: state.permitWrongStreak,
         financeLedger: state.financeLedger,
+        negativeCashSinceMs: state.negativeCashSinceMs,
+        bankWarningIssued: state.bankWarningIssued,
+        bankForeclosed: state.bankForeclosed,
       }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<GameState>;
@@ -2158,8 +2359,14 @@ export const useGameStore = create<GameState>()(
           permitSubmissions: p.permitSubmissions ?? current.permitSubmissions,
           permitWrongStreak: p.permitWrongStreak ?? current.permitWrongStreak,
           financeLedger: p.financeLedger ?? current.financeLedger,
+          negativeCashSinceMs:
+            p.negativeCashSinceMs ?? current.negativeCashSinceMs ?? null,
+          bankWarningIssued:
+            p.bankWarningIssued ?? current.bankWarningIssued ?? false,
+          bankForeclosed: p.bankForeclosed ?? current.bankForeclosed ?? false,
           intakeToast: null,
           legalAlert: null,
+          serviceFeedback: null,
         };
       },
     }

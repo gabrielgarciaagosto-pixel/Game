@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { BankDebtHud } from './components/BankDebtHud';
+import { BankForeclosureScreen } from './components/BankForeclosureScreen';
 import { CaseInboxWidget } from './components/CaseInboxWidget';
 import { ComputerRoom } from './components/ComputerRoom';
 import { CoolerRoom } from './components/CoolerRoom';
@@ -7,7 +9,8 @@ import { CrematoryAudio } from './components/CrematoryAudio';
 import { EmbalmingMiniGame } from './components/EmbalmingMiniGame';
 import { MainHubMenu } from './components/MainHubMenu';
 import { MenuThemeAudio } from './components/MenuThemeAudio';
-import { FuneraryEmporium } from './components/FuneraryEmporium';
+import { NotificationPing } from './components/NotificationPing';
+import { ServiceFeedbackModal } from './components/ServiceFeedbackModal';
 import { ServiceMusicAudio } from './components/ServiceMusicAudio';
 import { ShowroomAndChapelModal } from './components/ShowroomAndChapelModal';
 import { UrnFillingMiniGame } from './components/UrnFillingMiniGame';
@@ -65,6 +68,9 @@ function App() {
       <MenuThemeAudio />
       <CrematoryAudio />
       <ServiceMusicAudio />
+      <NotificationPing />
+      <BankForeclosureScreen />
+      <ServiceFeedbackModal />
       {!hasStartedGame ? (
         <UrnStartScreen
           title="OSSUARIAN"
@@ -87,7 +93,11 @@ function App() {
                 <div className="text-[10px] uppercase tracking-wider text-slate-500">
                   Cash
                 </div>
-                <div className="font-mono text-emerald-400 text-lg">
+                <div
+                  className={`font-mono text-lg ${
+                    cash < 0 ? 'text-red-400' : 'text-emerald-400'
+                  }`}
+                >
                   ${cash.toLocaleString()}
                 </div>
               </div>
@@ -132,11 +142,11 @@ function App() {
       {activeStation === 'CREMATION' && <CremationMiniGame />}
       {activeStation === 'URN_FILLING' && <UrnFillingMiniGame />}
       {activeStation === 'SHOWROOM' && <ShowroomAndChapelModal />}
-      {activeStation === 'EMPORIUM' && <FuneraryEmporium />}
       {activeStation === 'URN_VAULT' && <UrnVaultRoom />}
       {activeStation === 'COMPUTER' && <ComputerRoom />}
 
       <CaseInboxWidget />
+      {hasStartedGame ? <BankDebtHud /> : null}
 
       {legalAlert && (
         <div className="fixed inset-0 z-[60] bg-black/70 flex items-center justify-center p-6">

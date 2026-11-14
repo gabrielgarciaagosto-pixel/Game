@@ -57,12 +57,23 @@ class AudioManager {
   private oneShotHandlers = new Set<(id: MusicBedId) => void>();
   private muted = false;
   private unmuteHandlers = new Set<() => void>();
+  /** One-shot SFX level (0–1). Mute gates SFX without stopping music beds. */
+  private sfxVolume = 0.45;
+  private lastPingAt = 0;
 
   /** Tunable crossfade length in milliseconds. */
   crossfadeMs = CROSSFADE_MS;
 
   isMuted(): boolean {
     return this.muted;
+  }
+
+  getSfxVolume(): number {
+    return this.sfxVolume;
+  }
+
+  setSfxVolume(volume: number) {
+    this.sfxVolume = Math.max(0, Math.min(1, volume));
   }
 
   addUnmuteHandler(handler: () => void) {
@@ -414,6 +425,53 @@ class AudioManager {
     }
     this.voices = [];
     this.currentId = null;
+  }
+
+  /**
+   * Subtle mortuary notification ping (toast / alert / bank).
+   * Separate from music beds — never fades or stops menu/chapel tracks.
+   * Respects mute + sfxVolume; debounced so toast storms don't stack.
+   */
+  playNotificationPing(debounceMs = 480): void {
+    if (this.muted || this.sfxVolume <= 0.001) return;
+    const now = performance.now();
+    if (now - this.lastPingAt < debounceMs) return;
+    this.lastPingAt = now;
+
+    try {
+      const ctx = this.getOrCreateContext();
+      if (ctx.state === 'suspended') {
+        void ctx.resume();
+      }
+      const t = ctx.currentTime;
+      const master = ctx.createGain();
+      master.gain.setValueAtTime(0.0001, t);
+      master.gain.linearRampToValueAtTime(
+        Math.max(0.0001, this.sfxVolume * 0.22),
+        t + 0.012
+      );
+      master.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+      master.connect(ctx.destination);
+
+      // Soft bronze bell: fundamental + quiet fifth
+      for (const [freq, amp] of [
+        [392, 1],
+        [588, 0.35],
+        [784, 0.18],
+      ] as const) {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, t);
+        g.gain.setValueAtTime(amp, t);
+        osc.connect(g);
+        g.connect(master);
+        osc.start(t);
+        osc.stop(t + 0.6);
+      }
+    } catch {
+      /* ignore WebAudio failures */
+    }
   }
 }
 

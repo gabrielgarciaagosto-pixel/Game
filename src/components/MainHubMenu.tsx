@@ -4,8 +4,6 @@ import { useGameStore } from '../store/useGameStore';
 import { gameNow } from '../utils/gameNow';
 import { getCremationTargets } from '../utils/mortuaryMath';
 import { retortProgress } from '../retort/retortTypes';
-import { URN_CATALOG } from '../data/urnCatalog';
-
 export const MainHubMenu: React.FC = () => {
   const {
     setActiveStation,
@@ -23,9 +21,6 @@ export const MainHubMenu: React.FC = () => {
   const activeCase = cases.find((c) => c.id === activeCaseId) ?? null;
   const retortCase = cases.find((c) => c.id === retort.caseId);
   const urnOwned = Object.values(urnInventory).reduce((a, b) => a + b, 0);
-  const collectionKinds = URN_CATALOG.filter(
-    (u) => (urnInventory[u.id] ?? 0) > 0
-  ).length;
 
   const untaggedUrgentCount = coolerCases.filter(
     (c) => !c.isTagged && gameNow() < c.tagExpiresAt
@@ -81,12 +76,6 @@ export const MainHubMenu: React.FC = () => {
       color: 'from-violet-950 via-slate-950 to-slate-950 border-violet-500/45',
     },
     {
-      id: 'EMPORIUM' as const,
-      title: 'FUNERARY EMPORIUM',
-      subtitle: `${collectionKinds} styles · ${urnOwned} owned`,
-      color: 'from-yellow-950 via-[#1a120a] to-slate-950 border-amber-400/50',
-    },
-    {
       id: 'URN_VAULT' as const,
       title: 'URN VAULT',
       subtitle: `${vaultCount} sealed · collection display`,
@@ -95,7 +84,7 @@ export const MainHubMenu: React.FC = () => {
     {
       id: 'COMPUTER' as const,
       title: 'COMPUTER',
-      subtitle: 'State Vital Records · cremation permits',
+      subtitle: `Desktop · Vital Records · Shop (${urnOwned} urns)`,
       color: 'from-teal-950 via-slate-950 to-slate-950 border-teal-500/45',
     },
   ];
@@ -130,7 +119,12 @@ export const MainHubMenu: React.FC = () => {
 
         <div className="flex flex-wrap gap-1.5 font-mono text-[11px]">
           <div className="bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-slate-800">
-            $<span className="text-emerald-400 font-bold">{cash.toLocaleString()}</span>
+            $
+            <span
+              className={`font-bold ${cash < 0 ? 'text-red-400' : 'text-emerald-400'}`}
+            >
+              {cash.toLocaleString()}
+            </span>
           </div>
           <div className="bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-slate-800">
             REP <span className="text-sky-400 font-bold">{reputation}</span>
@@ -151,7 +145,7 @@ export const MainHubMenu: React.FC = () => {
             type="button"
             onPointerDown={() => setActiveStation(tile.id)}
             className={`min-h-[7.25rem] w-full rounded-2xl bg-gradient-to-br ${tile.color} border p-3 flex flex-col justify-between items-start text-left shadow-[0_10px_30px_rgba(0,0,0,0.35)] active:scale-[0.98] transition-transform relative overflow-hidden ${
-              tile.id === 'EMPORIUM' ? 'col-span-2 min-h-[6.5rem]' : ''
+              tile.id === 'COMPUTER' ? 'col-span-2 min-h-[6.5rem]' : ''
             }`}
           >
             <span className="absolute -right-2 -bottom-3 text-5xl opacity-[0.1] font-black pointer-events-none">

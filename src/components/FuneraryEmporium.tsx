@@ -79,7 +79,16 @@ function canPurchase(opts: {
   return true;
 }
 
-export const FuneraryEmporium: React.FC = () => {
+type EmporiumProps = {
+  /** Render inside Computer fake-browser (no full-screen Back to hub) */
+  embedded?: boolean;
+  onClose?: () => void;
+};
+
+export const FuneraryEmporium: React.FC<EmporiumProps> = ({
+  embedded = false,
+  onClose,
+}) => {
   const {
     cash,
     reputation,
@@ -215,7 +224,13 @@ export const FuneraryEmporium: React.FC = () => {
   };
 
   return (
-    <div className="safe-screen fixed inset-0 z-50 bg-[#140f0c] text-amber-50 flex flex-col select-none overflow-hidden">
+    <div
+      className={`${
+        embedded
+          ? 'absolute inset-0'
+          : 'safe-screen fixed inset-0 z-50'
+      } bg-[#140f0c] text-amber-50 flex flex-col select-none overflow-hidden`}
+    >
       <div
         className="absolute inset-0 pointer-events-none opacity-40"
         style={{
@@ -242,13 +257,24 @@ export const FuneraryEmporium: React.FC = () => {
               Floor clock {formatClock(now)} · rares rotate on the hour
             </p>
           </div>
-          <button
-            type="button"
-            onPointerDown={() => setActiveStation('OVERVIEW')}
-            className="px-3 py-1.5 bg-stone-900 border border-stone-700 rounded text-xs font-semibold shrink-0"
-          >
-            Back
-          </button>
+          {!embedded && (
+            <button
+              type="button"
+              onPointerDown={() => setActiveStation('OVERVIEW')}
+              className="px-3 py-1.5 bg-stone-900 border border-stone-700 rounded text-xs font-semibold shrink-0"
+            >
+              Back
+            </button>
+          )}
+          {embedded && onClose && (
+            <button
+              type="button"
+              onPointerDown={onClose}
+              className="px-3 py-1.5 bg-stone-900 border border-stone-700 rounded text-xs font-semibold shrink-0"
+            >
+              Desktop
+            </button>
+          )}
         </div>
 
         <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">

@@ -357,6 +357,20 @@ export const DevToolsOverlay: React.FC = () => {
             <Section title="Economy">
               <Btn label="+$1000" onClick={() => actions.addCash(1000)} />
               <Btn label="+50 rep" onClick={() => actions.addReputation(50)} />
+              <Btn
+                label="Cash −$500"
+                onClick={() => actions.setCashNegative(-500)}
+                danger
+              />
+              <Btn
+                label="Bank FF +2h"
+                onClick={() => actions.fastForwardBankHours(2)}
+              />
+              <Btn
+                label="Bank FF +4h"
+                onClick={() => actions.fastForwardBankHours(4)}
+                danger
+              />
               <div className="flex items-center gap-1 w-full">
                 <input
                   className="w-24 bg-zinc-900 border border-lime-500/30 rounded px-1.5 py-1 text-[11px]"

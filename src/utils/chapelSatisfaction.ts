@@ -32,6 +32,8 @@ export interface ChapelScoreBreakdown {
   decor: number;
   /** Prestige of the offered urn on the stand (memorial services) */
   urnVessel: number;
+  /** Bonus-only family chapel pref matches (walls/music/…) */
+  familyPrefs: number;
   clutter: number;
   total: number;
 }
@@ -65,10 +67,13 @@ export function scoreChapelArrangement(opts: {
   decayLevel: number;
   flowerAgeMinutes?: number;
   urnPrestige?: number;
+  /** Bonus-only points from honored family chapel prefs */
+  familyPrefBonus?: number;
 }): ChapelScoreBreakdown {
   const { pieces, preferred, ownedDecorIds, theme, decayLevel } = opts;
   const flowerAgeMinutes = opts.flowerAgeMinutes ?? 0;
   const urnPrestige = opts.urnPrestige ?? 0;
+  const familyPrefs = clamp(opts.familyPrefBonus ?? 0, 0, 28);
 
   // Focal is bier or urn stand — proximity / symmetry revolve around it
   const focal =
@@ -190,7 +195,8 @@ export function scoreChapelArrangement(opts: {
     preference +
     freshness +
     decor +
-    urnVessel -
+    urnVessel +
+    familyPrefs -
     clutter;
   const total = Math.round(clamp(raw, 0, 100));
 
@@ -203,6 +209,7 @@ export function scoreChapelArrangement(opts: {
     freshness: Math.round(freshness * 10) / 10,
     decor: Math.round(decor * 10) / 10,
     urnVessel: Math.round(urnVessel * 10) / 10,
+    familyPrefs: Math.round(familyPrefs * 10) / 10,
     clutter: Math.round(clutter * 10) / 10,
     total,
   };

@@ -7,6 +7,10 @@ import {
   formatVitalsDod,
   permitStatusLabel,
 } from '../data/decedentVitals';
+import {
+  decorPrefLabel,
+  serviceMusicLabel,
+} from '../data/familyChapelPrefs';
 import { getUrnById } from '../data/urnCatalog';
 import { gameNow } from '../utils/gameNow';
 import { UrnVessel } from './urns/UrnVessel';
@@ -233,6 +237,39 @@ export const CaseInboxWidget: React.FC = () => {
                       {activeFile.preferredFlowers}
                     </strong>
                   </p>
+                  {(() => {
+                    const prefs =
+                      linkedCase?.familyChapelPrefs ??
+                      activeFile.familyChapelPrefs;
+                    if (!prefs) return null;
+                    return (
+                      <div className="p-2 rounded-lg border border-violet-800/60 bg-violet-950/40 space-y-1">
+                        <div className="text-[10px] uppercase tracking-wider text-violet-300/80">
+                          Family chapel preferences
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11px] text-violet-100/90">
+                          <span>Walls · {decorPrefLabel(prefs.wallId)}</span>
+                          <span>Floor · {decorPrefLabel(prefs.floorId)}</span>
+                          <span>
+                            Drapery · {decorPrefLabel(prefs.draperyId)}
+                          </span>
+                          <span>
+                            Lighting · {decorPrefLabel(prefs.lightingId)}
+                          </span>
+                          <span>Pews · {decorPrefLabel(prefs.pewsId)}</span>
+                          <span>
+                            Music · {serviceMusicLabel(prefs.musicTrackId)}
+                          </span>
+                          <span className="col-span-2">
+                            Flowers · {prefs.flowers}
+                          </span>
+                        </div>
+                        <p className="text-[9px] text-violet-400/80">
+                          Matching is a bonus only — no penalty if you miss.
+                        </p>
+                      </div>
+                    );
+                  })()}
                   {(() => {
                     const requestedId =
                       linkedCase?.familyRequestedUrnId ??

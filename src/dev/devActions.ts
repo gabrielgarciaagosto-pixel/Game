@@ -52,9 +52,21 @@ export function addReputation(amount: number) {
 }
 
 export function setCash(value: number) {
-  const n = Math.max(0, Math.round(value));
+  const n = Math.round(value); // allow negative for bank foreclosure tests
   useGameStore.setState({ cash: n });
+  useGameStore.getState().tickBankForeclosure();
   toast(`Cash = $${n}`);
+}
+
+export function setCashNegative(amount = -500) {
+  setCash(amount);
+}
+
+export function fastForwardBankHours(familyHours: number) {
+  const ms = familyHours * 60 * 6_000; // FAMILY_MINUTE_MS = 6s
+  advanceClockBy(ms);
+  useGameStore.getState().tickBankForeclosure();
+  toast(`Clock +${familyHours} family hour(s) (bank tick)`);
 }
 
 export function setReputation(value: number) {

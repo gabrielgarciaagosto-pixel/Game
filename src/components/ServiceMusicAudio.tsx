@@ -38,9 +38,16 @@ export const ServiceMusicAudio: React.FC = () => {
   const indexRef = useRef(0);
   const playingRef = useRef(false);
 
+  const chapelLayouts = useGameStore((s) => s.chapelLayouts);
+
   const chapelCase =
     cases.find((c) => c.id === activeCaseId && c.location === 'CHAPEL') ??
     cases.find((c) => c.location === 'CHAPEL');
+
+  const preferredMusicId =
+    chapelCase != null
+      ? chapelLayouts[chapelCase.id]?.serviceMusicId ?? null
+      : null;
 
   const serviceActive =
     activeStation === 'SHOWROOM' &&
@@ -108,7 +115,14 @@ export const ServiceMusicAudio: React.FC = () => {
       const manifest = await loadServicePlaylist();
       if (cancelled) return;
       manifestRef.current = manifest;
-      if (orderRef.current.length === 0) {
+      // Player/family music pick: prefer that track; else full playlist order
+      if (preferredMusicId && manifest.tracks.some((t) => t.id === preferredMusicId)) {
+        orderRef.current = [
+          preferredMusicId,
+          ...manifest.tracks.map((t) => t.id).filter((id) => id !== preferredMusicId),
+        ];
+        indexRef.current = 0;
+      } else if (orderRef.current.length === 0) {
         orderRef.current = buildPlayOrder(manifest);
         indexRef.current = 0;
       }
@@ -140,7 +154,7 @@ export const ServiceMusicAudio: React.FC = () => {
       cancelled = true;
     };
     // retortAudioMode: recover if burn-end / menu theme cleared the bus
-  }, [serviceActive, retortAudioMode]);
+  }, [serviceActive, retortAudioMode, preferredMusicId]);
 
   useEffect(() => {
     return () => {

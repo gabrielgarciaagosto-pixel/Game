@@ -17,6 +17,13 @@ import {
   scoreChapelArrangement,
   satisfactionToRewards,
 } from '../utils/chapelSatisfaction';
+import {
+  chapelPrefMatchBonus,
+  decorPrefLabel,
+  evaluateChapelPrefMatches,
+  serviceMusicLabel,
+  serviceMusicOptions,
+} from '../data/familyChapelPrefs';
 import { caseUsesUrnStand } from '../data/familyUrnPick';
 import { directiveLabel } from '../types/game';
 import { ChapelMourners } from './ChapelMourners';
@@ -45,6 +52,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
     focusCase,
     ensureChapelLayout,
     setChapelTheme,
+    setChapelServiceMusic,
     moveChapelPiece,
   } = useGameStore();
 
@@ -99,6 +107,22 @@ export const ShowroomAndChapelModal: React.FC = () => {
   );
 
   const offeredForScore = getUrnById(currentCase?.offeredUrnId ?? null);
+  const prefPreview = useMemo(() => {
+    if (!currentCase || !layout) return null;
+    const flowerKinds = scoredPieces
+      .map((p) => p.kind)
+      .filter((k): k is FlowerKind =>
+        k === 'LILIES' || k === 'ROSES' || k === 'WREATH'
+      );
+    const matches = evaluateChapelPrefMatches({
+      prefs: currentCase.familyChapelPrefs,
+      theme: layout.theme,
+      flowersPlaced: flowerKinds,
+      serviceMusicId: layout.serviceMusicId ?? null,
+    });
+    return { matches, bonus: chapelPrefMatchBonus(matches) };
+  }, [currentCase, layout, scoredPieces]);
+
   const score = useMemo(() => {
     if (!currentCase || !layout) {
       return null;
@@ -110,8 +134,16 @@ export const ShowroomAndChapelModal: React.FC = () => {
       theme: layout.theme,
       decayLevel: currentCase.decayLevel,
       urnPrestige: offeredForScore?.prestigeBonus ?? 0,
+      familyPrefBonus: prefPreview?.bonus ?? 0,
     });
-  }, [currentCase, layout, chapelOwnedDecor, scoredPieces, offeredForScore]);
+  }, [
+    currentCase,
+    layout,
+    chapelOwnedDecor,
+    scoredPieces,
+    offeredForScore,
+    prefPreview,
+  ]);
 
   const rewards = score ? satisfactionToRewards(score.total) : null;
 
@@ -195,9 +227,11 @@ export const ShowroomAndChapelModal: React.FC = () => {
             CHAPEL — {displayCaseName(currentCase)}
           </h2>
           <p className="text-[10px] text-violet-300/70 leading-snug">
-            {directiveLabel(currentCase.directive)} · Prefers{' '}
-            {currentCase.preferredFlowers} · Urn{' '}
-            {currentCase.preferredUrnMaterial}
+            {directiveLabel(currentCase.directive)} ·             Prefers {currentCase.preferredFlowers}
+            {currentCase.familyChapelPrefs.wallId
+              ? ` · ${decorPrefLabel(currentCase.familyChapelPrefs.wallId)}`
+              : ''}{' '}
+            · Urn {currentCase.preferredUrnMaterial}
             {!urnStandService
               ? ` · Casket ${currentCase.preferredCasketMaterial}`
               : ''}{' '}
@@ -321,11 +355,30 @@ export const ShowroomAndChapelModal: React.FC = () => {
               <span>Freshness +{score.freshness}</span>
               <span>Decor +{score.decor}</span>
               <span>Vessel +{score.urnVessel}</span>
+              <span>Family prefs +{score.familyPrefs}</span>
               <span className="text-red-300">Clutter −{score.clutter}</span>
             </div>
             <div className="mt-1 text-violet-300/80">
               Preview: +{rewards.payoutBoostPct}% payout · tip ${rewards.tipCash}{' '}
               · rep +{rewards.reputationDelta}
+            </div>
+          </div>
+        )}
+
+        {prefPreview && (
+          <div className="rounded-xl border border-amber-800/50 bg-amber-950/40 p-2.5 text-[10px] space-y-1">
+            <div className="font-bold text-amber-200 tracking-wide">
+              FAMILY WISHES (bonus only)
+            </div>
+            <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-amber-100/90">
+              {prefPreview.matches.map((m) => (
+                <span
+                  key={m.key}
+                  className={m.matched ? 'text-emerald-300' : 'text-amber-100/70'}
+                >
+                  {m.matched ? '✓' : '·'} {m.label}: {m.preferredName}
+                </span>
+              ))}
             </div>
           </div>
         )}
@@ -381,6 +434,49 @@ export const ShowroomAndChapelModal: React.FC = () => {
             }
           />
         )}
+
+        <div className="space-y-1">
+          <div className="text-[10px] uppercase tracking-wider text-violet-300/70">
+            Service music
+            {currentCase.familyChapelPrefs.musicTrackId
+              ? ` · prefers ${serviceMusicLabel(currentCase.familyChapelPrefs.musicTrackId)}`
+              : ''}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onPointerDown={() =>
+                setChapelServiceMusic(currentCase.id, null)
+              }
+              className={`px-2 py-1 rounded text-[11px] border ${
+                !(layout?.serviceMusicId)
+                  ? 'border-amber-400 bg-amber-900/50 text-amber-100'
+                  : 'border-violet-700 bg-violet-950/60'
+              }`}
+            >
+              Playlist
+            </button>
+            {serviceMusicOptions().map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onPointerDown={() =>
+                  setChapelServiceMusic(currentCase.id, t.id)
+                }
+                className={`px-2 py-1 rounded text-[11px] border ${
+                  layout?.serviceMusicId === t.id
+                    ? 'border-amber-400 bg-amber-900/50 text-amber-100'
+                    : 'border-violet-700 bg-violet-950/60'
+                }`}
+              >
+                {t.label}
+                {currentCase.familyChapelPrefs.musicTrackId === t.id
+                  ? ' ★'
+                  : ''}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {chapelOwnedDecor.length === 0 && (
           <button

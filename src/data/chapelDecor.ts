@@ -343,6 +343,8 @@ export interface ChapelServiceLayout {
   caseId: string;
   theme: ChapelThemeSelection;
   pieces: ChapelLayoutPiece[];
+  /** Player-selected service music track id (null = playlist default) */
+  serviceMusicId?: string | null;
 }
 
 /** Default bier + empty flower slots for a fresh service. */
@@ -361,5 +363,6 @@ export function defaultChapelLayout(
         y: 0.42,
       },
     ],
+    serviceMusicId: null,
   };
 }
