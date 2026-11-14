@@ -509,7 +509,10 @@ export const FleetVehicleArt: React.FC<{
   vehicleId: string;
   title?: string;
 }> = ({ vehicleId, title }) => {
-  const g = gidOf(vehicleId);
+  // Instance suffix: the All tab draws the house coach twice, and duplicate
+  // gradient ids make url(#…) resolve to the first <defs> (broken on WebView).
+  const instance = React.useId().replace(/[^a-zA-Z0-9]/g, '');
+  const g = `${gidOf(vehicleId)}${instance}`;
   const [hi, lo] = PAINT[vehicleId] ?? ['#222', '#111'];
   return (
     <svg
