@@ -1017,13 +1017,6 @@ export const CremationMiniGame: React.FC = () => {
                     e.preventDefault();
                     toolHeldRef.current = true;
                     setToolHeld(true);
-                    try {
-                      (e.currentTarget as HTMLElement).setPointerCapture?.(
-                        e.pointerId
-                      );
-                    } catch {
-                      /* capture can throw on some WebViews; the drag still tracks this pointer */
-                    }
                     setToolGlide(false);
                     const point = pointInChamber(e.clientX, e.clientY);
                     prevToolPoint.current = point;
@@ -1032,19 +1025,31 @@ export const CremationMiniGame: React.FC = () => {
                       accum: 0,
                       credited: false,
                     };
-                  }}
-                  onPointerMove={(e) => {
-                    if (!toolHeldRef.current) return;
-                    moveHeldTool(e.clientX, e.clientY);
-                  }}
-                  onPointerUp={() => {
-                    toolHeldRef.current = false;
-                    setToolHeld(false);
-                    prevToolPoint.current = null;
-                  }}
-                  onPointerCancel={() => {
-                    toolHeldRef.current = false;
-                    setToolHeld(false);
+                    try {
+                      (e.currentTarget as HTMLElement).setPointerCapture?.(
+                        e.pointerId
+                      );
+                    } catch {
+                      /* capture can throw on some WebViews; window listeners keep the drag alive */
+                    }
+                    const pointerId = e.pointerId;
+                    const move = (ev: PointerEvent) => {
+                      if (ev.pointerId !== pointerId || !toolHeldRef.current)
+                        return;
+                      moveHeldTool(ev.clientX, ev.clientY);
+                    };
+                    const end = (ev: PointerEvent) => {
+                      if (ev.pointerId !== pointerId) return;
+                      toolHeldRef.current = false;
+                      setToolHeld(false);
+                      prevToolPoint.current = null;
+                      window.removeEventListener('pointermove', move);
+                      window.removeEventListener('pointerup', end);
+                      window.removeEventListener('pointercancel', end);
+                    };
+                    window.addEventListener('pointermove', move);
+                    window.addEventListener('pointerup', end);
+                    window.addEventListener('pointercancel', end);
                   }}
                 >
                   <ToolArt
