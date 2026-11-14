@@ -143,7 +143,9 @@ function HoldButton({
           /* automation and some WebViews reject capture; window listeners still end the jog */
         }
         startRef.current();
-        const end = () => {
+        const pointerId = e.pointerId;
+        const end = (ev: PointerEvent) => {
+          if (ev.pointerId !== pointerId) return;
           endRef.current();
           window.removeEventListener('pointerup', end);
           window.removeEventListener('pointercancel', end);
@@ -1013,11 +1015,15 @@ export const CremationMiniGame: React.FC = () => {
                   onPointerDown={(e) => {
                     e.stopPropagation();
                     e.preventDefault();
-                    (e.currentTarget as HTMLElement).setPointerCapture?.(
-                      e.pointerId
-                    );
                     toolHeldRef.current = true;
                     setToolHeld(true);
+                    try {
+                      (e.currentTarget as HTMLElement).setPointerCapture?.(
+                        e.pointerId
+                      );
+                    } catch {
+                      /* capture can throw on some WebViews; the drag still tracks this pointer */
+                    }
                     setToolGlide(false);
                     const point = pointInChamber(e.clientX, e.clientY);
                     prevToolPoint.current = point;

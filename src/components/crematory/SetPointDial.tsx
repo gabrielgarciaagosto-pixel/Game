@@ -55,18 +55,27 @@ export const SetPointDial: React.FC<SetPointDialProps> = ({
         onPointerDown={(e) => {
           e.stopPropagation();
           e.preventDefault();
-          (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
           drag.current = { x: e.clientX, value: clamped };
-        }}
-        onPointerMove={(e) => {
-          if (!drag.current) return;
-          apply(e.clientX);
-        }}
-        onPointerUp={() => {
-          drag.current = null;
-        }}
-        onPointerCancel={() => {
-          drag.current = null;
+          try {
+            (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+          } catch {
+            /* capture can throw on some WebViews; window listeners still track the slide */
+          }
+          const pointerId = e.pointerId;
+          const move = (ev: PointerEvent) => {
+            if (ev.pointerId !== pointerId || !drag.current) return;
+            apply(ev.clientX);
+          };
+          const end = (ev: PointerEvent) => {
+            if (ev.pointerId !== pointerId) return;
+            drag.current = null;
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', end);
+            window.removeEventListener('pointercancel', end);
+          };
+          window.addEventListener('pointermove', move);
+          window.addEventListener('pointerup', end);
+          window.addEventListener('pointercancel', end);
         }}
       >
         <svg viewBox="0 0 100 100" className="absolute inset-[7%] w-[86%] h-[86%]">

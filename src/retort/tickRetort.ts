@@ -43,21 +43,23 @@ export function stepRetortBurn(
     const step = Math.sign(delta) * Math.min(Math.abs(delta), maxStep);
     return Math.max(72, current + step - loss);
   };
+  /** Move toward a ceiling. Never jump down to it in one tick. */
+  const towardCap = (current: number, cap: number, rise: number, fall: number) => {
+    if (current > cap) return Math.max(cap, current - fall);
+    return Math.min(cap, current + rise);
+  };
 
   if (next.secondaryOn) {
-    next.secondaryTemp = Math.min(
-      secondarySp + 40,
-      approach(
-        next.secondaryTemp,
-        secondarySp + 15,
-        18 + Math.random() * 10,
-        doorLoss * 0.15
-      )
+    next.secondaryTemp = approach(
+      next.secondaryTemp,
+      secondarySp + 15,
+      18 + Math.random() * 10,
+      doorLoss * 0.15
     );
   } else if (next.blowerOn && next.heated) {
-    next.secondaryTemp = Math.min(820, next.secondaryTemp + 6);
+    next.secondaryTemp = towardCap(next.secondaryTemp, 820, 6, 8);
   } else if (next.blowerOn) {
-    next.secondaryTemp = Math.min(200, next.secondaryTemp + 2);
+    next.secondaryTemp = towardCap(next.secondaryTemp, 200, 2, 8);
   } else {
     next.secondaryTemp = Math.max(
       72,
@@ -69,14 +71,11 @@ export function stepRetortBurn(
     const slow =
       next.secondaryTemp < 850 || next.earlyPrimaryStarts > 0 ? 0.55 : 1;
     const gain = (10 + Math.random() * 8) * slow;
-    next.primaryTemp = Math.min(
-      primarySp + 50,
-      approach(next.primaryTemp, primarySp + 20, gain, doorLoss)
-    );
+    next.primaryTemp = approach(next.primaryTemp, primarySp + 20, gain, doorLoss);
   } else if (next.secondaryOn) {
     next.primaryTemp = Math.max(
       72,
-      Math.min(400, next.primaryTemp + 1 - doorLoss * 0.4)
+      towardCap(next.primaryTemp, 400, 1, 8 + doorLoss * 0.4)
     );
   } else {
     next.primaryTemp = Math.max(
