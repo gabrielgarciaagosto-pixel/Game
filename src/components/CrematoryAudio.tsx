@@ -6,6 +6,7 @@ import {
   isCrematoryBed,
   unlockGameAudio,
 } from '../utils/audioManager';
+import { isMenuBedId } from '../data/menuPlaylist';
 import { isServiceBedId } from '../data/servicePlaylist';
 
 /**
@@ -46,14 +47,19 @@ export const CrematoryAudio: React.FC = () => {
       const inCrematory = state.activeStation === 'CREMATION';
       if (mode === 'START' && on && p !== 'SWEEP' && p !== 'DONE') {
         patchRetort({ audioMode: 'LOOP' });
-        if (inCrematory && !isServiceBedId(audioManager.getCurrentId())) {
+        const bus = audioManager.getCurrentId();
+        if (
+          inCrematory &&
+          !isServiceBedId(bus) &&
+          !isMenuBedId(bus)
+        ) {
           activeBedRef.current = 'loop';
           void audioManager.crossfadeTo('crematoryLoop', {
             loop: true,
             durationMs: CROSSFADE_MS,
           });
         } else {
-          // Left the room or chapel music owns the bus — keep mode, stay silent
+          // Left the room or chapel/menu music owns the bus — keep mode, stay silent
           activeBedRef.current = 'off';
         }
       } else if (mode === 'START') {
@@ -73,15 +79,17 @@ export const CrematoryAudio: React.FC = () => {
       phase === 'DONE' ||
       !primaryOn;
     const inCrematory = activeStation === 'CREMATION';
-    const chapelMusicOwns = isServiceBedId(audioManager.getCurrentId());
+    const otherMusicOwns =
+      isServiceBedId(audioManager.getCurrentId()) ||
+      isMenuBedId(audioManager.getCurrentId());
 
     // Burn finished — fade crematory beds only, then clear mode.
-    // Never fadeOut while a chapel service bed owns the bus (MenuThemeAudio
-    // used to clobber service music when audioMode flipped to OFF).
+    // Never fadeOut while chapel/menu beds own the bus.
     if (burnEnded) {
       const currentId = audioManager.getCurrentId();
       if (
         !isServiceBedId(currentId) &&
+        !isMenuBedId(currentId) &&
         (activeBedRef.current !== 'off' || isCrematoryBed(currentId))
       ) {
         activeBedRef.current = 'off';
@@ -95,8 +103,8 @@ export const CrematoryAudio: React.FC = () => {
       return;
     }
 
-    // Left crematory or chapel service music is playing — fade out, keep audioMode
-    if (!inCrematory || chapelMusicOwns) {
+    // Left crematory or chapel/menu music is playing — fade out, keep audioMode
+    if (!inCrematory || otherMusicOwns) {
       if (activeBedRef.current !== 'off') {
         activeBedRef.current = 'off';
         void audioManager.fadeOut(CROSSFADE_MS);
@@ -139,7 +147,8 @@ export const CrematoryAudio: React.FC = () => {
     const onUnmute = () => {
       const state = useGameStore.getState();
       if (state.activeStation !== 'CREMATION') return;
-      if (isServiceBedId(audioManager.getCurrentId())) return;
+      const bus = audioManager.getCurrentId();
+      if (isServiceBedId(bus) || isMenuBedId(bus)) return;
       const mode = state.retort.audioMode;
       if (mode !== 'START' && mode !== 'LOOP') return;
       activeBedRef.current = 'off';
