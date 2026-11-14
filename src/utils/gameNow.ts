@@ -47,6 +47,17 @@ export function resetClockOffset(): void {
   persist();
 }
 
+/** Wipe the persisted clock offset key entirely (fresh install). */
+export function clearClockOffsetStorage(): void {
+  offsetMs = 0;
+  try {
+    localStorage.removeItem(OFFSET_KEY);
+  } catch {
+    /* ignore */
+  }
+  listeners.forEach((l) => l());
+}
+
 export function gameNow(): number {
   return Date.now() + offsetMs;
 }

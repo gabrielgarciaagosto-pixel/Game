@@ -440,8 +440,6 @@ export function nextIntakeDelayMs(): number {
   );
 }
 
-const seedCase = generateRandomCase();
-
 const defaultShowroomInventory: ShowroomItem[] = [
   {
     id: 'casket_oak',
@@ -516,9 +514,10 @@ export const useGameStore = create<GameState>()(
   reputation: 100,
   ossilegiumCommuneGrams: 0,
   activeStation: 'OVERVIEW',
-  cases: [seedCase],
-  activeCaseId: seedCase.id,
-  inboxFiles: [toInboxFile(seedCase)],
+  // Fresh / post-Reset Game: no bodies, empty Case Files until intake or Dev spawn.
+  cases: [],
+  activeCaseId: null,
+  inboxFiles: [],
   intakeToast: null,
   legalAlert: null,
   cremulatorOwned: true,

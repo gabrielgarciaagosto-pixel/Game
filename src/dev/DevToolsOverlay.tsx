@@ -78,6 +78,49 @@ function Btn({
   );
 }
 
+/** Two-tap danger control: first arms, second wipes all progress → title. */
+function ResetGameButton() {
+  const [armed, setArmed] = useState(false);
+
+  useEffect(() => {
+    if (!armed) return;
+    const t = window.setTimeout(() => setArmed(false), 4000);
+    return () => window.clearTimeout(t);
+  }, [armed]);
+
+  return (
+    <div className="flex flex-col gap-1 w-full">
+      <button
+        type="button"
+        data-testid="dev-reset-game"
+        onClick={() => {
+          if (!armed) {
+            setArmed(true);
+            return;
+          }
+          const ok = window.confirm(
+            'RESET GAME?\n\nDeletes ALL progress — money, rep, inventory, upgrades, cases/bodies, Case Files (all records/history + family urn picks), chapel layouts, clock. Returns to the title screen. This cannot be undone.'
+          );
+          if (ok) actions.resetGame();
+          else setArmed(false);
+        }}
+        className={`w-full px-2 py-2 text-[11px] font-mono rounded border font-bold tracking-wide ${
+          armed
+            ? 'border-red-400 bg-red-600 text-white animate-pulse shadow-[0_0_12px_rgba(239,68,68,0.55)]'
+            : 'border-red-500/70 bg-red-950/80 text-red-100 active:bg-red-900'
+        }`}
+      >
+        {armed ? 'TAP AGAIN TO WIPE ALL PROGRESS' : 'Reset Game'}
+      </button>
+      {armed && (
+        <p className="text-[9px] text-red-300/80 font-mono leading-snug">
+          Wipes persist + Case Files + cooler/rooms + clock. Title screen.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function useFps() {
   const [fps, setFps] = useState(0);
   useEffect(() => {
@@ -358,19 +401,7 @@ export const DevToolsOverlay: React.FC = () => {
             </Section>
 
             <Section title="Danger">
-              <Btn
-                label="Reset save…"
-                danger
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      'Reset Ossuarian save and reload? This cannot be undone.'
-                    )
-                  ) {
-                    actions.resetSave();
-                  }
-                }}
-              />
+              <ResetGameButton />
             </Section>
 
             <p className="text-[9px] text-lime-500/50 mt-2 leading-relaxed">

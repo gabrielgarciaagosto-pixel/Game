@@ -25,8 +25,8 @@ import type { DispositionDirective } from '../types/game';
 import { audioManager } from '../utils/audioManager';
 import {
   advanceClockBy,
+  clearClockOffsetStorage,
   gameNow,
-  resetClockOffset,
   setClockOffsetMs,
   getClockOffsetMs,
 } from '../utils/gameNow';
@@ -313,12 +313,65 @@ export function forcePickFamilyUrnForActive() {
   }));
 }
 
-export function resetSave() {
+const KNOWN_STORAGE_KEYS = [
+  'ossuarian-first-urn-v1',
+  'ossuarian-dev-clock-offset',
+  'ossuarian-dev-fab-pos',
+] as const;
+
+/**
+ * Full game wipe: Zustand persist, Case Files (inbox), cases/bodies, money,
+ * rep, inventory, chapel layouts, upgrades, clock offset, demo session flags.
+ * Hard reload → title screen. Do NOT setState after clearStorage — that would
+ * re-persist the in-memory dirty save.
+ */
+export function resetGame() {
+  clearClockOffsetStorage();
+
   try {
-    localStorage.removeItem('ossuarian-first-urn-v1');
-    resetClockOffset();
+    sessionStorage.removeItem('ofu-demo-urn-phase');
+    const sessionKill: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const k = sessionStorage.key(i);
+      if (k && (k.startsWith('ossuarian') || k.startsWith('ofu-'))) {
+        sessionKill.push(k);
+      }
+    }
+    for (const k of sessionKill) sessionStorage.removeItem(k);
   } catch {
     /* ignore */
   }
-  window.location.reload();
+
+  try {
+    useGameStore.persist.clearStorage();
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    for (const key of KNOWN_STORAGE_KEYS) {
+      localStorage.removeItem(key);
+    }
+    // Sweep any other ossuarian-* / ofu-* keys (migrations / leftovers).
+    const toRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith('ossuarian') || k.startsWith('ofu-'))) {
+        toRemove.push(k);
+      }
+    }
+    for (const k of toRemove) localStorage.removeItem(k);
+  } catch {
+    /* ignore */
+  }
+
+  // Navigate hard so no in-memory store (cases, inboxFiles, family urns) survives.
+  window.location.replace(
+    `${window.location.pathname}${window.location.search}${window.location.hash}`
+  );
+}
+
+/** @deprecated Prefer resetGame — kept as alias for older Dev Tools labels. */
+export function resetSave() {
+  resetGame();
 }
