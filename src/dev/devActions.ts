@@ -19,6 +19,8 @@ import { URN_CATALOG } from '../data/urnCatalog';
 import { IDLE_RETORT } from '../retort/retortTypes';
 import {
   generateRandomCase,
+  pauseGamePersistWrites,
+  resumeGamePersistWrites,
   useGameStore,
 } from '../store/useGameStore';
 import type { DispositionDirective } from '../types/game';
@@ -319,13 +321,7 @@ const KNOWN_STORAGE_KEYS = [
   'ossuarian-dev-fab-pos',
 ] as const;
 
-/**
- * Full game wipe: Zustand persist, Case Files (inbox), cases/bodies, money,
- * rep, inventory, chapel layouts, upgrades, clock offset, demo session flags.
- * Hard reload → title screen. Do NOT setState after clearStorage — that would
- * re-persist the in-memory dirty save.
- */
-export function resetGame() {
+function wipeBrowserStorage() {
   clearClockOffsetStorage();
 
   try {
@@ -343,16 +339,9 @@ export function resetGame() {
   }
 
   try {
-    useGameStore.persist.clearStorage();
-  } catch {
-    /* ignore */
-  }
-
-  try {
     for (const key of KNOWN_STORAGE_KEYS) {
       localStorage.removeItem(key);
     }
-    // Sweep any other ossuarian-* / ofu-* keys (migrations / leftovers).
     const toRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
@@ -365,10 +354,62 @@ export function resetGame() {
     /* ignore */
   }
 
-  // Navigate hard so no in-memory store (cases, inboxFiles, family urns) survives.
-  window.location.replace(
-    `${window.location.pathname}${window.location.search}${window.location.hash}`
-  );
+  // Best-effort IndexedDB wipe (Capacitor does not use Preferences for save).
+  try {
+    if (typeof indexedDB?.databases === 'function') {
+      void indexedDB.databases().then((dbs) => {
+        for (const db of dbs) {
+          if (
+            db.name &&
+            (db.name.includes('ossuarian') || db.name.includes('ofu-'))
+          ) {
+            indexedDB.deleteDatabase(db.name);
+          }
+        }
+      });
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Capacitor-safe full wipe → title screen.
+ *
+ * v0.9.9 Android failure root causes:
+ * 1) `window.confirm` often fails silently in Capacitor WebView → reset never ran
+ * 2) `location.replace` flushed dirty Zustand state back into localStorage after
+ *    clearStorage, so reload rehydrated the old save (no title)
+ * 3) Same-URL navigation may not remount the SPA — must set hasStartedGame false
+ *
+ * Fix: pause persist writes → clear storage → hardReset in memory → toast.
+ * No native confirm; no location.reload dependency.
+ */
+export function resetGame() {
+  pauseGamePersistWrites();
+
+  try {
+    resumeGamePersistWrites();
+    useGameStore.persist.clearStorage();
+  } catch {
+    /* ignore */
+  }
+  wipeBrowserStorage();
+  pauseGamePersistWrites();
+
+  // In-memory title screen (App.tsx gates on hasStartedGame)
+  useGameStore.getState().hardResetGameState();
+
+  // Resume persist shortly with the fresh empty state so a later cold start stays clean
+  window.setTimeout(() => {
+    try {
+      resumeGamePersistWrites();
+      // Nudge persist to write the fresh slice (hasStartedGame: false, empty cases)
+      useGameStore.setState((s) => ({ intakeToast: s.intakeToast }));
+    } catch {
+      /* ignore */
+    }
+  }, 150);
 }
 
 /** @deprecated Prefer resetGame — kept as alias for older Dev Tools labels. */

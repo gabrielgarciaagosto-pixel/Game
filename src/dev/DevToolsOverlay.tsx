@@ -78,33 +78,50 @@ function Btn({
   );
 }
 
-/** Two-tap danger control: first arms, second wipes all progress → title. */
+/**
+ * Two-tap danger control (Capacitor-safe).
+ * No window.confirm — Android WebView often swallows it and the wipe never runs.
+ * Uses pointerup (not click) so touch inside the scroll panel registers.
+ */
 function ResetGameButton() {
   const [armed, setArmed] = useState(false);
+  const guardRef = useRef(false);
 
   useEffect(() => {
     if (!armed) return;
-    const t = window.setTimeout(() => setArmed(false), 4000);
+    const t = window.setTimeout(() => setArmed(false), 5000);
     return () => window.clearTimeout(t);
   }, [armed]);
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (guardRef.current) return;
+    guardRef.current = true;
+    window.setTimeout(() => {
+      guardRef.current = false;
+    }, 350);
+
+    if (!armed) {
+      setArmed(true);
+      return;
+    }
+    setArmed(false);
+    actions.resetGame();
+  };
 
   return (
     <div className="flex flex-col gap-1 w-full">
       <button
         type="button"
         data-testid="dev-reset-game"
-        onClick={() => {
-          if (!armed) {
-            setArmed(true);
-            return;
-          }
-          const ok = window.confirm(
-            'RESET GAME?\n\nDeletes ALL progress — money, rep, inventory, upgrades, cases/bodies, Case Files (all records/history + family urn picks), chapel layouts, clock. Returns to the title screen. This cannot be undone.'
-          );
-          if (ok) actions.resetGame();
-          else setArmed(false);
+        onPointerUp={onPointerUp}
+        onClick={(e) => {
+          // Fallback for environments that only synthesize click
+          e.preventDefault();
+          e.stopPropagation();
         }}
-        className={`w-full px-2 py-2 text-[11px] font-mono rounded border font-bold tracking-wide ${
+        className={`w-full px-2 py-2 text-[11px] font-mono rounded border font-bold tracking-wide touch-manipulation ${
           armed
             ? 'border-red-400 bg-red-600 text-white animate-pulse shadow-[0_0_12px_rgba(239,68,68,0.55)]'
             : 'border-red-500/70 bg-red-950/80 text-red-100 active:bg-red-900'
@@ -114,7 +131,8 @@ function ResetGameButton() {
       </button>
       {armed && (
         <p className="text-[9px] text-red-300/80 font-mono leading-snug">
-          Wipes persist + Case Files + cooler/rooms + clock. Title screen.
+          Second tap wipes Case Files + cooler + money/rep/inventory/clock and
+          returns to the title screen. No undo.
         </p>
       )}
     </div>

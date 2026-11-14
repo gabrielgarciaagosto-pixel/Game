@@ -136,24 +136,6 @@ function App() {
 
       <CaseInboxWidget />
 
-      {intakeToast && (
-        <div
-          className="fixed left-1/2 -translate-x-1/2 z-[55] max-w-lg w-[calc(100%-2rem)]"
-          style={{ top: 'calc(var(--safe-top) + 0.5rem)' }}
-        >
-          <div className="bg-cyan-900/95 border border-cyan-400 text-cyan-50 px-4 py-3 rounded-xl shadow-xl flex items-center justify-between gap-3">
-            <span className="font-semibold text-sm">{intakeToast}</span>
-            <button
-              type="button"
-              onPointerDown={clearIntakeToast}
-              className="text-xs px-2 py-1 bg-cyan-700 rounded active:bg-cyan-600"
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      )}
-
       {legalAlert && (
         <div className="fixed inset-0 z-[60] bg-black/70 flex items-center justify-center p-6">
           <div className="max-w-lg w-full bg-red-950 border border-red-700 rounded-xl p-6 shadow-xl">
@@ -171,6 +153,25 @@ function App() {
         </div>
       )}
     </div>
+      )}
+
+      {/* Toast above title + hub so Reset Game feedback is visible on splash */}
+      {intakeToast && (
+        <div
+          className="fixed left-1/2 -translate-x-1/2 z-[10000] max-w-lg w-[calc(100%-2rem)]"
+          style={{ top: 'calc(var(--safe-top) + 0.5rem)' }}
+        >
+          <div className="bg-cyan-900/95 border border-cyan-400 text-cyan-50 px-4 py-3 rounded-xl shadow-xl flex items-center justify-between gap-3">
+            <span className="font-semibold text-sm">{intakeToast}</span>
+            <button
+              type="button"
+              onPointerDown={clearIntakeToast}
+              className="text-xs px-2 py-1 bg-cyan-700 rounded active:bg-cyan-600"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
       )}
     </>
   );

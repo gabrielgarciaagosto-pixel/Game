@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import type {
   CaseInboxFile,
   CaseLocation,
@@ -105,6 +105,11 @@ interface GameState {
   /** Persistent Millennium retort — keeps burning while you leave the room */
   retort: RetortMachine;
   startGame: () => void;
+  /**
+   * Wipe gameplay progress in memory (title screen). Pair with pausing
+   * persist writes so Capacitor reloads cannot resurrect the old save.
+   */
+  hardResetGameState: () => void;
   setActiveStation: (station: StationId) => void;
   patchRetort: (partial: Partial<RetortMachine>) => void;
   ensureRetortForCase: (caseId: string) => void;
@@ -506,42 +511,66 @@ const defaultShowroomInventory: ShowroomItem[] = [
   },
 ];
 
+/** Default persisted gameplay fields for a brand-new / Reset Game save. */
+export function freshPersistedGameFields() {
+  return {
+    hasStartedGame: false as const,
+    cash: 2500,
+    reputation: 100,
+    ossilegiumCommuneGrams: 0,
+    activeStation: 'OVERVIEW' as const,
+    cases: [] as DecedentCase[],
+    activeCaseId: null as string | null,
+    inboxFiles: [] as CaseInboxFile[],
+    showroomInventory: defaultShowroomInventory.map((i) => ({ ...i })),
+    urnInventory: {
+      urn_carrara_classic: 1,
+      urn_walnut_pillar: 1,
+    } as Record<string, number>,
+    casketInventory: {
+      casket_oak_half: 1,
+      casket_pine_tapered: 1,
+    } as Record<string, number>,
+    chapelOwnedDecor: [] as string[],
+    chapelLayouts: {} as Record<string, ChapelServiceLayout>,
+    facilityLevels: { ...DEFAULT_FACILITY_LEVELS },
+    shopRotation: createShopRotation(),
+    placedFlowers: [] as ('LILIES' | 'ROSES' | 'WREATH')[],
+    serviceRatingBonus: 0,
+    cremulatorOwned: true,
+    cremulatorDamaged: false,
+    cremationBurnActive: false,
+    cremationBurnProgress: 0,
+    cremationHeatNormalized: 0,
+    cremationDecayArrested: false,
+    retort: { ...IDLE_RETORT },
+  };
+}
+
+/** Pause Zustand persist writes (Capacitor-safe wipe). */
+export function pauseGamePersistWrites() {
+  useGameStore.persist.setOptions({
+    storage: createJSONStorage(() => ({
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {},
+    })),
+  });
+}
+
+/** Restore default localStorage persist after a wipe cycle. */
+export function resumeGamePersistWrites() {
+  useGameStore.persist.setOptions({
+    storage: createJSONStorage(() => localStorage),
+  });
+}
+
 export const useGameStore = create<GameState>()(
   persist(
     (set, get) => ({
-  hasStartedGame: false,
-  cash: 2500,
-  reputation: 100,
-  ossilegiumCommuneGrams: 0,
-  activeStation: 'OVERVIEW',
-  // Fresh / post-Reset Game: no bodies, empty Case Files until intake or Dev spawn.
-  cases: [],
-  activeCaseId: null,
-  inboxFiles: [],
+  ...freshPersistedGameFields(),
   intakeToast: null,
   legalAlert: null,
-  cremulatorOwned: true,
-  cremulatorDamaged: false,
-  cremationBurnActive: false,
-  cremationBurnProgress: 0,
-  cremationHeatNormalized: 0,
-  cremationDecayArrested: false,
-  retort: { ...IDLE_RETORT },
-  placedFlowers: [],
-  serviceRatingBonus: 0,
-  casketInventory: {
-    casket_oak_half: 1,
-    casket_pine_tapered: 1,
-  },
-  chapelOwnedDecor: [],
-  chapelLayouts: {},
-  facilityLevels: { ...DEFAULT_FACILITY_LEVELS },
-  shopRotation: createShopRotation(),
-  showroomInventory: defaultShowroomInventory,
-  urnInventory: {
-    urn_carrara_classic: 1,
-    urn_walnut_pillar: 1,
-  },
 
   getActiveCase: () => resolveActiveCase(get()),
 
@@ -566,6 +595,13 @@ export const useGameStore = create<GameState>()(
         cases,
         inboxFiles,
       };
+    }),
+
+  hardResetGameState: () =>
+    set({
+      ...freshPersistedGameFields(),
+      intakeToast: '[DEV] Game reset — back at title.',
+      legalAlert: null,
     }),
 
   setActiveStation: (station) => set({ activeStation: station }),
