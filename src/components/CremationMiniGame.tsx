@@ -58,6 +58,20 @@ function HoneywellReadout({
   );
 }
 
+function buttonShell(
+  color: 'green' | 'red' | 'silver',
+  size: 'sm' | 'md'
+) {
+  const bg =
+    color === 'green'
+      ? 'bg-emerald-500 border-emerald-300 shadow-emerald-900/50'
+      : color === 'red'
+        ? 'bg-red-600 border-red-300 shadow-red-950/50'
+        : 'bg-zinc-300 border-zinc-100 text-zinc-900 shadow-zinc-900/40';
+  const dim = size === 'sm' ? 'w-10 h-10 text-[8px]' : 'w-14 h-14 text-[10px]';
+  return `${dim} rounded-full border-4 ${bg} shadow-inner font-black leading-tight active:scale-95 disabled:opacity-35 disabled:active:scale-100`;
+}
+
 function PushButton({
   color,
   label,
@@ -71,13 +85,6 @@ function PushButton({
   disabled?: boolean;
   size?: 'sm' | 'md';
 }) {
-  const bg =
-    color === 'green'
-      ? 'bg-emerald-500 border-emerald-300 shadow-emerald-900/50'
-      : color === 'red'
-        ? 'bg-red-600 border-red-300 shadow-red-950/50'
-        : 'bg-zinc-300 border-zinc-100 text-zinc-900 shadow-zinc-900/40';
-  const dim = size === 'sm' ? 'w-10 h-10 text-[8px]' : 'w-14 h-14 text-[10px]';
   return (
     <button
       type="button"
@@ -86,12 +93,57 @@ function PushButton({
         e.stopPropagation();
         onPress();
       }}
-      className={`${dim} rounded-full border-4 ${bg} shadow-inner font-black leading-tight active:scale-95 disabled:opacity-35 disabled:active:scale-100`}
+      className={buttonShell(color, size)}
     >
       {label}
     </button>
   );
 }
+
+/** Hold to jog the refractory door — releases stop travel mid-stroke */
+function HoldButton({
+  color,
+  label,
+  onHoldStart,
+  onHoldEnd,
+  disabled,
+  size = 'md',
+}: {
+  color: 'green' | 'red' | 'silver';
+  label: string;
+  onHoldStart: () => void;
+  onHoldEnd: () => void;
+  disabled?: boolean;
+  size?: 'sm' | 'md';
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+        onHoldStart();
+      }}
+      onPointerUp={(e) => {
+        e.stopPropagation();
+        onHoldEnd();
+      }}
+      onPointerCancel={onHoldEnd}
+      onLostPointerCapture={onHoldEnd}
+      className={buttonShell(color, size)}
+    >
+      {label}
+    </button>
+  );
+}
+
+/** Door must be more than 16% open before a rod can enter the chamber */
+const STIR_DOOR_MIN = 0.16;
+/** Full door travel ~5s while held */
+const DOOR_STEP = 0.008;
+const BURN_TICK_MS = 250;
 
 function StatusLamp({
   on,
@@ -132,6 +184,7 @@ export const CremationMiniGame: React.FC = () => {
     setActiveStation,
     takeCaseToStation,
     focusCase,
+    syncCremationDecayState,
   } = useGameStore();
 
   const currentCase = caseAtLocation(cases, 'CREMATION', activeCaseId);
@@ -208,11 +261,11 @@ export const CremationMiniGame: React.FC = () => {
     const id = setInterval(() => {
       setDoorOpen((v) => {
         if (doorMoving === 'UP') {
-          const next = Math.min(1, v + 0.04);
+          const next = Math.min(1, v + DOOR_STEP);
           if (next >= 1) setDoorMoving(null);
           return next;
         }
-        const next = Math.max(0, v - 0.04);
+        const next = Math.max(0, v - DOOR_STEP);
         if (next <= 0) setDoorMoving(null);
         return next;
       });
@@ -220,39 +273,87 @@ export const CremationMiniGame: React.FC = () => {
     return () => clearInterval(id);
   }, [doorMoving]);
 
+  // Sync burn heat/progress so refrigeration decay slows then freezes at 15%
+  useEffect(() => {
+    const heatNormalized = Math.min(
+      1,
+      Math.max(0, (primaryTemp - 200) / 1200)
+    );
+    syncCremationDecayState({
+      active: phase === 'BURN' && (primaryOn || secondaryOn),
+      progress,
+      heatNormalized,
+    });
+  }, [
+    phase,
+    primaryOn,
+    secondaryOn,
+    progress,
+    primaryTemp,
+    syncCremationDecayState,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      syncCremationDecayState({
+        active: false,
+        progress: 0,
+        heatNormalized: 0,
+      });
+    };
+  }, [syncCremationDecayState]);
+
   useEffect(() => {
     if (!currentCase || !targets) return;
     const id = setInterval(() => {
+      // Door openness vents chamber heat (quadratic — cracked door bleeds less)
+      const doorLoss = Math.pow(doorOpen, 1.35) * 28;
+
       setSecondaryTemp((t) => {
         if (secondaryOn) {
-          return Math.min(secondarySp + 40, t + 18 + Math.random() * 10);
+          return Math.min(
+            secondarySp + 40,
+            Math.max(72, t + 18 + Math.random() * 10 - doorLoss * 0.15)
+          );
         }
         if (blowerOn && heated) return Math.min(820, t + 6);
         if (blowerOn) return Math.min(200, t + 2);
-        return Math.max(72, t - 4);
+        return Math.max(72, t - 4 - doorLoss * 0.1);
       });
 
       setPrimaryTemp((t) => {
         if (primaryOn) {
           const slow =
             secondaryTemp < 850 || earlyPrimaryStarts > 0 ? 0.55 : 1;
-          return Math.min(primarySp + 60, t + (14 + Math.random() * 12) * slow);
+          const gain = (10 + Math.random() * 8) * slow;
+          return Math.min(
+            primarySp + 60,
+            Math.max(72, t + gain - doorLoss)
+          );
         }
-        if (secondaryOn) return Math.min(400, Math.max(t, t + 1));
-        return Math.max(72, t - 5);
+        if (secondaryOn) {
+          return Math.max(72, Math.min(400, t + 1 - doorLoss * 0.4));
+        }
+        return Math.max(72, t - 5 - doorLoss * 0.5);
       });
 
-      if (phase === 'BURN' && primaryOn && doorOpen < 0.15) {
+      if (phase === 'BURN' && primaryOn) {
+        const heatFactor = Math.min(1.15, Math.max(0.15, primaryTemp / 1400));
+        const doorEfficiency = Math.max(0.2, 1 - doorOpen * 0.7);
         const burnRate =
-          (primaryTemp / 1400) *
+          heatFactor *
+          doorEfficiency *
           (secondaryTemp >= 850 ? 1 : 0.65) *
           (earlyPrimaryStarts > 0 ? 0.85 : 1);
-        setElapsedSec((prev) => prev + burnRate * 2.8);
+        // Near real-time: ~5 minutes wall-clock when heat is held
+        setElapsedSec(
+          (prev) => prev + (BURN_TICK_MS / 1000) * burnRate
+        );
         if (primaryTemp > maxSafeTemp) {
           setThermalWarnings((w) => w + 1);
         }
       }
-    }, 280);
+    }, BURN_TICK_MS);
     return () => clearInterval(id);
   }, [
     currentCase,
@@ -299,11 +400,27 @@ export const CremationMiniGame: React.FC = () => {
     if (secondaryTemp < 850) setEarlyPrimaryStarts((n) => n + 1);
     setPrimaryOn(true);
     if (phase === 'LOAD') setPhase('BURN');
+    setActiveTool((t) => t ?? 'STIRRING_ROD');
   };
 
-  const handleRakeMove = (clientX: number, clientY: number) => {
-    if (!chamberRef.current || !rakeHeld || activeTool !== 'IRON_RAKE') return;
-    if (doorOpen < 0.35 || !primaryOn) return;
+  useEffect(() => {
+    if (phase === 'BURN') {
+      setActiveTool((t) =>
+        t === 'IRON_RAKE' || t === 'BRISTLE_BRUSH' || t === 'HAND_BRUSH'
+          ? 'STIRRING_ROD'
+          : t ?? 'STIRRING_ROD'
+      );
+    }
+  }, [phase]);
+
+  const canStir =
+    doorOpen > STIR_DOOR_MIN &&
+    primaryOn &&
+    phase === 'BURN' &&
+    activeTool === 'STIRRING_ROD';
+
+  const handleRodMove = (clientX: number, clientY: number) => {
+    if (!chamberRef.current || !rakeHeld || !canStir) return;
     const rect = chamberRef.current.getBoundingClientRect();
     const x = ((clientX - rect.left) / rect.width) * 100;
     const y = ((clientY - rect.top) / rect.height) * 100;
@@ -314,7 +431,8 @@ export const CremationMiniGame: React.FC = () => {
       setStirCount((s) => s + 1);
       setLastStirAt(Date.now());
       setBoneNudge((n) => n + 1);
-      setPrimaryTemp((t) => Math.max(900, t - 90));
+      // Stirring dumps a little chamber heat through the open door
+      setPrimaryTemp((t) => Math.max(850, t - 55 - doorOpen * 40));
       if (Date.now() - lastHaptic.current > 180) {
         lastHaptic.current = Date.now();
         void hapticIronRake();
@@ -570,20 +688,30 @@ export const CremationMiniGame: React.FC = () => {
       >
         DOOR
       </div>
-      <div className={`flex justify-center ${zoomed ? 'gap-4 mb-3' : 'gap-1 mb-1'}`}>
-        <PushButton
+      <div className={`flex justify-center ${zoomed ? 'gap-4 mb-1' : 'gap-1 mb-1'}`}>
+        <HoldButton
           color="silver"
           label="UP"
-          onPress={() => setDoorMoving('UP')}
+          onHoldStart={() => setDoorMoving('UP')}
+          onHoldEnd={() => setDoorMoving(null)}
           size={zoomed ? 'md' : 'sm'}
         />
-        <PushButton
+        <HoldButton
           color="silver"
           label="DOWN"
-          onPress={() => setDoorMoving('DOWN')}
+          onHoldStart={() => setDoorMoving('DOWN')}
+          onHoldEnd={() => setDoorMoving(null)}
           size={zoomed ? 'md' : 'sm'}
         />
       </div>
+      {zoomed && (
+        <p className="text-[8px] text-center text-zinc-700 mb-2">
+          Hold to jog · Door {Math.round(doorOpen * 100)}%
+          {doorOpen > 0 ? ' · heat venting' : ''}
+          <br />
+          Stirring needs door &gt;16% open
+        </p>
+      )}
 
       {zoomed && (
         <div className="text-[7px] text-center text-zinc-700 leading-tight border-t border-zinc-600/40 pt-2">
@@ -631,8 +759,12 @@ export const CremationMiniGame: React.FC = () => {
               MILLENNIUM — {displayCaseName(currentCase)}
             </h2>
             <p className="text-[10px] text-stone-400">
-              {Math.round(progress * 100)}% · {bonePhase} · Stirs {stirCount}/
+              {Math.round(progress * 100)}% · {bonePhase} · Door{' '}
+              {Math.round(doorOpen * 100)}% · Stirs {stirCount}/
               {targets.requiredStirs}
+              {progress >= 0.15 && (primaryOn || secondaryOn)
+                ? ' · Decay arrested'
+                : ''}
             </p>
             <CaseTransferBar currentCase={currentCase} />
           </div>
@@ -663,16 +795,21 @@ export const CremationMiniGame: React.FC = () => {
                   handleSweepStroke();
                   return;
                 }
-                if (activeTool === 'IRON_RAKE' && doorOpen > 0.35) {
+                if (
+                  activeTool === 'STIRRING_ROD' &&
+                  doorOpen > STIR_DOOR_MIN &&
+                  primaryOn &&
+                  phase === 'BURN'
+                ) {
                   setRakeHeld(true);
                   (e.currentTarget as HTMLElement).setPointerCapture?.(
                     e.pointerId
                   );
-                  handleRakeMove(e.clientX, e.clientY);
+                  handleRodMove(e.clientX, e.clientY);
                 }
               }}
               onPointerMove={(e) => {
-                if (rakeHeld) handleRakeMove(e.clientX, e.clientY);
+                if (rakeHeld) handleRodMove(e.clientX, e.clientY);
               }}
               onPointerUp={() => setRakeHeld(false)}
               onPointerCancel={() => setRakeHeld(false)}
@@ -751,26 +888,34 @@ export const CremationMiniGame: React.FC = () => {
                 )}
               </div>
 
-              {activeTool === 'IRON_RAKE' &&
-                doorOpen > 0.3 &&
-                phase !== 'SWEEP' && (
+              {activeTool === 'STIRRING_ROD' &&
+                doorOpen > STIR_DOOR_MIN &&
+                phase === 'BURN' && (
                   <div
                     className="absolute z-40 pointer-events-none"
                     style={{
                       left: `${rakePos.x}%`,
                       top: `${rakePos.y}%`,
-                      transform: 'translate(-10%, -50%) rotate(-12deg)',
+                      transform: 'translate(-10%, -50%) rotate(-18deg)',
                     }}
                   >
                     <div className="flex items-center">
-                      <div className="w-28 h-1.5 bg-gradient-to-r from-zinc-400 to-zinc-600 rounded-full shadow-lg" />
-                      <div className="w-7 h-3.5 border-2 border-zinc-400 rounded-sm bg-zinc-700 -ml-1" />
+                      <div className="w-32 h-1 bg-gradient-to-r from-amber-700 via-zinc-400 to-zinc-600 rounded-full shadow-lg" />
+                      <div className="w-3 h-3 rounded-full border border-zinc-300 bg-zinc-500 -ml-1" />
                     </div>
                     {rakeHeld && (
                       <div className="text-[9px] text-amber-300 mt-1 font-bold">
                         STIRRING
                       </div>
                     )}
+                  </div>
+                )}
+
+              {activeTool === 'STIRRING_ROD' &&
+                phase === 'BURN' &&
+                doorOpen <= STIR_DOOR_MIN && (
+                  <div className="absolute bottom-3 left-2 right-2 z-40 text-center text-[10px] text-amber-200/90 bg-black/55 rounded px-2 py-1.5 pointer-events-none">
+                    Open door past 16% to insert stirring rod
                   </div>
                 )}
 
@@ -817,11 +962,13 @@ export const CremationMiniGame: React.FC = () => {
 
           <div className="shrink-0 flex gap-1.5 bg-stone-900/90 border border-stone-700 rounded-lg p-1.5">
             {(
-              [
-                { id: 'IRON_RAKE' as const, name: 'Iron Rake' },
-                { id: 'BRISTLE_BRUSH' as const, name: 'Bristle' },
-                { id: 'HAND_BRUSH' as const, name: 'Hand Brush' },
-              ] as const
+              phase === 'SWEEP'
+                ? ([
+                    { id: 'IRON_RAKE' as const, name: 'Iron Rake' },
+                    { id: 'BRISTLE_BRUSH' as const, name: 'Bristle' },
+                    { id: 'HAND_BRUSH' as const, name: 'Hand Brush' },
+                  ] as const)
+                : ([{ id: 'STIRRING_ROD' as const, name: 'Stirring Rod' }] as const)
             ).map((tool) => (
               <button
                 key={tool.id}

@@ -13,6 +13,7 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
 }) => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [isFadingOut, setIsFadingOut] = useState(false);
+  const [isRattling, setIsRattling] = useState(false);
   const [statusText, setStatusText] = useState('Awaiting Mortician...');
   const timersRef = useRef<number[]>([]);
 
@@ -22,9 +23,21 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
     };
   }, []);
 
+  const playUrnRattle = () => {
+    if (isAnimating || isRattling) return;
+    setIsRattling(true);
+    setStatusText('Ash stirs...');
+    const id = window.setTimeout(() => {
+      setIsRattling(false);
+      setStatusText('Awaiting Mortician...');
+    }, 2400);
+    timersRef.current.push(id);
+  };
+
   const handleStartClick = () => {
     if (isAnimating) return;
     setIsAnimating(true);
+    setIsRattling(false);
     setStatusText('Loading...');
 
     const fadeId = window.setTimeout(() => {
@@ -79,6 +92,15 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
           margin: 0 auto;
         }
 
+        .urn-hit {
+          cursor: pointer;
+          touch-action: manipulation;
+          border: none;
+          background: transparent;
+          padding: 0;
+          display: block;
+        }
+
         .urn-svg {
           width: min(52vw, 210px);
           height: auto;
@@ -86,6 +108,16 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
           overflow: visible;
           display: block;
           margin: 0 auto;
+        }
+
+        @keyframes urnHover {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-12px); }
+        }
+
+        .urn-hover {
+          transform-origin: 50% 88%;
+          animation: urnHover 3.8s ease-in-out infinite;
         }
 
         .splash-title {
@@ -201,30 +233,53 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
           100% { opacity: 0; transform: translate(4px, -38px) scale(1.8); }
         }
 
-        .anim-active .boot-urn-rock {
+        .anim-active .boot-urn-rock,
+        .rattle-active .boot-urn-rock {
           transform-origin: 50% 88%;
           animation: urnRock 2.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) forwards;
         }
 
-        .anim-active .boot-lid-rattle {
+        .anim-active .boot-lid-rattle,
+        .rattle-active .boot-lid-rattle {
           transform-origin: 50% 30%;
           animation: lidRattle 2.2s ease-in-out forwards;
         }
 
-        .anim-active .ash-puff-1 {
+        .anim-active .ash-puff-1,
+        .rattle-active .ash-puff-1 {
           animation: ashPuffLeft 1.1s ease-out 0.25s 2 forwards;
         }
 
-        .anim-active .ash-puff-2 {
+        .anim-active .ash-puff-2,
+        .rattle-active .ash-puff-2 {
           animation: ashPuffRight 1.1s ease-out 0.4s 2 forwards;
         }
 
-        .anim-active .ash-puff-3 {
+        .anim-active .ash-puff-3,
+        .rattle-active .ash-puff-3 {
           animation: ashPuffCenter 1.2s ease-out 0.55s 2 forwards;
+        }
+
+        .anim-active .urn-hover,
+        .rattle-active .urn-hover {
+          animation: none;
         }
       `}</style>
 
-      <div className={`urn-wrapper ${isAnimating ? 'anim-active' : ''}`}>
+      <div
+        className={`urn-wrapper ${isAnimating ? 'anim-active' : ''} ${
+          isRattling ? 'rattle-active' : ''
+        }`}
+      >
+        <button
+          type="button"
+          className="urn-hit"
+          aria-label="Tap urn to rattle"
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            playUrnRattle();
+          }}
+        >
         <svg viewBox="0 0 200 210" className="urn-svg" aria-hidden="true">
           <defs>
             <radialGradient id="urnMetal" cx="38%" cy="35%" r="65%">
@@ -253,7 +308,7 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
             <circle cx="100" cy="46" r="9" fill="url(#ashDust)" />
           </g>
 
-          <g className="boot-urn-rock">
+          <g className={`boot-urn-rock ${!isAnimating && !isRattling ? 'urn-hover' : ''}`}>
             <path
               d="M74 176 L126 176 L120 164 L80 164 Z"
               fill="url(#urnMetal)"
@@ -319,6 +374,7 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
             </g>
           </g>
         </svg>
+        </button>
 
         <h1 className="splash-title">{title}</h1>
         {subtitle ? <p className="splash-subtitle">{subtitle}</p> : null}

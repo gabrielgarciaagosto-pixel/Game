@@ -3,6 +3,7 @@ import { CoolerRoom } from './components/CoolerRoom';
 import { CremationMiniGame } from './components/CremationMiniGame';
 import { EmbalmingMiniGame } from './components/EmbalmingMiniGame';
 import { MainHubMenu } from './components/MainHubMenu';
+import { MenuThemeAudio } from './components/MenuThemeAudio';
 import { ShowroomAndChapelModal } from './components/ShowroomAndChapelModal';
 import { UrnFillingMiniGame } from './components/UrnFillingMiniGame';
 import { UrnStartScreen } from './components/UrnStartScreen';
@@ -32,17 +33,16 @@ function App() {
   const activeCase =
     cases.find((c) => c.id === activeCaseId) ?? cases[0] ?? null;
 
-  if (!hasStartedGame) {
-    return (
-      <UrnStartScreen
-        title="OSSUARIAN"
-        subtitle="FIRST URN"
-        onStartComplete={startGame}
-      />
-    );
-  }
-
   return (
+    <>
+      <MenuThemeAudio />
+      {!hasStartedGame ? (
+        <UrnStartScreen
+          title="OSSUARIAN"
+          subtitle="FIRST URN"
+          onStartComplete={startGame}
+        />
+      ) : (
     <div className="relative flex flex-col w-full h-full overflow-hidden bg-slate-950 text-slate-100">
       {activeStation === 'OVERVIEW' ? (
         <MainHubMenu />
@@ -141,6 +141,8 @@ function App() {
         </div>
       )}
     </div>
+      )}
+    </>
   );
 }
 

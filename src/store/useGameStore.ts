@@ -33,8 +33,17 @@ interface GameState {
   /** Working cremulator available for urn processing */
   cremulatorOwned: boolean;
   cremulatorDamaged: boolean;
+  /** Synced from Millennium retort — slows/stops decay while burning */
+  cremationBurnActive: boolean;
+  cremationBurnProgress: number;
+  cremationHeatNormalized: number;
   startGame: () => void;
   setActiveStation: (station: StationId) => void;
+  syncCremationDecayState: (state: {
+    active: boolean;
+    progress: number;
+    heatNormalized: number;
+  }) => void;
   selectActiveCase: (caseId: string) => void;
   /** Sync selection to the case currently on a station without clearing chapel décor */
   focusCase: (caseId: string) => void;
@@ -304,6 +313,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   legalAlert: null,
   cremulatorOwned: true,
   cremulatorDamaged: false,
+  cremationBurnActive: false,
+  cremationBurnProgress: 0,
+  cremationHeatNormalized: 0,
   placedFlowers: [],
   serviceRatingBonus: 0,
   showroomInventory: [
@@ -495,6 +507,13 @@ export const useGameStore = create<GameState>((set, get) => ({
       return changed ? { cases } : state;
     }),
 
+  syncCremationDecayState: ({ active, progress, heatNormalized }) =>
+    set({
+      cremationBurnActive: active,
+      cremationBurnProgress: Math.max(0, Math.min(1, progress)),
+      cremationHeatNormalized: Math.max(0, Math.min(1, heatNormalized)),
+    }),
+
   tickDecay: () =>
     set((state) => {
       let changed = false;
@@ -504,7 +523,19 @@ export const useGameStore = create<GameState>((set, get) => ({
         if (refrigerated || preserved || c.location === 'URN_VAULT') {
           return c;
         }
-        const nextDecay = Math.min(100, c.decayLevel + DECAY_PER_SEC);
+
+        let rate = DECAY_PER_SEC;
+        if (c.location === 'CREMATION' && state.cremationBurnActive) {
+          // Heat arrests putrefaction; fully stopped once burn reaches 15%
+          if (state.cremationBurnProgress >= 0.15) {
+            return c;
+          }
+          rate =
+            DECAY_PER_SEC *
+            Math.max(0.08, 1 - state.cremationHeatNormalized * 0.92);
+        }
+
+        const nextDecay = Math.min(100, c.decayLevel + rate);
         if (nextDecay === c.decayLevel) return c;
         changed = true;
         return { ...c, decayLevel: nextDecay };

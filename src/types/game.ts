@@ -7,7 +7,11 @@ export type DispositionDirective =
   | 'CREMATION_DIRECT'
   | 'VIEWING_THEN_CREMATION';
 
-export type SweepTool = 'IRON_RAKE' | 'BRISTLE_BRUSH' | 'HAND_BRUSH';
+export type SweepTool =
+  | 'STIRRING_ROD'
+  | 'IRON_RAKE'
+  | 'BRISTLE_BRUSH'
+  | 'HAND_BRUSH';
 
 export type CaseLocation =
   | 'COOLER'
