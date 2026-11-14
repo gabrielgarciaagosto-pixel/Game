@@ -1,9 +1,22 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { CaseTransferBar } from './CaseTransferBar';
 import { displayCaseName, decayLabel } from '../types/game';
 import { caseAtLocation, useGameStore } from '../store/useGameStore';
 import { getUrnById, URN_CATALOG } from '../data/urnCatalog';
+import { CASKET_CATALOG, getCasketById } from '../data/casketCatalog';
+import {
+  CHAPEL_DECOR_CATALOG,
+  getChapelDecorById,
+  maxFlowerStands,
+  type ChapelLayoutPiece,
+  type FlowerKind,
+} from '../data/chapelDecor';
+import {
+  scoreChapelArrangement,
+  satisfactionToRewards,
+} from '../utils/chapelSatisfaction';
 import { UrnVessel } from './urns/UrnVessel';
+import { CasketVessel } from './caskets/CasketVessel';
 
 const FLOWER_TYPES = ['LILIES', 'ROSES', 'WREATH'] as const;
 
@@ -13,15 +26,21 @@ export const ShowroomAndChapelModal: React.FC = () => {
     activeCaseId,
     showroomInventory,
     urnInventory,
-    placedFlowers,
-    serviceRatingBonus,
+    casketInventory,
+    chapelOwnedDecor,
+    chapelLayouts,
     cash,
     placeFloralSpray,
+    removeChapelFlower,
     offerUrnToCase,
+    offerCasketToCase,
     finalizeServiceAndNextCase,
     setActiveStation,
     takeCaseToStation,
     focusCase,
+    ensureChapelLayout,
+    setChapelTheme,
+    moveChapelPiece,
   } = useGameStore();
 
   const currentCase = caseAtLocation(cases, 'CHAPEL', activeCaseId);
@@ -32,25 +51,58 @@ export const ShowroomAndChapelModal: React.FC = () => {
     }
   }, [currentCase, activeCaseId, focusCase]);
 
+  useEffect(() => {
+    if (currentCase) ensureChapelLayout(currentCase.id);
+  }, [currentCase, ensureChapelLayout]);
+
+  const layout = currentCase ? chapelLayouts[currentCase.id] : undefined;
+
   const ownedUrns = useMemo(
     () =>
-      URN_CATALOG.filter((u) => (urnInventory[u.id] ?? 0) > 0).concat(
-        currentCase?.offeredUrnId
-          ? URN_CATALOG.filter((u) => u.id === currentCase.offeredUrnId)
-          : []
-      ).filter(
-        (u, i, arr) => arr.findIndex((x) => x.id === u.id) === i
-      ),
+      URN_CATALOG.filter((u) => (urnInventory[u.id] ?? 0) > 0)
+        .concat(
+          currentCase?.offeredUrnId
+            ? URN_CATALOG.filter((u) => u.id === currentCase.offeredUrnId)
+            : []
+        )
+        .filter((u, i, arr) => arr.findIndex((x) => x.id === u.id) === i),
     [urnInventory, currentCase?.offeredUrnId]
   );
+
+  const ownedCaskets = useMemo(
+    () =>
+      CASKET_CATALOG.filter((c) => (casketInventory[c.id] ?? 0) > 0)
+        .concat(
+          currentCase?.offeredCasketId
+            ? CASKET_CATALOG.filter((c) => c.id === currentCase.offeredCasketId)
+            : []
+        )
+        .filter((c, i, arr) => arr.findIndex((x) => x.id === c.id) === i),
+    [casketInventory, currentCase?.offeredCasketId]
+  );
+
+  const score = useMemo(() => {
+    if (!currentCase || !layout) {
+      return null;
+    }
+    return scoreChapelArrangement({
+      pieces: layout.pieces,
+      preferred: currentCase.preferredFlowers,
+      ownedDecorIds: chapelOwnedDecor,
+      theme: layout.theme,
+      decayLevel: currentCase.decayLevel,
+    });
+  }, [currentCase, layout, chapelOwnedDecor]);
+
+  const rewards = score ? satisfactionToRewards(score.total) : null;
 
   if (!currentCase) {
     return (
       <div className="fixed inset-0 z-50 bg-violet-950/95 text-violet-50 flex flex-col items-center justify-center gap-4 p-6">
         <p className="text-center max-w-md">
           No case staged for chapel. Move remains here with Chapel / Move to
-          Chapel — hub tiles only open rooms. Buy vessels in the Funerary
-          Emporium.
+          Chapel — hub tiles only open rooms. Buy décor in Emporium → Chapel
+          Decor.
         </p>
         <div className="flex gap-2">
           <button
@@ -76,8 +128,36 @@ export const ShowroomAndChapelModal: React.FC = () => {
     currentCase.serviceDateMs != null &&
     Date.now() > currentCase.serviceDateMs;
   const offered = getUrnById(currentCase.offeredUrnId);
+  const offeredCasket = getCasketById(currentCase.offeredCasketId);
   const urnMatch =
     offered != null && offered.material === currentCase.preferredUrnMaterial;
+  const casketMatch =
+    offeredCasket != null &&
+    offeredCasket.material === currentCase.preferredCasketMaterial;
+
+  const wall = getChapelDecorById(layout?.theme.wallId ?? '');
+  const floor = getChapelDecorById(layout?.theme.floorId ?? '');
+  const drapery = getChapelDecorById(layout?.theme.draperyId ?? '');
+  const lighting = getChapelDecorById(layout?.theme.lightingId ?? '');
+  const pews = getChapelDecorById(layout?.theme.pewsId ?? '');
+
+  const wallGrad =
+    wall?.style?.wall ?? 'from-violet-900 via-violet-950 to-[#12081a]';
+  const floorColor = floor?.style?.floor ?? '#1a1024';
+  const drapeColor = drapery?.style?.drapery ?? 'rgba(80,40,100,0.35)';
+  const lightColor = lighting?.style?.lighting ?? 'rgba(255,200,120,0.12)';
+  const pewColor = pews?.style?.pews ?? '#2a1830';
+
+  const flowerCount =
+    layout?.pieces.filter((p) =>
+      ['LILIES', 'ROSES', 'WREATH'].includes(p.kind)
+    ).length ?? 0;
+  const maxStands = maxFlowerStands(chapelOwnedDecor);
+
+  const ownedByKind = (kind: string) =>
+    CHAPEL_DECOR_CATALOG.filter(
+      (d) => d.kind === kind && chapelOwnedDecor.includes(d.id)
+    );
 
   return (
     <div className="safe-screen fixed inset-0 z-50 bg-violet-950/95 text-violet-50 flex flex-col select-none overflow-auto">
@@ -87,16 +167,13 @@ export const ShowroomAndChapelModal: React.FC = () => {
             CHAPEL — {displayCaseName(currentCase)}
           </h2>
           <p className="text-[10px] text-violet-300/70 leading-snug">
-            Prefers {currentCase.preferredFlowers} · Urn taste{' '}
-            {currentCase.preferredUrnMaterial} · {currentCase.directive} · $
-            {cash}
-            {currentCase.embalmRank
-              ? ` · Embalm ${currentCase.embalmRank}`
-              : ''}
+            Prefers {currentCase.preferredFlowers} · Urn{' '}
+            {currentCase.preferredUrnMaterial} · Casket{' '}
+            {currentCase.preferredCasketMaterial} · ${cash}
+            {lateService ? ' · LATE' : ''}
             {currentCase.decayLevel > 5
               ? ` · ${decayLabel(currentCase.decayLevel)}`
               : ''}
-            {lateService ? ' · LATE' : ''}
           </p>
           <CaseTransferBar currentCase={currentCase} showVault />
         </div>
@@ -118,93 +195,241 @@ export const ShowroomAndChapelModal: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col gap-4 mt-3">
-        <div className="relative h-44 rounded-xl border-2 border-violet-700 bg-gradient-to-b from-violet-900 to-violet-950 overflow-hidden">
-          <div className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 w-44 h-14 bg-amber-900 rounded-sm border border-amber-600 flex items-center justify-center text-[10px] font-bold">
-            {currentCase.isUrnFilled ? 'URN ON BIER' : 'CASKET / BIER'}
-          </div>
-          {offered && (
-            <div className="absolute left-1/2 top-[18%] -translate-x-1/2">
-              <UrnVessel urn={offered} size="sm" />
-            </div>
-          )}
-          {placedFlowers.map((flower, idx) => (
-            <div
-              key={flower}
-              className="absolute text-[10px] font-bold px-2 py-1 rounded bg-emerald-700/90"
-              style={{ left: `${18 + idx * 28}%`, bottom: '14%' }}
-            >
-              {flower}
-            </div>
+      <div className="flex-1 flex flex-col gap-3 mt-3 pb-4">
+        {/* Floor */}
+        <div
+          className={`relative h-56 rounded-xl border-2 border-violet-700 overflow-hidden bg-gradient-to-b ${wallGrad} touch-none`}
+          data-chapel-floor
+        >
+          <div
+            className="absolute inset-x-0 bottom-0 h-[42%]"
+            style={{ background: floorColor }}
+          />
+          <div
+            className="absolute inset-y-0 left-0 w-6"
+            style={{ background: drapeColor }}
+          />
+          <div
+            className="absolute inset-y-0 right-0 w-6"
+            style={{ background: drapeColor }}
+          />
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background: `radial-gradient(60% 50% at 50% 35%, ${lightColor}, transparent 70%)`,
+            }}
+          />
+          {/* pews silhouette */}
+          <div
+            className="absolute left-3 right-3 bottom-2 h-3 rounded-sm opacity-80 pointer-events-none"
+            style={{ background: pewColor }}
+          />
+
+          {layout?.pieces.map((piece) => (
+            <DraggablePiece
+              key={piece.id}
+              piece={piece}
+              offeredUrn={offered}
+              offeredCasket={offeredCasket}
+              onMove={(x, y) => moveChapelPiece(currentCase.id, piece.id, x, y)}
+              onRemoveFlower={() => {
+                if (['LILIES', 'ROSES', 'WREATH'].includes(piece.kind)) {
+                  removeChapelFlower(currentCase.id, piece.id);
+                }
+              }}
+            />
           ))}
-          <div className="absolute bottom-2 left-3 right-3 text-[10px] text-violet-300">
-            Service boost +{serviceRatingBonus}%
-            {urnMatch ? ' · Urn taste matched ★' : offered ? ' · Urn offered' : ''}
-          </div>
         </div>
 
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <h3 className="text-xs font-black tracking-[0.18em] text-amber-200">
-              OFFER URN TO FAMILY
-            </h3>
-            <button
-              type="button"
-              onPointerDown={() => setActiveStation('EMPORIUM')}
-              className="text-[10px] px-2 py-1 rounded bg-amber-700/80"
-            >
-              Emporium →
-            </button>
+        {/* Live score */}
+        {score && rewards && (
+          <div className="rounded-xl border border-violet-700/80 bg-violet-950/80 p-2.5 text-[10px]">
+            <div className="flex justify-between items-baseline mb-1">
+              <span className="font-black tracking-wide text-amber-200">
+                FAMILY SATISFACTION
+              </span>
+              <span className="text-lg font-black text-amber-300">
+                {score.total}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-violet-200/90">
+              <span>Count +{score.count}</span>
+              <span>Symmetry +{score.symmetry}</span>
+              <span>Proximity +{score.proximity}</span>
+              <span>Variety +{score.variety}</span>
+              <span>Preference +{score.preference}</span>
+              <span>Freshness +{score.freshness}</span>
+              <span>Decor +{score.decor}</span>
+              <span className="text-red-300">Clutter −{score.clutter}</span>
+            </div>
+            <div className="mt-1 text-violet-300/80">
+              Preview: +{rewards.payoutBoostPct}% payout · tip ${rewards.tipCash}{' '}
+              · rep +{rewards.reputationDelta}
+            </div>
           </div>
-          {ownedUrns.length === 0 ? (
-            <p className="text-[11px] text-violet-300/80">
-              No vessels in stock. Buy urns at the Funerary Emporium.
-            </p>
-          ) : (
-            <div className="flex gap-2 overflow-x-auto pb-1">
+        )}
+
+        {/* Theme pickers */}
+        <ThemeRow
+          label="Wall"
+          options={ownedByKind('WALL')}
+          selected={layout?.theme.wallId ?? null}
+          onPick={(id) =>
+            setChapelTheme(currentCase.id, { wallId: id })
+          }
+        />
+        <ThemeRow
+          label="Floor"
+          options={ownedByKind('FLOOR')}
+          selected={layout?.theme.floorId ?? null}
+          onPick={(id) =>
+            setChapelTheme(currentCase.id, { floorId: id })
+          }
+        />
+        <ThemeRow
+          label="Drapery"
+          options={ownedByKind('DRAPERY')}
+          selected={layout?.theme.draperyId ?? null}
+          onPick={(id) =>
+            setChapelTheme(currentCase.id, { draperyId: id })
+          }
+        />
+        <ThemeRow
+          label="Lighting"
+          options={ownedByKind('LIGHTING')}
+          selected={layout?.theme.lightingId ?? null}
+          onPick={(id) =>
+            setChapelTheme(currentCase.id, { lightingId: id })
+          }
+        />
+        <ThemeRow
+          label="Pews"
+          options={ownedByKind('PEWS')}
+          selected={layout?.theme.pewsId ?? null}
+          onPick={(id) =>
+            setChapelTheme(currentCase.id, { pewsId: id })
+          }
+        />
+
+        {chapelOwnedDecor.length === 0 && (
+          <button
+            type="button"
+            onPointerDown={() => setActiveStation('EMPORIUM')}
+            className="text-[11px] text-amber-300 underline text-left"
+          >
+            Buy Chapel Decor in Emporium to customize look →
+          </button>
+        )}
+
+        {/* Urns */}
+        <OfferStrip
+          title="OFFER URN"
+          empty="No vessels in stock."
+          onEmporium={() => setActiveStation('EMPORIUM')}
+        >
+          <button
+            type="button"
+            onPointerDown={() => offerUrnToCase(currentCase.id, null)}
+            className={`shrink-0 px-3 py-2 rounded-lg border text-[10px] ${
+              !currentCase.offeredUrnId
+                ? 'border-amber-400 bg-amber-950/50'
+                : 'border-violet-800 bg-violet-950'
+            }`}
+          >
+            None
+          </button>
+          {ownedUrns.map((urn) => {
+            const selected = currentCase.offeredUrnId === urn.id;
+            const preferred =
+              urn.material === currentCase.preferredUrnMaterial;
+            return (
               <button
+                key={urn.id}
                 type="button"
-                onPointerDown={() => offerUrnToCase(currentCase.id, null)}
-                className={`shrink-0 px-3 py-2 rounded-lg border text-[10px] ${
-                  !currentCase.offeredUrnId
-                    ? 'border-amber-400 bg-amber-950/50'
-                    : 'border-violet-800 bg-violet-950'
+                onPointerDown={() =>
+                  offerUrnToCase(currentCase.id, selected ? null : urn.id)
+                }
+                className={`shrink-0 w-24 rounded-xl border p-1.5 text-center ${
+                  selected
+                    ? 'border-amber-400 bg-amber-950/40'
+                    : preferred
+                      ? 'border-emerald-500/70 bg-violet-950'
+                      : 'border-violet-800 bg-violet-950'
                 }`}
               >
-                None
+                <UrnVessel
+                  urn={urn}
+                  size="sm"
+                  showPlaque={false}
+                  className="mx-auto h-16"
+                />
+                <div className="text-[9px] font-bold leading-tight mt-0.5">
+                  {urn.name}
+                  {preferred ? ' ★' : ''}
+                </div>
               </button>
-              {ownedUrns.map((urn) => {
-                const selected = currentCase.offeredUrnId === urn.id;
-                const preferred = urn.material === currentCase.preferredUrnMaterial;
-                return (
-                  <button
-                    key={urn.id}
-                    type="button"
-                    onPointerDown={() =>
-                      offerUrnToCase(currentCase.id, selected ? null : urn.id)
-                    }
-                    className={`shrink-0 w-24 rounded-xl border p-1.5 text-center ${
-                      selected
-                        ? 'border-amber-400 bg-amber-950/40'
-                        : preferred
-                          ? 'border-emerald-500/70 bg-violet-950'
-                          : 'border-violet-800 bg-violet-950'
-                    }`}
-                  >
-                    <UrnVessel urn={urn} size="sm" showPlaque={false} className="mx-auto h-16" />
-                    <div className="text-[9px] font-bold leading-tight mt-0.5">
-                      {urn.name}
-                      {preferred ? ' ★' : ''}
-                    </div>
-                    <div className="text-[8px] text-violet-300">
-                      Own {urnInventory[urn.id] ?? (selected ? 0 : 0)}
-                      {selected ? ' · staged' : ''}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+            );
+          })}
+        </OfferStrip>
+
+        {/* Caskets */}
+        <OfferStrip
+          title="OFFER CASKET"
+          empty="No caskets in stock."
+          onEmporium={() => setActiveStation('EMPORIUM')}
+        >
+          <button
+            type="button"
+            onPointerDown={() => offerCasketToCase(currentCase.id, null)}
+            className={`shrink-0 px-3 py-2 rounded-lg border text-[10px] ${
+              !currentCase.offeredCasketId
+                ? 'border-amber-400 bg-amber-950/50'
+                : 'border-violet-800 bg-violet-950'
+            }`}
+          >
+            None
+          </button>
+          {ownedCaskets.map((casket) => {
+            const selected = currentCase.offeredCasketId === casket.id;
+            const preferred =
+              casket.material === currentCase.preferredCasketMaterial;
+            return (
+              <button
+                key={casket.id}
+                type="button"
+                onPointerDown={() =>
+                  offerCasketToCase(
+                    currentCase.id,
+                    selected ? null : casket.id
+                  )
+                }
+                className={`shrink-0 w-28 rounded-xl border p-1.5 text-center ${
+                  selected
+                    ? 'border-amber-400 bg-amber-950/40'
+                    : preferred
+                      ? 'border-emerald-500/70 bg-violet-950'
+                      : 'border-violet-800 bg-violet-950'
+                }`}
+              >
+                <CasketVessel
+                  casket={casket}
+                  size="sm"
+                  showPlaque={false}
+                  className="mx-auto"
+                />
+                <div className="text-[9px] font-bold leading-tight mt-0.5">
+                  {casket.name}
+                  {preferred ? ' ★' : ''}
+                </div>
+              </button>
+            );
+          })}
+        </OfferStrip>
+
+        <div className="text-[10px] text-violet-300">
+          Flower stands {flowerCount}/{maxStands}
+          {urnMatch ? ' · Urn taste matched ★' : ''}
+          {casketMatch ? ' · Casket taste matched ★' : ''}
         </div>
 
         <div className="grid grid-cols-3 gap-2">
@@ -212,29 +437,26 @@ export const ShowroomAndChapelModal: React.FC = () => {
             const inv = showroomInventory.find((i) =>
               i.id.includes(flower.toLowerCase())
             );
-            const placed = placedFlowers.includes(flower);
             const preferred = currentCase.preferredFlowers === flower;
+            const full = flowerCount >= maxStands;
             return (
               <button
                 key={flower}
                 type="button"
-                disabled={placed || !inv || inv.ownedCount <= 0}
+                disabled={full || !inv || inv.ownedCount <= 0}
                 onPointerDown={() =>
                   placeFloralSpray(flower, currentCase.id)
                 }
                 className={`py-3 rounded font-semibold text-[11px] ${
-                  placed
-                    ? 'bg-emerald-700'
-                    : inv && inv.ownedCount > 0
-                      ? preferred
-                        ? 'bg-amber-500 text-violet-950'
-                        : 'bg-violet-700'
-                      : 'bg-violet-950 text-violet-600'
+                  inv && inv.ownedCount > 0 && !full
+                    ? preferred
+                      ? 'bg-amber-500 text-violet-950'
+                      : 'bg-violet-700'
+                    : 'bg-violet-950 text-violet-600'
                 }`}
               >
-                {placed
-                  ? `${flower} placed`
-                  : `Place ${flower}${preferred ? ' ★' : ''} (${inv?.ownedCount ?? 0})`}
+                Place {flower}
+                {preferred ? ' ★' : ''} ({inv?.ownedCount ?? 0})
               </button>
             );
           })}
@@ -264,3 +486,171 @@ export const ShowroomAndChapelModal: React.FC = () => {
     </div>
   );
 };
+
+function ThemeRow({
+  label,
+  options,
+  selected,
+  onPick,
+}: {
+  label: string;
+  options: { id: string; name: string }[];
+  selected: string | null;
+  onPick: (id: string | null) => void;
+}) {
+  if (options.length === 0) return null;
+  return (
+    <div className="flex items-center gap-1.5 overflow-x-auto text-[10px]">
+      <span className="shrink-0 text-violet-400 w-14">{label}</span>
+      <button
+        type="button"
+        onPointerDown={() => onPick(null)}
+        className={`shrink-0 px-2 py-1 rounded border ${
+          !selected
+            ? 'border-amber-400 bg-amber-950/40'
+            : 'border-violet-800'
+        }`}
+      >
+        Basic
+      </button>
+      {options.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          onPointerDown={() => onPick(o.id)}
+          className={`shrink-0 px-2 py-1 rounded border ${
+            selected === o.id
+              ? 'border-amber-400 bg-amber-950/40'
+              : 'border-violet-800'
+          }`}
+        >
+          {o.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function OfferStrip({
+  title,
+  empty,
+  onEmporium,
+  children,
+}: {
+  title: string;
+  empty: string;
+  onEmporium: () => void;
+  children: React.ReactNode;
+}) {
+  const childArray = React.Children.toArray(children);
+  const onlyNone = childArray.length <= 1;
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <h3 className="text-xs font-black tracking-[0.18em] text-amber-200">
+          {title}
+        </h3>
+        <button
+          type="button"
+          onPointerDown={onEmporium}
+          className="text-[10px] px-2 py-1 rounded bg-amber-700/80"
+        >
+          Emporium →
+        </button>
+      </div>
+      {onlyNone ? (
+        <p className="text-[11px] text-violet-300/80">{empty}</p>
+      ) : null}
+      <div className="flex gap-2 overflow-x-auto pb-1">{children}</div>
+    </div>
+  );
+}
+
+function DraggablePiece({
+  piece,
+  offeredUrn,
+  offeredCasket,
+  onMove,
+  onRemoveFlower,
+}: {
+  piece: ChapelLayoutPiece;
+  offeredUrn: ReturnType<typeof getUrnById>;
+  offeredCasket: ReturnType<typeof getCasketById>;
+  onMove: (x: number, y: number) => void;
+  onRemoveFlower: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    ref.current?.setPointerCapture(e.pointerId);
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!dragging.current) return;
+    const floor = ref.current?.parentElement;
+    if (!floor) return;
+    const rect = floor.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    onMove(x, y);
+  };
+
+  const onPointerUp = () => {
+    dragging.current = false;
+  };
+
+  const isFlower = ['LILIES', 'ROSES', 'WREATH'].includes(piece.kind);
+
+  return (
+    <div
+      ref={ref}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing touch-none z-10"
+      style={{ left: `${piece.x * 100}%`, top: `${piece.y * 100}%` }}
+    >
+      {piece.kind === 'COFFIN' && (
+        <div className="relative">
+          {offeredCasket ? (
+            <CasketVessel casket={offeredCasket} size="sm" showPlaque={false} />
+          ) : (
+            <div className="w-28 h-10 bg-amber-900 rounded-sm border border-amber-600 flex items-center justify-center text-[9px] font-bold">
+              CASKET / BIER
+            </div>
+          )}
+        </div>
+      )}
+      {piece.kind === 'URN' && (
+        <div>
+          {offeredUrn ? (
+            <UrnVessel urn={offeredUrn} size="sm" showPlaque={false} />
+          ) : (
+            <div className="w-16 h-16 rounded-full bg-stone-700 border border-stone-500 flex items-center justify-center text-[9px] font-bold">
+              URN
+            </div>
+          )}
+        </div>
+      )}
+      {isFlower && (
+        <div className="relative text-[10px] font-bold px-2 py-1 rounded bg-emerald-700/95 border border-emerald-400/40">
+          {piece.kind as FlowerKind}
+          <button
+            type="button"
+            onPointerDown={(ev) => {
+              ev.stopPropagation();
+              onRemoveFlower();
+            }}
+            className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-700 text-[9px] leading-4"
+          >
+            ×
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
