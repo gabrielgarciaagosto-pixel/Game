@@ -56,16 +56,7 @@ class AudioManager {
   private handoffTimer: number | null = null;
   private oneShotHandlers = new Set<(id: MusicBedId) => void>();
   private muted = false;
-  /** Last bed request — restored on unmute so controllers don't stay silent. */
-  private lastRequest: {
-    id: MusicBedId;
-    options?: {
-      loop?: boolean;
-      volume?: number;
-      durationMs?: number;
-      url?: string;
-    };
-  } | null = null;
+  private unmuteHandlers = new Set<() => void>();
 
   /** Tunable crossfade length in milliseconds. */
   crossfadeMs = CROSSFADE_MS;
@@ -74,19 +65,29 @@ class AudioManager {
     return this.muted;
   }
 
+  addUnmuteHandler(handler: () => void) {
+    this.unmuteHandlers.add(handler);
+  }
+
+  removeUnmuteHandler(handler: () => void) {
+    this.unmuteHandlers.delete(handler);
+  }
+
   setMuted(muted: boolean) {
     if (muted) {
       this.muted = true;
       this.stopImmediate();
       return;
     }
+    if (!this.muted) return;
     this.muted = false;
-    const resume = this.lastRequest;
-    if (resume) {
-      void this.crossfadeTo(resume.id, {
-        ...resume.options,
-        durationMs: resume.options?.durationMs ?? Math.min(400, this.crossfadeMs),
-      });
+    // Controllers re-assert the correct bed for the current room.
+    for (const h of this.unmuteHandlers) {
+      try {
+        h();
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -330,7 +331,6 @@ class AudioManager {
       url?: string;
     }
   ): Promise<void> {
-    this.lastRequest = { id, options };
     if (this.muted) {
       this.currentId = null;
       return;

@@ -88,6 +88,20 @@ export const ServiceMusicAudio: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    const onUnmute = () => {
+      if (!serviceActive) return;
+      // Force a fresh crossfade — mute cleared the bus while playingRef stayed true.
+      playingRef.current = false;
+      void playIndex(
+        indexRef.current,
+        manifestRef.current?.crossfadeMs ?? CROSSFADE_MS
+      );
+    };
+    audioManager.addUnmuteHandler(onUnmute);
+    return () => audioManager.removeUnmuteHandler(onUnmute);
+  }, [serviceActive]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const ensurePlaying = async (fadeMs: number) => {

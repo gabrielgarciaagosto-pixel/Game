@@ -134,5 +134,32 @@ export const CrematoryAudio: React.FC = () => {
     };
   }, []);
 
+  // Dev mute clears the bus while activeBedRef still says "playing" — re-assert.
+  useEffect(() => {
+    const onUnmute = () => {
+      const state = useGameStore.getState();
+      if (state.activeStation !== 'CREMATION') return;
+      if (isServiceBedId(audioManager.getCurrentId())) return;
+      const mode = state.retort.audioMode;
+      if (mode !== 'START' && mode !== 'LOOP') return;
+      activeBedRef.current = 'off';
+      if (mode === 'START') {
+        activeBedRef.current = 'start';
+        void audioManager.crossfadeTo('crematoryStart', {
+          loop: false,
+          durationMs: Math.min(400, CROSSFADE_MS),
+        });
+      } else {
+        activeBedRef.current = 'loop';
+        void audioManager.crossfadeTo('crematoryLoop', {
+          loop: true,
+          durationMs: CROSSFADE_MS,
+        });
+      }
+    };
+    audioManager.addUnmuteHandler(onUnmute);
+    return () => audioManager.removeUnmuteHandler(onUnmute);
+  }, []);
+
   return null;
 };
