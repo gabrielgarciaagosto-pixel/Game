@@ -15,7 +15,7 @@ export const UrnVaultRoom: React.FC = () => {
   const selected = vault.find((c) => c.id === activeCaseId) ?? null;
 
   return (
-    <div className="fixed inset-0 z-40 bg-stone-950 text-stone-100 p-4 md:p-6 pb-24 flex flex-col select-none">
+    <div className="safe-screen fixed inset-0 z-40 bg-stone-950 text-stone-100 flex flex-col select-none">
       <div className="flex justify-between items-center border-b border-stone-700 pb-3 gap-3">
         <div>
           <h2 className="text-lg md:text-xl font-bold text-amber-400">

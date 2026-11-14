@@ -1,5 +1,19 @@
 @import 'tailwindcss';
 
+:root {
+  /*
+    System bars are reserved (Android windowFullscreen=false).
+    Keep modest mins for cutouts / gesture insets when env() is present,
+    plus extra lift for the FILES FAB so it clears the nav bar hit zone.
+  */
+  --safe-top: max(0.75rem, env(safe-area-inset-top, 0px));
+  --safe-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  --safe-left: max(0.75rem, env(safe-area-inset-left, 0px));
+  --safe-right: max(0.75rem, env(safe-area-inset-right, 0px));
+  --files-fab-bottom: calc(var(--safe-bottom) + 1.25rem);
+  --files-panel-bottom: calc(var(--files-fab-bottom) + 3.75rem);
+}
+
 html,
 body,
 #root {
@@ -14,6 +28,21 @@ body,
 
 body {
   font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+/* Full-screen station shells — clear status bar + gesture/nav bar */
+.safe-screen {
+  padding-top: var(--safe-top);
+  padding-bottom: calc(var(--safe-bottom) + 4.5rem);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
+.safe-hub {
+  padding-top: var(--safe-top);
+  padding-bottom: calc(var(--safe-bottom) + 5rem);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
 }
 
 /* Keep touch gestures on the WebGL canvas only — not global UI buttons */

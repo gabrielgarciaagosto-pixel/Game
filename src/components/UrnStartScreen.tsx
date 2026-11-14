@@ -3,11 +3,13 @@ import React, { useEffect, useRef, useState } from 'react';
 interface UrnStartScreenProps {
   onStartComplete: () => void;
   title?: string;
+  subtitle?: string;
 }
 
 export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
   onStartComplete,
-  title = 'DEATH IS MY BUSINESS',
+  title = 'OSSUARIAN',
+  subtitle = 'FIRST URN',
 }) => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [isFadingOut, setIsFadingOut] = useState(false);
@@ -48,11 +50,18 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
           flex-direction: column;
           align-items: center;
           justify-content: center;
+          box-sizing: border-box;
+          padding:
+            max(2rem, env(safe-area-inset-top, 0px))
+            max(1rem, env(safe-area-inset-right, 0px))
+            max(2rem, env(safe-area-inset-bottom, 0px))
+            max(1rem, env(safe-area-inset-left, 0px));
           background-color: #08080a;
           color: #ebe6dd;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
           transition: opacity 0.7s ease;
           user-select: none;
+          text-align: center;
         }
 
         .splash-screen.fade-out {
@@ -65,36 +74,62 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
           display: flex;
           flex-direction: column;
           align-items: center;
+          justify-content: center;
+          width: min(100%, 22rem);
+          margin: 0 auto;
         }
 
         .urn-svg {
-          width: 210px;
-          height: 220px;
+          width: min(52vw, 210px);
+          height: auto;
+          aspect-ratio: 210 / 220;
           overflow: visible;
+          display: block;
+          margin: 0 auto;
         }
 
         .splash-title {
-          margin-top: 12px;
+          margin: 1rem 0 0;
+          width: 100%;
           font-family: 'Cinzel', Georgia, 'Times New Roman', serif;
-          font-size: 1.65rem;
+          font-size: clamp(1.45rem, 7vw, 2rem);
           font-weight: 600;
-          letter-spacing: 0.25em;
+          letter-spacing: 0.18em;
+          /* letter-spacing adds trailing space — pad left so the block stays optically centered */
+          padding-left: 0.18em;
           color: #ebe6dd;
           text-align: center;
+          line-height: 1.15;
+        }
+
+        .splash-subtitle {
+          margin: 0.45rem 0 0;
+          width: 100%;
+          font-family: 'Cinzel', Georgia, 'Times New Roman', serif;
+          font-size: clamp(0.85rem, 3.8vw, 1.05rem);
+          font-weight: 600;
+          letter-spacing: 0.28em;
+          padding-left: 0.28em;
+          color: #c89d66;
+          text-align: center;
+          text-transform: uppercase;
         }
 
         .splash-status {
-          margin-top: 8px;
+          margin-top: 0.75rem;
+          width: 100%;
           font-size: 0.75rem;
           text-transform: uppercase;
           letter-spacing: 0.2em;
+          padding-left: 0.2em;
           color: #9a958c;
           min-height: 1.2em;
+          text-align: center;
         }
 
         .start-btn {
-          margin-top: 22px;
-          padding: 10px 28px;
+          margin-top: 1.35rem;
+          padding: 0.7rem 1.85rem;
           border-radius: 8px;
           background: #141419;
           border: 1px solid #c89d66;
@@ -286,6 +321,7 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
         </svg>
 
         <h1 className="splash-title">{title}</h1>
+        {subtitle ? <p className="splash-subtitle">{subtitle}</p> : null}
         <p className="splash-status">{statusText}</p>
 
         <button

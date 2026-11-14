@@ -53,7 +53,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
     Date.now() > currentCase.serviceDateMs;
 
   return (
-    <div className="fixed inset-0 z-50 bg-violet-950/95 text-violet-50 p-4 md:p-6 pb-24 flex flex-col select-none overflow-auto">
+    <div className="safe-screen fixed inset-0 z-50 bg-violet-950/95 text-violet-50 flex flex-col select-none overflow-auto">
       <div className="flex justify-between items-center border-b border-violet-800 pb-3 gap-3">
         <div>
           <h2 className="text-lg md:text-xl font-bold text-violet-300">

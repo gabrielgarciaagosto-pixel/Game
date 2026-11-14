@@ -64,11 +64,14 @@ export const MainHubMenu: React.FC = () => {
   ];
 
   return (
-    <div className="w-full h-full bg-slate-950 text-slate-100 p-3 flex flex-col select-none overflow-hidden">
-      <div className="shrink-0 border-b border-slate-800 pb-2 space-y-2">
+    <div className="safe-hub w-full h-full bg-slate-950 text-slate-100 flex flex-col select-none overflow-hidden">
+      <div className="shrink-0 border-b border-slate-800 pb-2 space-y-2 px-1">
         <div>
-          <h1 className="text-lg font-black tracking-wider text-slate-100">
-            DEATH IS MY BUSINESS
+          <h1 className="text-lg font-black tracking-wide text-slate-100 leading-tight">
+            OSSUARIAN
+            <span className="block text-sm font-semibold tracking-[0.18em] text-amber-200/90">
+              FIRST URN
+            </span>
           </h1>
           <p className="text-[11px] text-slate-400 leading-snug">
             Selected:{' '}

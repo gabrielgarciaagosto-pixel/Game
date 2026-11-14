@@ -378,7 +378,7 @@ export const CremationMiniGame: React.FC = () => {
 
   if (currentCase.isCremated || phase === 'DONE') {
     return (
-      <div className="fixed inset-0 z-50 bg-stone-950/95 text-stone-100 p-4 pb-28 flex flex-col select-none">
+      <div className="safe-screen fixed inset-0 z-50 bg-stone-950/95 text-stone-100 flex flex-col select-none">
         <div className="flex justify-between border-b border-stone-800 pb-3 gap-2">
           <h2 className="text-base font-bold text-orange-400">
             CREMATION COMPLETE — {displayCaseName(currentCase)}
@@ -623,8 +623,8 @@ export const CremationMiniGame: React.FC = () => {
   );
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#1a2e1a] text-stone-100 flex flex-col select-none overflow-hidden pb-24">
-      <div className="shrink-0 px-3 pt-3 pb-2 border-b border-stone-800/80">
+    <div className="safe-screen fixed inset-0 z-50 bg-[#1a2e1a] text-stone-100 flex flex-col select-none overflow-hidden">
+      <div className="shrink-0 px-1 pb-2 border-b border-stone-800/80">
         <div className="flex justify-between items-start gap-2">
           <div className="min-w-0">
             <h2 className="text-sm font-bold text-orange-300 tracking-wide truncate">

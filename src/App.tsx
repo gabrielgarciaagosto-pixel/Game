@@ -35,7 +35,8 @@ function App() {
   if (!hasStartedGame) {
     return (
       <UrnStartScreen
-        title="DEATH IS MY BUSINESS"
+        title="OSSUARIAN"
+        subtitle="FIRST URN"
         onStartComplete={startGame}
       />
     );
@@ -47,7 +48,10 @@ function App() {
         <MainHubMenu />
       ) : (
         <>
-          <header className="shrink-0 z-40 px-3 py-2 border-b border-slate-800 bg-slate-950/95">
+          <header
+            className="shrink-0 z-40 px-3 py-2 border-b border-slate-800 bg-slate-950/95"
+            style={{ paddingTop: 'calc(var(--safe-top) + 0.25rem)' }}
+          >
             <div className="mx-auto max-w-lg grid grid-cols-2 gap-2">
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-slate-500">
@@ -103,7 +107,10 @@ function App() {
       <CaseInboxWidget />
 
       {intakeToast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[55] max-w-lg w-[calc(100%-2rem)]">
+        <div
+          className="fixed left-1/2 -translate-x-1/2 z-[55] max-w-lg w-[calc(100%-2rem)]"
+          style={{ top: 'calc(var(--safe-top) + 0.5rem)' }}
+        >
           <div className="bg-cyan-900/95 border border-cyan-400 text-cyan-50 px-4 py-3 rounded-xl shadow-xl flex items-center justify-between gap-3">
             <span className="font-semibold text-sm">{intakeToast}</span>
             <button

@@ -1,4 +1,4 @@
-# Death is my Business
+# Ossuarian: First Urn
 
 Android-first isometric mortuary management game built with React, TypeScript, Vite, React Three Fiber, Zustand, and Capacitor.
 
