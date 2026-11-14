@@ -122,7 +122,11 @@ export const CremationMiniGame: React.FC = () => {
   } = useGameStore();
 
   const currentCase =
-    cases.find((c) => c.id === activeCaseId) ??
+    cases.find(
+      (c) =>
+        c.location === 'CREMATION' &&
+        (c.id === activeCaseId || activeCaseId == null)
+    ) ??
     cases.find((c) => c.location === 'CREMATION') ??
     null;
 
@@ -352,7 +356,10 @@ export const CremationMiniGame: React.FC = () => {
   if (!currentCase || !targets) {
     return (
       <div className="fixed inset-0 z-50 bg-stone-950/95 text-stone-100 flex flex-col items-center justify-center gap-4 p-6">
-        <p>No case in the crematory. Take remains from the Cooler.</p>
+        <p className="text-center max-w-md">
+          No case loaded in the crematory. Move remains here from the Cooler
+          (Cremate) or transfer menus — hub tiles only open rooms.
+        </p>
         <button
           type="button"
           onPointerDown={() => setActiveStation('COOLER')}

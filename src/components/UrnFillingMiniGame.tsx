@@ -22,7 +22,11 @@ export const UrnFillingMiniGame: React.FC = () => {
     setActiveStation,
   } = useGameStore();
   const currentCase =
-    cases.find((c) => c.id === activeCaseId) ??
+    cases.find(
+      (c) =>
+        c.location === 'URN_FILLING' &&
+        (c.id === activeCaseId || activeCaseId == null)
+    ) ??
     cases.find((c) => c.location === 'URN_FILLING') ??
     null;
 

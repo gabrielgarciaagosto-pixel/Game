@@ -53,14 +53,69 @@ interface GameState {
   clearLegalAlert: () => void;
 }
 
+const FIRST_NAMES = [
+  'Arthur',
+  'Walter',
+  'Eleanor',
+  'Silas',
+  'Harold',
+  'Margaret',
+  'Clara',
+  'Victor',
+  'Beatrice',
+  'Raymond',
+  'Dorothy',
+  'Francis',
+  'Irene',
+  'Otto',
+  'Lillian',
+  'Gerald',
+  'Esther',
+  'Norman',
+  'Agatha',
+  'Edmund',
+  'Pearl',
+  'Theodore',
+  'Mabel',
+  'Curtis',
+  'Sylvia',
+] as const;
+
+const LAST_NAMES = [
+  'Pendelton',
+  'Vex',
+  'Vance',
+  'Thorne',
+  'Finch',
+  'Ashcroft',
+  'Blackwood',
+  'Crowe',
+  'Dunmore',
+  'Ellsworth',
+  'Fairchild',
+  'Graves',
+  'Holloway',
+  'Ingram',
+  'Lockwood',
+  'Marlow',
+  'North',
+  'Oakley',
+  'Pritchard',
+  'Quill',
+  'Ravenscroft',
+  'Sterling',
+  'Underwood',
+  'Whitaker',
+  'York',
+] as const;
+
+function randomDecedentName(): string {
+  const first = FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)];
+  const last = LAST_NAMES[Math.floor(Math.random() * LAST_NAMES.length)];
+  return `${first} ${last}`;
+}
+
 export function generateRandomCase(now = Date.now()): DecedentCase {
-  const names = [
-    'Arthur Pendelton',
-    'Walter Vex',
-    'Eleanor Vance',
-    'Silas Thorne',
-    'Harold Finch',
-  ];
   const weights = [135, 165, 190, 245, 285];
   const conditions: Array<{
     cond: DecedentCase['tissueCondition'];
@@ -84,7 +139,7 @@ export function generateRandomCase(now = Date.now()): DecedentCase {
   const pickedCond = conditions[Math.floor(Math.random() * conditions.length)];
   return {
     id: Math.random().toString(36).substring(2, 8).toUpperCase(),
-    name: names[Math.floor(Math.random() * names.length)],
+    name: randomDecedentName(),
     weightLbs: weights[Math.floor(Math.random() * weights.length)],
     tissueCondition: pickedCond.cond,
     dehydrationFactor: pickedCond.factor,

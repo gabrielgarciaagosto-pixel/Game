@@ -35,7 +35,11 @@ export const EmbalmingMiniGame: React.FC = () => {
     takeActiveCaseToStation,
   } = useGameStore();
   const currentCase =
-    cases.find((c) => c.id === activeCaseId) ??
+    cases.find(
+      (c) =>
+        c.location === 'EMBALMING' &&
+        (c.id === activeCaseId || activeCaseId == null)
+    ) ??
     cases.find((c) => c.location === 'EMBALMING') ??
     null;
 
@@ -99,7 +103,10 @@ export const EmbalmingMiniGame: React.FC = () => {
   if (!currentCase) {
     return (
       <div className="fixed inset-0 z-50 bg-slate-950/95 text-slate-100 flex flex-col items-center justify-center gap-4 p-6">
-        <p>No body on the prep table. Pull a case from the Cooler.</p>
+        <p className="text-center max-w-md">
+          No body on the prep table. Move remains here from the Cooler (Prep) or
+          with Move to Cooler / transfer buttons — hub tiles only open rooms.
+        </p>
         <button
           type="button"
           onPointerDown={() => setActiveStation('COOLER')}

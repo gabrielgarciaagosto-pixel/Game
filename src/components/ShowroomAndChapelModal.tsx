@@ -22,14 +22,21 @@ export const ShowroomAndChapelModal: React.FC = () => {
 
   const [tab, setTab] = useState<'BUY' | 'CHAPEL'>('BUY');
   const currentCase =
-    cases.find((c) => c.id === activeCaseId) ??
+    cases.find(
+      (c) =>
+        c.location === 'CHAPEL' &&
+        (c.id === activeCaseId || activeCaseId == null)
+    ) ??
     cases.find((c) => c.location === 'CHAPEL') ??
     null;
 
   if (!currentCase) {
     return (
       <div className="fixed inset-0 z-50 bg-violet-950/95 text-violet-50 flex flex-col items-center justify-center gap-4 p-6">
-        <p>No case staged for chapel. Move remains from Cooler or Prep.</p>
+        <p className="text-center max-w-md">
+          No case staged for chapel. Move remains here with Chapel / Move to
+          Chapel — hub tiles only open rooms.
+        </p>
         <button
           type="button"
           onPointerDown={() => setActiveStation('COOLER')}
