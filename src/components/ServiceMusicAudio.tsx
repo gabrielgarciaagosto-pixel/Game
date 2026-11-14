@@ -30,6 +30,8 @@ export const ServiceMusicAudio: React.FC = () => {
   const activeStation = useGameStore((s) => s.activeStation);
   const cases = useGameStore((s) => s.cases);
   const activeCaseId = useGameStore((s) => s.activeCaseId);
+  /** When retort flips OFF mid-service, re-assert the chapel bed. */
+  const retortAudioMode = useGameStore((s) => s.retort.audioMode);
 
   const manifestRef = useRef<ServicePlaylistManifest | null>(null);
   const orderRef = useRef<string[]>([]);
@@ -88,6 +90,23 @@ export const ServiceMusicAudio: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
 
+    const ensurePlaying = async (fadeMs: number) => {
+      const manifest = await loadServicePlaylist();
+      if (cancelled) return;
+      manifestRef.current = manifest;
+      if (orderRef.current.length === 0) {
+        orderRef.current = buildPlayOrder(manifest);
+        indexRef.current = 0;
+      }
+      if (
+        playingRef.current &&
+        isServiceBedId(audioManager.getCurrentId())
+      ) {
+        return;
+      }
+      await playIndex(indexRef.current, fadeMs);
+    };
+
     const run = async () => {
       if (!serviceActive) {
         if (playingRef.current || isServiceBedId(audioManager.getCurrentId())) {
@@ -99,25 +118,15 @@ export const ServiceMusicAudio: React.FC = () => {
         return;
       }
 
-      const manifest = await loadServicePlaylist();
-      if (cancelled) return;
-      manifestRef.current = manifest;
-      if (orderRef.current.length === 0) {
-        orderRef.current = buildPlayOrder(manifest);
-        indexRef.current = 0;
-      }
-
-      await playIndex(
-        indexRef.current,
-        manifest.crossfadeMs ?? CROSSFADE_MS
-      );
+      await ensurePlaying(manifestRef.current?.crossfadeMs ?? CROSSFADE_MS);
     };
 
     void run();
     return () => {
       cancelled = true;
     };
-  }, [serviceActive]);
+    // retortAudioMode: recover if burn-end / menu theme cleared the bus
+  }, [serviceActive, retortAudioMode]);
 
   useEffect(() => {
     return () => {

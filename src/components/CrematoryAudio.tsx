@@ -75,11 +75,19 @@ export const CrematoryAudio: React.FC = () => {
     const inCrematory = activeStation === 'CREMATION';
     const chapelMusicOwns = isServiceBedId(audioManager.getCurrentId());
 
-    // Burn finished — fade out and clear mode
+    // Burn finished — fade crematory beds only, then clear mode.
+    // Never fadeOut while a chapel service bed owns the bus (MenuThemeAudio
+    // used to clobber service music when audioMode flipped to OFF).
     if (burnEnded) {
-      if (activeBedRef.current !== 'off' || isCrematoryBed(audioManager.getCurrentId())) {
+      const currentId = audioManager.getCurrentId();
+      if (
+        !isServiceBedId(currentId) &&
+        (activeBedRef.current !== 'off' || isCrematoryBed(currentId))
+      ) {
         activeBedRef.current = 'off';
         void audioManager.fadeOut(CROSSFADE_MS);
+      } else {
+        activeBedRef.current = 'off';
       }
       if (audioMode !== 'OFF' && (phase === 'SWEEP' || phase === 'DONE' || !primaryOn)) {
         patchRetort({ audioMode: 'OFF' });

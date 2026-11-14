@@ -1,10 +1,17 @@
 import React, { useEffect } from 'react';
 import { useGameStore } from '../store/useGameStore';
-import { audioManager, CROSSFADE_MS, unlockGameAudio } from '../utils/audioManager';
+import {
+  audioManager,
+  CROSSFADE_MS,
+  isCrematoryBed,
+  unlockGameAudio,
+} from '../utils/audioManager';
+import { isServiceBedId } from '../data/servicePlaylist';
 
 /**
  * Soft-loops the Ossuarian theme on the splash only — fades out when Start
  * is pressed. Yields immediately if crematory beds take the bus.
+ * Never clobbers chapel service beds when retort audioMode flips to OFF.
  */
 export const MenuThemeAudio: React.FC = () => {
   const hasStartedGame = useGameStore((s) => s.hasStartedGame);
@@ -37,10 +44,17 @@ export const MenuThemeAudio: React.FC = () => {
         loop: true,
         durationMs: CROSSFADE_MS,
       });
-    } else {
-      // Always invalidate in-flight splash loads — getCurrentId() may still
-      // be null while unlock/preload is awaiting.
+      return;
+    }
+
+    // After Start: only silence the splash theme. Retort mode often flips to
+    // OFF while chapel service music is playing — do not fade that out.
+    const id = audioManager.getCurrentId();
+    if (id == null || id === 'theme') {
       void audioManager.fadeOut(CROSSFADE_MS);
+    } else if (isServiceBedId(id) || isCrematoryBed(id)) {
+      // In-game beds own the bus; leave them alone.
+      return;
     }
   }, [hasStartedGame, audioMode]);
 
