@@ -57,6 +57,8 @@ export const EmbalmingMiniGame: React.FC = () => {
 
   const [isPouring, setIsPouring] = useState(false);
   const [proximity, setProximity] = useState(0);
+  /** Water hose slide takes ~500ms — hold stream until nozzle is on-screen. */
+  const [hoseStreamReady, setHoseStreamReady] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastGlugHaptic = useRef(0);
   const proximityRef = useRef(0);
@@ -69,6 +71,15 @@ export const EmbalmingMiniGame: React.FC = () => {
   useEffect(() => {
     selectedFluidRef.current = selectedFluid;
   }, [selectedFluid]);
+
+  useEffect(() => {
+    if (selectedFluid === 'WATER' && isPouring) {
+      setHoseStreamReady(false);
+      const t = window.setTimeout(() => setHoseStreamReady(true), 480);
+      return () => window.clearTimeout(t);
+    }
+    setHoseStreamReady(false);
+  }, [selectedFluid, isPouring]);
 
   useEffect(() => {
     if (!isPouring) return;
@@ -324,7 +335,9 @@ export const EmbalmingMiniGame: React.FC = () => {
             selectedFluid === 'FORMALDEHYDE' || selectedFluid === 'SOFTENER';
           const hoseExtended = selectedFluid === 'WATER' && isPouring;
           const streamActive =
-            isPouring && physics.currentFlowOzPerSec > 0.01;
+            isPouring &&
+            physics.currentFlowOzPerSec > 0.01 &&
+            (selectedFluid !== 'WATER' || hoseStreamReady);
 
           return (
             <>
@@ -339,7 +352,10 @@ export const EmbalmingMiniGame: React.FC = () => {
                 />
               )}
               {selectedFluid === 'WATER' && (
-                <WaterHose extended={hoseExtended} isPouring={isPouring} />
+                <WaterHose
+                  extended={hoseExtended}
+                  isPouring={isPouring && hoseStreamReady}
+                />
               )}
               <PourStream
                 fluid={selectedFluid}

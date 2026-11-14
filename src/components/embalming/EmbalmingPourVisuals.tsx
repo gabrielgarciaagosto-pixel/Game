@@ -246,6 +246,19 @@ type StreamProps = {
   fillPercent: number;
 };
 
+/** Tank box sits mid-right of the pour overlay — map fill only inside that band. */
+const TANK_SURFACE_EMPTY = 72; // % overlay Y at empty tank floor
+const TANK_SURFACE_FULL = 44; // % overlay Y at full tank rim
+const STREAM_MOUTH_Y = 28;
+
+function tankSurfaceY(fillPercent: number): number {
+  const t = Math.max(0, Math.min(100, fillPercent)) / 100;
+  const surface =
+    TANK_SURFACE_EMPTY - t * (TANK_SURFACE_EMPTY - TANK_SURFACE_FULL);
+  // Always land below the mouth so the ribbon never pours upward.
+  return Math.max(STREAM_MOUTH_Y + 10, surface);
+}
+
 /** Liquid ribbon from bottle mouth or hose tip into the tank, plus splash. */
 export const PourStream: React.FC<StreamProps> = ({
   fluid,
@@ -256,7 +269,8 @@ export const PourStream: React.FC<StreamProps> = ({
 }) => {
   if (!active) return null;
   const tint = FLUID_TINT[fluid];
-  const splashTop = Math.max(8, 100 - fillPercent);
+  const endY = tankSurfaceY(fillPercent);
+  const midY = STREAM_MOUTH_Y + (endY - STREAM_MOUTH_Y) * 0.45;
 
   return (
     <div className="pointer-events-none absolute inset-0 z-[15]" aria-hidden>
@@ -271,9 +285,9 @@ export const PourStream: React.FC<StreamProps> = ({
         </defs>
         {from === 'bottle' ? (
           <path
-            d={`M 22 28
-                C 34 ${32 + (isGlugging ? 2 : 0)}, 52 ${40 + (isGlugging ? 3 : 0)}, 72 ${splashTop * 0.72}
-                C 78 ${splashTop * 0.78}, 80 ${splashTop * 0.85}, 82 ${Math.min(88, splashTop * 0.92)}`}
+            d={`M 22 ${STREAM_MOUTH_Y}
+                C 34 ${STREAM_MOUTH_Y + 4 + (isGlugging ? 2 : 0)}, 52 ${midY + (isGlugging ? 3 : 0)}, 72 ${endY - 4}
+                C 78 ${endY - 2}, 80 ${endY - 1}, 82 ${endY}`}
             fill="none"
             stroke={`url(#stream-grad-${fluid})`}
             strokeWidth={isGlugging ? 2.4 : 1.7}
@@ -283,8 +297,8 @@ export const PourStream: React.FC<StreamProps> = ({
           />
         ) : (
           <path
-            d={`M 72 28
-                C 74 36, 78 ${48 + (isGlugging ? 2 : 0)}, 82 ${Math.min(86, splashTop * 0.9)}`}
+            d={`M 72 ${STREAM_MOUTH_Y}
+                C 74 ${STREAM_MOUTH_Y + 8}, 78 ${midY + (isGlugging ? 2 : 0)}, 82 ${endY}`}
             fill="none"
             stroke={`url(#stream-grad-${fluid})`}
             strokeWidth={isGlugging ? 2.6 : 2}
@@ -298,7 +312,7 @@ export const PourStream: React.FC<StreamProps> = ({
       {/* Splash / ripples at tank surface */}
       <div
         className="absolute right-[11%] md:right-[13%] w-16 md:w-20"
-        style={{ top: `${42 + (100 - fillPercent) * 0.28}%` }}
+        style={{ top: `${endY}%` }}
       >
         <div
           className="embalm-splash-ring absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border"
