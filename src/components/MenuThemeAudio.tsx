@@ -4,15 +4,11 @@ import { useGameStore } from '../store/useGameStore';
 const THEME_SRC = '/audio/ossuarian-theme.m4a';
 
 /**
- * Loops the Ossuarian theme on the splash / main hub.
- * Starts (or resumes) after the first user gesture if autoplay is blocked.
+ * Loops the Ossuarian theme on the splash only — stops when Start is pressed.
  */
 export const MenuThemeAudio: React.FC = () => {
   const hasStartedGame = useGameStore((s) => s.hasStartedGame);
-  const activeStation = useGameStore((s) => s.activeStation);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  const shouldPlay = !hasStartedGame || activeStation === 'OVERVIEW';
 
   useEffect(() => {
     const audio = new Audio(THEME_SRC);
@@ -28,16 +24,14 @@ export const MenuThemeAudio: React.FC = () => {
     };
 
     const unlock = () => {
-      tryPlay();
+      if (!useGameStore.getState().hasStartedGame) tryPlay();
       window.removeEventListener('pointerdown', unlock);
       window.removeEventListener('keydown', unlock);
     };
 
-    if (shouldPlay) {
-      tryPlay();
-      window.addEventListener('pointerdown', unlock, { once: true });
-      window.addEventListener('keydown', unlock, { once: true });
-    }
+    tryPlay();
+    window.addEventListener('pointerdown', unlock, { once: true });
+    window.addEventListener('keydown', unlock, { once: true });
 
     return () => {
       window.removeEventListener('pointerdown', unlock);
@@ -51,12 +45,13 @@ export const MenuThemeAudio: React.FC = () => {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    if (shouldPlay) {
-      void audio.play().catch(() => undefined);
-    } else {
+    if (hasStartedGame) {
       audio.pause();
+      audio.currentTime = 0;
+    } else {
+      void audio.play().catch(() => undefined);
     }
-  }, [shouldPlay]);
+  }, [hasStartedGame]);
 
   return null;
 };

@@ -1,6 +1,8 @@
 import React from 'react';
 import { displayCaseName } from '../types/game';
 import { useGameStore } from '../store/useGameStore';
+import { getCremationTargets } from '../utils/mortuaryMath';
+import { retortProgress } from '../retort/retortTypes';
 
 export const MainHubMenu: React.FC = () => {
   const {
@@ -10,15 +12,27 @@ export const MainHubMenu: React.FC = () => {
     cash,
     reputation,
     ossilegiumCommuneGrams,
+    retort,
   } = useGameStore();
 
   const coolerCases = cases.filter((c) => c.location === 'COOLER');
   const vaultCount = cases.filter((c) => c.location === 'URN_VAULT').length;
   const activeCase = cases.find((c) => c.id === activeCaseId) ?? null;
+  const retortCase = cases.find((c) => c.id === retort.caseId);
 
   const untaggedUrgentCount = coolerCases.filter(
     (c) => !c.isTagged && Date.now() < c.tagExpiresAt
   ).length;
+
+  const burnPct =
+    retort.phase === 'BURN' && retortCase
+      ? Math.round(
+          retortProgress(
+            retort.elapsedSec,
+            getCremationTargets(retortCase.weightLbs).targetDurationSec
+          ) * 100
+        )
+      : null;
 
   const tiles = [
     {
@@ -40,7 +54,11 @@ export const MainHubMenu: React.FC = () => {
     {
       id: 'CREMATION' as const,
       title: 'CREMATORY',
-      subtitle: 'Millennium Retort · Door · Rake',
+      subtitle:
+        burnPct != null
+          ? `Running · ${burnPct}% — tap to return`
+          : 'Millennium Retort · Door · Stir',
+      badge: burnPct != null ? `BURN ${burnPct}%` : undefined,
       color: 'from-orange-900/80 to-slate-900 border-orange-500/50',
     },
     {

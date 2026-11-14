@@ -5,13 +5,15 @@ import { displayCaseName } from '../types/game';
 import { caseAtLocation, useGameStore } from '../store/useGameStore';
 import { hapticIronRake } from '../utils/haptics';
 import { getCremationTargets } from '../utils/mortuaryMath';
+import {
+  PRIMARY_SP,
+  SECONDARY_SP,
+  STIR_DOOR_MIN,
+  randomPurgeMs,
+  retortProgress,
+} from '../retort/retortTypes';
 
 type BonePhase = 'INTACT' | 'CHARRING' | 'CALCINING' | 'FRAGMENTING' | 'ASH';
-
-/** Playable purge: 8–18s stands in for real-world 1–3 minutes */
-function randomPurgeMs(): number {
-  return 8000 + Math.floor(Math.random() * 10001);
-}
 
 function bonePhaseFromProgress(p: number): BonePhase {
   if (p < 0.15) return 'INTACT';
@@ -139,12 +141,6 @@ function HoldButton({
   );
 }
 
-/** Door must be more than 16% open before a rod can enter the chamber */
-const STIR_DOOR_MIN = 0.16;
-/** Full door travel ~5s while held */
-const DOOR_STEP = 0.008;
-const BURN_TICK_MS = 250;
-
 function StatusLamp({
   on,
   color,
@@ -184,8 +180,10 @@ export const CremationMiniGame: React.FC = () => {
     setActiveStation,
     takeCaseToStation,
     focusCase,
-    syncCremationDecayState,
-    clearCremationDecayState,
+    retort,
+    patchRetort,
+    ensureRetortForCase,
+    resetRetort,
   } = useGameStore();
 
   const currentCase = caseAtLocation(cases, 'CREMATION', activeCaseId);
@@ -196,39 +194,20 @@ export const CremationMiniGame: React.FC = () => {
     }
   }, [currentCase, activeCaseId, focusCase]);
 
+  useEffect(() => {
+    if (currentCase) ensureRetortForCase(currentCase.id);
+  }, [currentCase, ensureRetortForCase]);
+
   const targets = currentCase
     ? getCremationTargets(currentCase.weightLbs)
     : null;
 
   const [panelZoomed, setPanelZoomed] = useState(false);
-
-  const [blowerOn, setBlowerOn] = useState(false);
-  const [purging, setPurging] = useState(false);
-  const [heated, setHeated] = useState(false);
-  const [purgeEndsAt, setPurgeEndsAt] = useState<number | null>(null);
-
-  const [secondaryOn, setSecondaryOn] = useState(false);
-  const [primaryOn, setPrimaryOn] = useState(false);
-  const [secondaryTemp, setSecondaryTemp] = useState(72);
-  const [primaryTemp, setPrimaryTemp] = useState(72);
-  const secondarySp = 1700;
-  const primarySp = 1600;
-
-  const [doorOpen, setDoorOpen] = useState(0);
-  const [doorMoving, setDoorMoving] = useState<'UP' | 'DOWN' | null>(null);
-
-  const [elapsedSec, setElapsedSec] = useState(0);
-  const [stirCount, setStirCount] = useState(0);
-  const [earlyPrimaryStarts, setEarlyPrimaryStarts] = useState(0);
-  const [thermalWarnings, setThermalWarnings] = useState(0);
-  const [phase, setPhase] = useState<'LOAD' | 'BURN' | 'SWEEP' | 'DONE'>('LOAD');
-
   const [activeTool, setActiveTool] = useState<SweepTool | null>(null);
   const [rakeHeld, setRakeHeld] = useState(false);
   const [rakePos, setRakePos] = useState({ x: 50, y: 40 });
   const [lastStirAt, setLastStirAt] = useState(0);
   const [boneNudge, setBoneNudge] = useState(0);
-
   const [largeBonesLeft, setLargeBonesLeft] = useState(100);
   const [mediumBonesLeft, setMediumBonesLeft] = useState(100);
   const [fineAshLeft, setFineAshLeft] = useState(100);
@@ -236,192 +215,82 @@ export const CremationMiniGame: React.FC = () => {
   const chamberRef = useRef<HTMLDivElement>(null);
   const lastHaptic = useRef(0);
 
+  const {
+    blowerOn,
+    purging,
+    heated,
+    purgeEndsAt,
+    secondaryOn,
+    primaryOn,
+    secondaryTemp,
+    primaryTemp,
+    doorOpen,
+    doorMoving,
+    elapsedSec,
+    stirCount,
+    earlyPrimaryStarts,
+    thermalWarnings,
+    phase,
+  } = retort;
+
+  const secondarySp = SECONDARY_SP;
+  const primarySp = PRIMARY_SP;
+
   const progress =
     targets != null
-      ? Math.min(1, elapsedSec / targets.targetDurationSec)
+      ? retortProgress(elapsedSec, targets.targetDurationSec)
       : 0;
   const bonePhase = bonePhaseFromProgress(progress);
-  const maxSafeTemp = targets?.getMaxSafeTempF(progress) ?? 1600;
   const canStartPrimary =
     secondaryOn && secondaryTemp >= 800 && !purging;
 
-  // Live values for the burn interval — avoid restarting ticks while jogging the door
-  const burnRefs = useRef({
-    doorOpen,
-    secondaryOn,
-    primaryOn,
-    blowerOn,
-    heated,
-    phase,
-    primaryTemp,
-    secondaryTemp,
-    earlyPrimaryStarts,
-    maxSafeTemp,
-    secondarySp,
-    primarySp,
-  });
-  burnRefs.current = {
-    doorOpen,
-    secondaryOn,
-    primaryOn,
-    blowerOn,
-    heated,
-    phase,
-    primaryTemp,
-    secondaryTemp,
-    earlyPrimaryStarts,
-    maxSafeTemp,
-    secondarySp,
-    primarySp,
-  };
-
-  useEffect(() => {
-    if (!purging || purgeEndsAt == null) return;
-    const id = setInterval(() => {
-      if (Date.now() >= purgeEndsAt) {
-        setPurging(false);
-        setHeated(true);
-        setPurgeEndsAt(null);
-      }
-    }, 200);
-    return () => clearInterval(id);
-  }, [purging, purgeEndsAt]);
-
-  useEffect(() => {
-    if (!doorMoving) return;
-    const id = setInterval(() => {
-      setDoorOpen((v) => {
-        if (doorMoving === 'UP') {
-          const next = Math.min(1, v + DOOR_STEP);
-          if (next >= 1) setDoorMoving(null);
-          return next;
-        }
-        const next = Math.max(0, v - DOOR_STEP);
-        if (next <= 0) setDoorMoving(null);
-        return next;
-      });
-    }, 40);
-    return () => clearInterval(id);
-  }, [doorMoving]);
-
-  // Sync burn heat/progress so refrigeration decay slows then freezes at 15%
-  useEffect(() => {
-    const heatNormalized = Math.min(
-      1,
-      Math.max(0, (primaryTemp - 200) / 1200)
-    );
-    syncCremationDecayState({
-      active: phase === 'BURN' && (primaryOn || secondaryOn),
-      progress,
-      heatNormalized,
-    });
-  }, [
-    phase,
-    primaryOn,
-    secondaryOn,
-    progress,
-    primaryTemp,
-    syncCremationDecayState,
-  ]);
-
-  useEffect(() => {
-    return () => {
-      // Keep progress / arrest latch; only mark burners inactive on leave
-      const s = burnRefs.current;
-      syncCremationDecayState({
-        active: false,
-        progress: s.phase === 'SWEEP' || s.phase === 'DONE' ? 1 : 0,
-        heatNormalized: 0,
-      });
-    };
-  }, [syncCremationDecayState]);
-
-  useEffect(() => {
-    if (!currentCase || !targets) return;
-    const id = setInterval(() => {
-      const s = burnRefs.current;
-      // Door openness vents chamber heat (quadratic — cracked door bleeds less)
-      const doorLoss = Math.pow(s.doorOpen, 1.35) * 28;
-
-      setSecondaryTemp((t) => {
-        if (s.secondaryOn) {
-          return Math.min(
-            s.secondarySp + 40,
-            Math.max(72, t + 18 + Math.random() * 10 - doorLoss * 0.15)
-          );
-        }
-        if (s.blowerOn && s.heated) return Math.min(820, t + 6);
-        if (s.blowerOn) return Math.min(200, t + 2);
-        return Math.max(72, t - 4 - doorLoss * 0.1);
-      });
-
-      setPrimaryTemp((t) => {
-        if (s.primaryOn) {
-          const slow =
-            s.secondaryTemp < 850 || s.earlyPrimaryStarts > 0 ? 0.55 : 1;
-          const gain = (10 + Math.random() * 8) * slow;
-          return Math.min(
-            s.primarySp + 60,
-            Math.max(72, t + gain - doorLoss)
-          );
-        }
-        if (s.secondaryOn) {
-          return Math.max(72, Math.min(400, t + 1 - doorLoss * 0.4));
-        }
-        return Math.max(72, t - 5 - doorLoss * 0.5);
-      });
-
-      if (s.phase === 'BURN' && s.primaryOn) {
-        const heatFactor = Math.min(
-          1.15,
-          Math.max(0.15, s.primaryTemp / 1400)
-        );
-        const doorEfficiency = Math.max(0.2, 1 - s.doorOpen * 0.7);
-        const burnRate =
-          heatFactor *
-          doorEfficiency *
-          (s.secondaryTemp >= 850 ? 1 : 0.65) *
-          (s.earlyPrimaryStarts > 0 ? 0.85 : 1);
-        // Near real-time: ~5 minutes wall-clock when heat is held
-        setElapsedSec(
-          (prev) => prev + (BURN_TICK_MS / 1000) * burnRate
-        );
-        if (s.primaryTemp > s.maxSafeTemp) {
-          setThermalWarnings((w) => w + 1);
-        }
-      }
-    }, BURN_TICK_MS);
-    return () => clearInterval(id);
-  }, [currentCase, targets]);
-
   const startBlower = () => {
     if (blowerOn) return;
-    setBlowerOn(true);
-    setPurging(true);
-    setHeated(false);
-    setPurgeEndsAt(Date.now() + randomPurgeMs());
+    patchRetort({
+      blowerOn: true,
+      purging: true,
+      heated: false,
+      purgeEndsAt: Date.now() + randomPurgeMs(),
+      phase: phase === 'IDLE' ? 'LOAD' : phase,
+    });
   };
 
   const stopBlower = () => {
-    setBlowerOn(false);
-    setPurging(false);
-    setHeated(false);
-    setPurgeEndsAt(null);
-    setSecondaryOn(false);
-    setPrimaryOn(false);
+    patchRetort({
+      blowerOn: false,
+      purging: false,
+      heated: false,
+      purgeEndsAt: null,
+      secondaryOn: false,
+      primaryOn: false,
+      audioMode: 'OFF',
+    });
   };
 
   const startSecondary = () => {
     if (!heated) return;
-    setSecondaryOn(true);
-    if (phase === 'LOAD' && doorOpen < 0.2) setPhase('BURN');
+    patchRetort({
+      secondaryOn: true,
+      phase:
+        (phase === 'LOAD' || phase === 'IDLE') && doorOpen < 0.2
+          ? 'BURN'
+          : phase === 'IDLE'
+            ? 'LOAD'
+            : phase,
+    });
   };
 
   const startPrimary = () => {
     if (!canStartPrimary) return;
-    if (secondaryTemp < 850) setEarlyPrimaryStarts((n) => n + 1);
-    setPrimaryOn(true);
-    if (phase === 'LOAD') setPhase('BURN');
+    patchRetort({
+      primaryOn: true,
+      earlyPrimaryStarts:
+        secondaryTemp < 850
+          ? earlyPrimaryStarts + 1
+          : earlyPrimaryStarts,
+      phase: phase === 'LOAD' || phase === 'IDLE' ? 'BURN' : phase,
+      audioMode: retort.audioMode === 'OFF' ? 'START' : retort.audioMode,
+    });
     setActiveTool((t) => t ?? 'STIRRING_ROD');
   };
 
@@ -450,11 +319,12 @@ export const CremationMiniGame: React.FC = () => {
     setRakePos({ x, y });
     const dist = Math.hypot(x - prev.x, y - prev.y);
     if (dist > 8 && Date.now() - lastStirAt > 400) {
-      setStirCount((s) => s + 1);
+      patchRetort({
+        stirCount: stirCount + 1,
+        primaryTemp: Math.max(850, primaryTemp - 55 - doorOpen * 40),
+      });
       setLastStirAt(Date.now());
       setBoneNudge((n) => n + 1);
-      // Stirring dumps a little chamber heat through the open door
-      setPrimaryTemp((t) => Math.max(850, t - 55 - doorOpen * 40));
       if (Date.now() - lastHaptic.current > 180) {
         lastHaptic.current = Date.now();
         void hapticIronRake();
@@ -495,8 +365,7 @@ export const CremationMiniGame: React.FC = () => {
       rank = rank === 'S+' || rank === 'S' ? 'B' : rank === 'A' ? 'C' : 'F';
     }
     completeCremation(rank, currentCase.weightLbs * 15, currentCase.id);
-    clearCremationDecayState();
-    setPhase('DONE');
+    resetRetort();
   };
 
   if (!currentCase || !targets) {
@@ -529,7 +398,7 @@ export const CremationMiniGame: React.FC = () => {
             onPointerDown={() => setActiveStation('OVERVIEW')}
             className="px-3 py-2 bg-stone-800 rounded text-xs shrink-0"
           >
-            Menu
+            Back
           </button>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center">
@@ -634,8 +503,11 @@ export const CremationMiniGame: React.FC = () => {
           color="red"
           label="STOP"
           onPress={() => {
-            setSecondaryOn(false);
-            setPrimaryOn(false);
+            patchRetort({
+              secondaryOn: false,
+              primaryOn: false,
+              audioMode: 'OFF',
+            });
           }}
           size={zoomed ? 'md' : 'sm'}
         />
@@ -676,7 +548,9 @@ export const CremationMiniGame: React.FC = () => {
         <PushButton
           color="red"
           label="STOP"
-          onPress={() => setPrimaryOn(false)}
+          onPress={() =>
+            patchRetort({ primaryOn: false, audioMode: 'OFF' })
+          }
           size={zoomed ? 'md' : 'sm'}
         />
       </div>
@@ -715,15 +589,15 @@ export const CremationMiniGame: React.FC = () => {
         <HoldButton
           color="silver"
           label="UP"
-          onHoldStart={() => setDoorMoving('UP')}
-          onHoldEnd={() => setDoorMoving(null)}
+          onHoldStart={() => patchRetort({ doorMoving: 'UP' })}
+          onHoldEnd={() => patchRetort({ doorMoving: null })}
           size={zoomed ? 'md' : 'sm'}
         />
         <HoldButton
           color="silver"
           label="DOWN"
-          onHoldStart={() => setDoorMoving('DOWN')}
-          onHoldEnd={() => setDoorMoving(null)}
+          onHoldStart={() => patchRetort({ doorMoving: 'DOWN' })}
+          onHoldEnd={() => patchRetort({ doorMoving: null })}
           size={zoomed ? 'md' : 'sm'}
         />
       </div>
@@ -748,10 +622,13 @@ export const CremationMiniGame: React.FC = () => {
         <button
           type="button"
           onPointerDown={() => {
-            setPrimaryOn(false);
-            setSecondaryOn(false);
-            setDoorMoving('UP');
-            setPhase('SWEEP');
+            patchRetort({
+              primaryOn: false,
+              secondaryOn: false,
+              doorMoving: 'UP',
+              phase: 'SWEEP',
+              audioMode: 'OFF',
+            });
             setActiveTool('IRON_RAKE');
             setPanelZoomed(false);
           }}
@@ -793,10 +670,10 @@ export const CremationMiniGame: React.FC = () => {
           </div>
           <button
             type="button"
-            onPointerDown={() => takeCaseToStation(currentCase.id, 'COOLER')}
+            onPointerDown={() => setActiveStation('OVERVIEW')}
             className="px-2.5 py-1.5 bg-stone-800 rounded text-[10px] shrink-0"
           >
-            Abort
+            Back
           </button>
         </div>
       </div>
@@ -959,10 +836,13 @@ export const CremationMiniGame: React.FC = () => {
                 <button
                   type="button"
                   onPointerDown={() => {
-                    setPrimaryOn(false);
-                    setSecondaryOn(false);
-                    setDoorMoving('UP');
-                    setPhase('SWEEP');
+                    patchRetort({
+                      primaryOn: false,
+                      secondaryOn: false,
+                      doorMoving: 'UP',
+                      phase: 'SWEEP',
+                      audioMode: 'OFF',
+                    });
                     setActiveTool('IRON_RAKE');
                   }}
                   className="absolute bottom-2 left-2 right-2 z-50 py-2 bg-emerald-700/95 text-white font-bold rounded text-[11px]"

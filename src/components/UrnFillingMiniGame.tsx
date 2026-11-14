@@ -304,7 +304,7 @@ export const UrnFillingMiniGame: React.FC = () => {
             onPointerDown={() => setActiveStation('OVERVIEW')}
             className="px-3 py-2 bg-zinc-800 rounded text-xs"
           >
-            Menu
+            Back
           </button>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center">
@@ -364,7 +364,7 @@ export const UrnFillingMiniGame: React.FC = () => {
           onPointerDown={() => setActiveStation('OVERVIEW')}
           className="text-xs text-zinc-500 underline"
         >
-          Main Menu
+          Back
         </button>
       </div>
     );
@@ -388,7 +388,7 @@ export const UrnFillingMiniGame: React.FC = () => {
           onPointerDown={() => setActiveStation('OVERVIEW')}
           className="px-2.5 py-1.5 bg-zinc-800 rounded text-[10px] shrink-0"
         >
-          Menu
+          Back
         </button>
       </div>
 

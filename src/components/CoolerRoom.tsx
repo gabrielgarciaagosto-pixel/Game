@@ -41,7 +41,7 @@ export const CoolerRoom: React.FC = () => {
           onPointerDown={() => setActiveStation('OVERVIEW')}
           className="px-3 py-1.5 bg-slate-800 rounded text-xs font-semibold shrink-0"
         >
-          Menu
+          Back
         </button>
       </div>
 

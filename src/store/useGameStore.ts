@@ -7,7 +7,13 @@ import type {
   ShowroomItem,
   StationId,
 } from '../types/game';
+import {
+  IDLE_RETORT,
+  type RetortMachine,
+} from '../retort/retortTypes';
+import { stepRetortBurn, stepRetortDoor } from '../retort/tickRetort';
 import { playIntakeBell } from '../utils/soundEffects';
+import { getCremationTargets } from '../utils/mortuaryMath';
 
 const MAX_COOLER_BAYS = 6;
 const TAG_WINDOW_MS = 60_000;
@@ -39,8 +45,15 @@ interface GameState {
   cremationHeatNormalized: number;
   /** Latches once burn reaches 15% — stays frozen through sweep / burner stops */
   cremationDecayArrested: boolean;
+  /** Persistent Millennium retort — keeps burning while you leave the room */
+  retort: RetortMachine;
   startGame: () => void;
   setActiveStation: (station: StationId) => void;
+  patchRetort: (partial: Partial<RetortMachine>) => void;
+  ensureRetortForCase: (caseId: string) => void;
+  resetRetort: () => void;
+  tickRetortDoor: () => void;
+  tickRetortBurn: () => void;
   syncCremationDecayState: (state: {
     active: boolean;
     progress: number;
@@ -320,6 +333,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   cremationBurnProgress: 0,
   cremationHeatNormalized: 0,
   cremationDecayArrested: false,
+  retort: { ...IDLE_RETORT },
   placedFlowers: [],
   serviceRatingBonus: 0,
   showroomInventory: [
@@ -531,6 +545,101 @@ export const useGameStore = create<GameState>((set, get) => ({
       cremationDecayArrested: false,
     }),
 
+  patchRetort: (partial) =>
+    set((state) => ({
+      retort: { ...state.retort, ...partial },
+    })),
+
+  ensureRetortForCase: (caseId) =>
+    set((state) => {
+      if (state.retort.caseId === caseId && state.retort.phase !== 'IDLE') {
+        return state;
+      }
+      if (state.retort.caseId === caseId) return state;
+      return {
+        retort: {
+          ...IDLE_RETORT,
+          caseId,
+          phase: 'LOAD',
+        },
+      };
+    }),
+
+  resetRetort: () =>
+    set({
+      retort: { ...IDLE_RETORT },
+      cremationBurnActive: false,
+      cremationBurnProgress: 0,
+      cremationHeatNormalized: 0,
+      cremationDecayArrested: false,
+    }),
+
+  tickRetortDoor: () =>
+    set((state) => {
+      if (!state.retort.doorMoving) return state;
+      return { retort: stepRetortDoor(state.retort) };
+    }),
+
+  tickRetortBurn: () =>
+    set((state) => {
+      const r = state.retort;
+      if (
+        r.phase === 'IDLE' ||
+        r.phase === 'DONE' ||
+        (!r.blowerOn &&
+          !r.secondaryOn &&
+          !r.primaryOn &&
+          !r.purging &&
+          r.phase !== 'BURN')
+      ) {
+        // Still cool temps slowly if something was warm
+        if (
+          r.phase === 'LOAD' &&
+          !r.blowerOn &&
+          !r.secondaryOn &&
+          !r.primaryOn
+        ) {
+          return state;
+        }
+      }
+
+      const cremationCase = state.cases.find(
+        (c) => c.id === r.caseId && c.location === 'CREMATION'
+      );
+      if (!cremationCase && r.phase !== 'IDLE') {
+        return state;
+      }
+
+      const targets = cremationCase
+        ? getCremationTargets(cremationCase.weightLbs)
+        : null;
+      const progress =
+        targets != null
+          ? Math.min(1, r.elapsedSec / targets.targetDurationSec)
+          : 0;
+      const maxSafe = targets?.getMaxSafeTempF(progress) ?? 1600;
+      const next = stepRetortBurn(r, maxSafe);
+
+      const heatNormalized = Math.min(
+        1,
+        Math.max(0, (next.primaryTemp - 200) / 1200)
+      );
+      const burnActive =
+        next.phase === 'BURN' && (next.primaryOn || next.secondaryOn);
+
+      return {
+        retort: next,
+        cremationBurnActive: burnActive,
+        cremationBurnProgress: Math.max(
+          state.cremationBurnProgress,
+          progress
+        ),
+        cremationHeatNormalized: heatNormalized,
+        cremationDecayArrested:
+          state.cremationDecayArrested || progress >= 0.15,
+      };
+    }),
+
   tickDecay: () =>
     set((state) => {
       let changed = false;
@@ -690,6 +799,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         cremationBurnProgress: 0,
         cremationHeatNormalized: 0,
         cremationDecayArrested: false,
+        retort: { ...IDLE_RETORT },
       });
       return;
     }
@@ -709,6 +819,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       cremationBurnProgress: 0,
       cremationHeatNormalized: 0,
       cremationDecayArrested: false,
+      retort: { ...IDLE_RETORT },
     });
   },
 

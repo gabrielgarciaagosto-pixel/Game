@@ -43,7 +43,7 @@ export const UrnVaultRoom: React.FC = () => {
           onPointerDown={() => setActiveStation('OVERVIEW')}
           className="px-4 py-2 bg-stone-800 rounded text-sm font-semibold active:bg-stone-700"
         >
-          ← Main Menu
+          Back
         </button>
       </div>
 

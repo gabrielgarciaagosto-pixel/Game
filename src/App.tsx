@@ -1,6 +1,7 @@
 import { CaseInboxWidget } from './components/CaseInboxWidget';
 import { CoolerRoom } from './components/CoolerRoom';
 import { CremationMiniGame } from './components/CremationMiniGame';
+import { CrematoryAudio } from './components/CrematoryAudio';
 import { EmbalmingMiniGame } from './components/EmbalmingMiniGame';
 import { MainHubMenu } from './components/MainHubMenu';
 import { MenuThemeAudio } from './components/MenuThemeAudio';
@@ -9,11 +10,13 @@ import { UrnFillingMiniGame } from './components/UrnFillingMiniGame';
 import { UrnStartScreen } from './components/UrnStartScreen';
 import { UrnVaultRoom } from './components/UrnVaultRoom';
 import { useIntakeSpawner } from './hooks/useIntakeSpawner';
+import { useRetortEngine } from './hooks/useRetortEngine';
 import { displayCaseName } from './types/game';
 import { useGameStore } from './store/useGameStore';
 
 function App() {
   useIntakeSpawner();
+  useRetortEngine();
 
   const {
     hasStartedGame,
@@ -36,6 +39,7 @@ function App() {
   return (
     <>
       <MenuThemeAudio />
+      <CrematoryAudio />
       {!hasStartedGame ? (
         <UrnStartScreen
           title="OSSUARIAN"

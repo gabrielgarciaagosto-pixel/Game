@@ -91,7 +91,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
             onPointerDown={() => setActiveStation('OVERVIEW')}
             className="px-4 py-2 bg-violet-900 rounded text-sm active:bg-violet-800"
           >
-            Main Menu
+            Back
           </button>
         </div>
       </div>

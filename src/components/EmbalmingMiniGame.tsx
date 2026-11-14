@@ -130,7 +130,7 @@ export const EmbalmingMiniGame: React.FC = () => {
             onPointerDown={() => setActiveStation('OVERVIEW')}
             className="px-4 py-2 bg-slate-800 rounded text-sm"
           >
-            Main Menu
+            Back
           </button>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center">
@@ -211,7 +211,7 @@ export const EmbalmingMiniGame: React.FC = () => {
             onPointerDown={() => setActiveStation('OVERVIEW')}
             className="px-4 py-2 bg-slate-800 rounded text-sm active:bg-slate-700"
           >
-            Main Menu
+            Back
           </button>
         </div>
       </div>
