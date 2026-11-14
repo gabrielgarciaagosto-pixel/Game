@@ -43,14 +43,16 @@ import {
 } from '../data/facilityUpgrades';
 import {
   directiveNeedsCremationPermit,
-  findPermitMismatches,
+  findExactPermitCaseMatch,
   initialPermitStatus,
   PERMIT_ERROR_STREAK_FINE,
   PERMIT_ERROR_STREAK_LIMIT,
   PERMIT_ERROR_STREAK_REP_HIT,
+  PERMIT_REJECT_GENERIC,
   rollPermitEvaluationDueAt,
   UNPERMITTED_CREMATION_FINE,
   UNPERMITTED_CREMATION_REP_HIT,
+  type FinanceLedgerEntry,
   type PermitFormDraft,
   type PermitSubmissionRecord,
 } from '../data/cremationPermits';
@@ -114,6 +116,8 @@ interface GameState {
   permitSubmissions: PermitSubmissionRecord[];
   /** Consecutive rejected permit filings → streak fine */
   permitWrongStreak: number;
+  /** Simple cash ledger (permit fees, fines, …) — wiped on Reset Game */
+  financeLedger: FinanceLedgerEntry[];
   /** Working cremulator available for urn processing */
   cremulatorOwned: boolean;
   cremulatorDamaged: boolean;
@@ -157,10 +161,10 @@ interface GameState {
   tickFamilyUrnChoices: () => void;
   /** Resolve pending cremation permit evaluations that are due */
   tickPermitEvaluations: () => void;
-  /** File a cremation permit from the Computer portal */
+  /** File a cremation permit from the Computer portal (vitals-only match + fee) */
   submitCremationPermit: (
-    caseId: string,
-    form: PermitFormDraft
+    form: PermitFormDraft,
+    filingFee: number
   ) => { ok: boolean; message: string };
   getActiveCase: () => DecedentCase | null;
   moveCaseTo: (caseId: string, location: CaseLocation) => void;
@@ -619,6 +623,7 @@ export function freshPersistedGameFields() {
     retort: { ...IDLE_RETORT },
     permitSubmissions: [] as PermitSubmissionRecord[],
     permitWrongStreak: 0,
+    financeLedger: [] as FinanceLedgerEntry[],
   };
 }
 
@@ -1013,15 +1018,17 @@ export const useGameStore = create<GameState>()(
       let wrongStreak = state.permitWrongStreak;
       let cash = state.cash;
       let reputation = state.reputation;
+      let financeLedger = state.financeLedger;
       let any = false;
 
       const submissions = state.permitSubmissions.map((sub) => {
         if (sub.status !== 'PENDING' || now < sub.evaluatesAt) return sub;
         any = true;
-        const approved = sub.mismatchLabels.length === 0;
+        const approved =
+          sub.caseId != null && sub.mismatchLabels.length === 0;
         if (approved) {
           wrongStreak = 0;
-          toast = `Cremation permit APPROVED — ${sub.decedentName}`;
+          toast = 'Cremation permit APPROVED.';
           return {
             ...sub,
             status: 'APPROVED' as const,
@@ -1029,10 +1036,21 @@ export const useGameStore = create<GameState>()(
           };
         }
         wrongStreak += 1;
-        toast = `Cremation permit REJECTED — ${sub.decedentName} (needs correction)`;
+        toast =
+          'Cremation permit REJECTED — vital records could not be verified.';
         if (wrongStreak >= PERMIT_ERROR_STREAK_LIMIT) {
           cash = Math.max(0, cash - PERMIT_ERROR_STREAK_FINE);
           reputation = Math.max(0, reputation - PERMIT_ERROR_STREAK_REP_HIT);
+          financeLedger = [
+            {
+              id: `fine-${now.toString(36)}`,
+              at: now,
+              amount: -PERMIT_ERROR_STREAK_FINE,
+              label: `Vital Records incorrect-filing fine (${PERMIT_ERROR_STREAK_LIMIT}+)`,
+              kind: 'FINE' as const,
+            },
+            ...financeLedger,
+          ].slice(0, 80);
           legalAlert = `STATE VITAL RECORDS FINE: ${PERMIT_ERROR_STREAK_LIMIT}+ incorrect cremation permit filings. $${PERMIT_ERROR_STREAK_FINE} levied and reputation docked. Review Case Files carefully before resubmitting.`;
           wrongStreak = 0;
         }
@@ -1067,17 +1085,16 @@ export const useGameStore = create<GameState>()(
             cremationPermitRejectReason: null,
           };
         }
-        const reason = `Mismatch: ${due.mismatchLabels.join(', ')}`;
         inboxFiles = syncInboxPermit(inboxFiles, c.id, {
           cremationPermitStatus: 'REJECTED',
-          cremationPermitRejectReason: reason,
+          cremationPermitRejectReason: PERMIT_REJECT_GENERIC,
           isRead: false,
         });
         return {
           ...c,
           cremationPermitStatus: 'REJECTED' as const,
           cremationPermitEvaluatesAt: null,
-          cremationPermitRejectReason: reason,
+          cremationPermitRejectReason: PERMIT_REJECT_GENERIC,
         };
       });
 
@@ -1088,73 +1105,84 @@ export const useGameStore = create<GameState>()(
         permitWrongStreak: wrongStreak,
         cash,
         reputation,
+        financeLedger,
         intakeToast: toast ?? state.intakeToast,
         legalAlert: legalAlert ?? state.legalAlert,
       };
     }),
 
-  submitCremationPermit: (caseId, form) => {
+  submitCremationPermit: (form, filingFee) => {
     const state = get();
-    const c = resolveCase(state, caseId);
-    if (!c) return { ok: false, message: 'Case not found.' };
-    if (!directiveNeedsCremationPermit(c.directive)) {
-      return { ok: false, message: 'This directive does not require a cremation permit.' };
+    const fee = Math.max(0, Math.round(filingFee));
+    if (fee <= 0) {
+      return { ok: false, message: 'Invalid filing fee.' };
     }
-    if (c.cremationPermitStatus === 'APPROVED') {
-      return { ok: false, message: 'Permit already approved.' };
-    }
-    if (c.cremationPermitStatus === 'PENDING') {
-      return { ok: false, message: 'Permit already pending evaluation.' };
-    }
-    if (!c.isTagged) {
+    if (state.cash < fee) {
       return {
         ok: false,
-        message: 'Tag the remains in the Cooler before filing a permit.',
+        message: `Insufficient funds. Filing fee is $${fee}.`,
       };
     }
 
-    const mismatches = findPermitMismatches(form, c.name, {
-      dateOfBirthMs: c.dateOfBirthMs,
-      dateOfDeathMs: c.dateOfDeathMs,
-      timeOfDeathHour: c.timeOfDeathHour,
-      timeOfDeathMinute: c.timeOfDeathMinute,
-      placeOfBirth: c.placeOfBirth,
-    });
+    const matched = findExactPermitCaseMatch(form, state.cases);
     const now = gameNow();
     const evaluatesAt = rollPermitEvaluationDueAt(now);
+    const exact = matched != null;
     const submission: PermitSubmissionRecord = {
-      id: `${c.id}-${now.toString(36)}`,
-      caseId: c.id,
-      decedentName: c.name,
+      id: `vr441-${now.toString(36)}`,
+      caseId: exact ? matched.id : null,
+      decedentName: exact ? matched.name : form.legalName.trim() || 'UNKNOWN',
       submittedAt: now,
       evaluatesAt,
       evaluatedAt: null,
       status: 'PENDING',
-      mismatchLabels: mismatches.map((m) => m.label),
+      // Non-empty sentinel ⇒ evaluate as reject without leaking which fields
+      mismatchLabels: exact ? [] : ['Vital records'],
       form: { ...form },
+      filingFee: fee,
     };
 
-    set({
-      permitSubmissions: [submission, ...state.permitSubmissions].slice(0, 40),
-      cases: updateCaseById(state.cases, c.id, (row) => ({
+    const ledgerEntry: FinanceLedgerEntry = {
+      id: `fee-${now.toString(36)}`,
+      at: now,
+      amount: -fee,
+      label: exact
+        ? `VR-441 cremation permit filing fee`
+        : `VR-441 cremation permit filing fee (unverified)`,
+      kind: 'PERMIT_FEE',
+    };
+
+    let cases = state.cases;
+    let inboxFiles = state.inboxFiles;
+    if (exact) {
+      cases = updateCaseById(cases, matched.id, (row) => ({
         ...row,
         cremationPermitStatus: 'PENDING',
         cremationPermitSubmittedAt: now,
         cremationPermitEvaluatesAt: evaluatesAt,
         cremationPermitRejectReason: null,
-      })),
-      inboxFiles: syncInboxPermit(state.inboxFiles, c.id, {
+      }));
+      inboxFiles = syncInboxPermit(inboxFiles, matched.id, {
         cremationPermitStatus: 'PENDING',
         cremationPermitRejectReason: null,
         isRead: false,
-      }),
-      intakeToast: `Permit filed for ${c.name} — pending state evaluation.`,
+      });
+    }
+
+    set({
+      cash: state.cash - fee,
+      financeLedger: [ledgerEntry, ...state.financeLedger].slice(0, 80),
+      permitSubmissions: [submission, ...state.permitSubmissions].slice(0, 40),
+      cases,
+      inboxFiles,
+      intakeToast: exact
+        ? `Permit filed (fee $${fee}) — pending state evaluation.`
+        : `Permit filed (fee $${fee}) — pending state evaluation.`,
     });
 
     return {
       ok: true,
-      message:
-        'Submission received. Vital Records will evaluate shortly. Status: PENDING.',
+      message: `Submission received. Filing fee $${fee} charged. Vital Records will evaluate shortly.`,
     };
   },
 
@@ -2030,6 +2058,7 @@ export const useGameStore = create<GameState>()(
             inboxFiles,
             permitSubmissions: p.permitSubmissions ?? [],
             permitWrongStreak: p.permitWrongStreak ?? 0,
+            financeLedger: p.financeLedger ?? [],
           } as never;
         }
         return {
@@ -2039,6 +2068,7 @@ export const useGameStore = create<GameState>()(
           inboxFiles,
           permitSubmissions: [],
           permitWrongStreak: 0,
+          financeLedger: [],
         } as never;
       },
       partialize: (state) => ({
@@ -2068,6 +2098,7 @@ export const useGameStore = create<GameState>()(
         retort: state.retort,
         permitSubmissions: state.permitSubmissions,
         permitWrongStreak: state.permitWrongStreak,
+        financeLedger: state.financeLedger,
       }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<GameState>;
@@ -2126,6 +2157,7 @@ export const useGameStore = create<GameState>()(
           showroomInventory: p.showroomInventory ?? current.showroomInventory,
           permitSubmissions: p.permitSubmissions ?? current.permitSubmissions,
           permitWrongStreak: p.permitWrongStreak ?? current.permitWrongStreak,
+          financeLedger: p.financeLedger ?? current.financeLedger,
           intakeToast: null,
           legalAlert: null,
         };

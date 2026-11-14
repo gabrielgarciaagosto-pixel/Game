@@ -1,4 +1,4 @@
-import type { DispositionDirective } from '../types/game';
+import type { DecedentCase, DispositionDirective } from '../types/game';
 import type { CremationPermitStatus, DecedentVitals } from './decedentVitals';
 import {
   formatTod,
@@ -97,10 +97,47 @@ export function findPermitMismatches(
   return mismatches;
 }
 
+function caseVitals(c: DecedentCase): DecedentVitals {
+  return {
+    dateOfBirthMs: c.dateOfBirthMs,
+    dateOfDeathMs: c.dateOfDeathMs,
+    timeOfDeathHour: c.timeOfDeathHour,
+    timeOfDeathMinute: c.timeOfDeathMinute,
+    placeOfBirth: c.placeOfBirth,
+  };
+}
+
+/**
+ * Exact all-fields match against held cremation cases.
+ * Mixed vitals from two files → no match. 0 or 2+ hits → null.
+ */
+export function findExactPermitCaseMatch(
+  form: PermitFormDraft,
+  cases: DecedentCase[]
+): DecedentCase | null {
+  const candidates = cases.filter(
+    (c) =>
+      directiveNeedsCremationPermit(c.directive) &&
+      !c.isCremated &&
+      c.isTagged &&
+      c.cremationPermitStatus !== 'APPROVED' &&
+      c.cremationPermitStatus !== 'PENDING'
+  );
+  const hits = candidates.filter(
+    (c) => findPermitMismatches(form, c.name, caseVitals(c)).length === 0
+  );
+  return hits.length === 1 ? hits[0]! : null;
+}
+
 /** Short in-game evaluation window (~8–14 family minutes). */
 export function rollPermitEvaluationDueAt(nowMs: number): number {
   const minutes = 8 + Math.floor(Math.random() * 7);
   return nowMs + minutes * FAMILY_MINUTE_MS;
+}
+
+/** State filing fee charged on every VR-441 submit (correct or wrong). */
+export function rollPermitFilingFee(): number {
+  return 50 + Math.floor(Math.random() * 101); // $50–$150
 }
 
 export const UNPERMITTED_CREMATION_FINE = 1500;
@@ -109,14 +146,29 @@ export const PERMIT_ERROR_STREAK_LIMIT = 3;
 export const PERMIT_ERROR_STREAK_FINE = 500;
 export const PERMIT_ERROR_STREAK_REP_HIT = 10;
 
+export const PERMIT_REJECT_GENERIC =
+  'Vital records could not be verified — needs correction.';
+
 export interface PermitSubmissionRecord {
   id: string;
-  caseId: string;
+  /** Null when vitals matched no held case (wrong / mixed). */
+  caseId: string | null;
   decedentName: string;
   submittedAt: number;
   evaluatesAt: number;
   evaluatedAt: number | null;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  /** Empty when exact match; non-empty / sentinel for wrong filings. */
   mismatchLabels: string[];
   form: PermitFormDraft;
+  filingFee: number;
+}
+
+export interface FinanceLedgerEntry {
+  id: string;
+  at: number;
+  /** Negative = outflow */
+  amount: number;
+  label: string;
+  kind: 'PERMIT_FEE' | 'FINE' | 'OTHER';
 }
