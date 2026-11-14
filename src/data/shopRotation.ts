@@ -195,6 +195,7 @@ export const ALWAYS_URN_IDS = [
 ] as const;
 
 export const ALWAYS_CASKET_IDS = [
+  'casket_pine_tapered',
   'casket_oak_half',
   'casket_cherry_panel',
   'casket_steel_silver',

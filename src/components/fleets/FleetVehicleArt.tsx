@@ -105,29 +105,23 @@ function Glass({
   );
 }
 
+/** Side elevation of a half-couch casket in the coach bay. */
 function Casket({ x, y, w }: { x: number; y: number; w: number }) {
   const h = 16;
+  const split = x + w * 0.46;
   return (
     <g>
-      <path
-        d={`M${x} ${y + h} L${x + 8} ${y} H${x + w - 8} L${x + w} ${y + h} Z`}
-        fill="#6b3e22"
-        stroke="#e6d2a2"
-        strokeWidth="0.8"
-      />
-      <path
-        d={`M${x + 10} ${y + 3} H${x + w - 10}`}
-        stroke="#f2e2b0"
-        strokeWidth="1.4"
-      />
-      <rect
-        x={x + w * 0.42}
-        y={y + 5}
-        width="7"
-        height="5"
-        rx="0.5"
-        fill="#d9c48a"
-      />
+      <path d={`M${x} ${y + h} h${w} l-1 3 H${x + 1} Z`} fill="#2a160c" />
+      <path d={`M${x + 2} ${y + 7} H${x + w - 2} V${y + h} H${x + 2} Z`} fill="#7a4320" />
+      <path d={`M${x + 4} ${y + 7} H${split} L${split + 4} ${y - 1} H${x + 10} Z`} fill="#f4e4ea" />
+      <path d={`M${split} ${y + 7} H${x + w - 3} V${y + 2} H${split + 6} Z`} fill="#a86432" />
+      <path d={`M${x + 8} ${y + 2} H${split - 2}`} stroke="#fff" strokeOpacity="0.55" />
+      {[0.22, 0.55, 0.8].map((t) => (
+        <g key={t}>
+          <rect x={x + w * t} y={y + 9} width="8" height="2.2" rx="1" fill="#e6c878" />
+          <path d={`M${x + w * t + 1} ${y + 8} v2 M${x + w * t + 7} ${y + 8} v2`} stroke="#8a6a28" strokeWidth="0.7" />
+        </g>
+      ))}
     </g>
   );
 }

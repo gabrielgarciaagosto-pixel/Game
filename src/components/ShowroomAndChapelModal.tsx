@@ -846,9 +846,17 @@ function DraggablePiece({
       {piece.kind === 'COFFIN' && (
         <div className="relative">
           {offeredCasket ? (
-            <CasketVessel casket={offeredCasket} size="sm" showPlaque={false} />
+            <CasketVessel
+              casket={offeredCasket}
+              size="md"
+              showPlaque={false}
+              chapel
+              className="w-[18rem]"
+            />
           ) : (
             <CasketVessel
+              chapel
+              className="w-[18rem]"
               casket={{
                 id: 'bier',
                 name: 'Bier',
