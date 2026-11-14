@@ -10,7 +10,7 @@
   --safe-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
   --safe-left: max(0.75rem, env(safe-area-inset-left, 0px));
   --safe-right: max(0.75rem, env(safe-area-inset-right, 0px));
-  --files-fab-bottom: calc(var(--safe-bottom) + 1.25rem);
+  --files-fab-bottom: calc(var(--safe-bottom) + 2.25rem);
   --files-panel-bottom: calc(var(--files-fab-bottom) + 3.75rem);
 }
 
