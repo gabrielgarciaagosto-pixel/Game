@@ -1118,6 +1118,8 @@ function CasketInspectModal({
     reputationRequired: casket.reputationRequired ?? 0,
     stock: rare ? stock : undefined,
   });
+  const coffin = casket.silhouette === 'TAPERED' || casket.silhouette === 'OCTAGON';
+  const [lid, setLid] = useState<'open' | 'closed' | null>(null);
 
   return (
     <div className="fixed inset-0 z-[70] bg-black/80 flex items-end sm:items-center justify-center p-3">
@@ -1146,9 +1148,36 @@ function CasketInspectModal({
         <div className="my-4 flex justify-center">
           <div className="relative">
             <div className="absolute inset-0 blur-2xl bg-amber-600/20 rounded-full" />
-            <CasketVessel casket={casket} size="lg" className="relative" />
+            <CasketVessel casket={casket} size="lg" className="relative" lid={lid ?? undefined} />
           </div>
         </div>
+
+        {!coffin && (
+          <div className="flex justify-center gap-2 mb-3">
+            <button
+              type="button"
+              onClick={() => setLid('open')}
+              className={`px-3 py-1 rounded text-[11px] font-bold ${
+                (lid ?? (casket.silhouette === 'HALF_COUCH' || casket.silhouette === 'FULL_COUCH' ? 'open' : 'closed')) === 'open'
+                  ? 'bg-amber-500 text-stone-950'
+                  : 'bg-stone-800 text-stone-300'
+              }`}
+            >
+              Lid open
+            </button>
+            <button
+              type="button"
+              onClick={() => setLid('closed')}
+              className={`px-3 py-1 rounded text-[11px] font-bold ${
+                (lid ?? (casket.silhouette === 'HALF_COUCH' || casket.silhouette === 'FULL_COUCH' ? 'open' : 'closed')) === 'closed'
+                  ? 'bg-amber-500 text-stone-950'
+                  : 'bg-stone-800 text-stone-300'
+              }`}
+            >
+              Lid closed
+            </button>
+          </div>
+        )}
 
         <p className="text-sm text-stone-200 leading-snug">{casket.blurb}</p>
         <p className="text-[11px] text-amber-200/80 mt-2">
