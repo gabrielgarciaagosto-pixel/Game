@@ -36,6 +36,8 @@ interface GameState {
   startGame: () => void;
   setActiveStation: (station: StationId) => void;
   selectActiveCase: (caseId: string) => void;
+  /** Sync selection to the case currently on a station without clearing chapel décor */
+  focusCase: (caseId: string) => void;
   tagBodyInCooler: (caseId: string) => void;
   markFileRead: (fileId: string) => void;
   setServiceDate: (caseId: string, serviceDateMs: number) => void;
@@ -416,6 +418,13 @@ export const useGameStore = create<GameState>((set, get) => ({
       serviceRatingBonus: 0,
       showroomInventory: returnPlacedFlowers(state),
     });
+  },
+
+  focusCase: (caseId) => {
+    const state = get();
+    if (!state.cases.some((c) => c.id === caseId)) return;
+    if (state.activeCaseId === caseId) return;
+    set({ activeCaseId: caseId });
   },
 
   tagBodyInCooler: (caseId) =>

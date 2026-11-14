@@ -40,7 +40,7 @@ export const UrnFillingMiniGame: React.FC = () => {
     storeUrnInVault,
     moveCaseTo,
     setActiveStation,
-    selectActiveCase,
+    focusCase,
     cremulatorOwned,
     cremulatorDamaged,
     damageCremulator,
@@ -51,9 +51,9 @@ export const UrnFillingMiniGame: React.FC = () => {
 
   useEffect(() => {
     if (currentCase && currentCase.id !== activeCaseId) {
-      selectActiveCase(currentCase.id);
+      focusCase(currentCase.id);
     }
-  }, [currentCase, activeCaseId, selectActiveCase]);
+  }, [currentCase, activeCaseId, focusCase]);
 
   const [phase, setPhase] = useState<Phase>('CRUSH');
   const [bones, setBones] = useState<BoneChunk[]>(() =>
@@ -109,12 +109,15 @@ export const UrnFillingMiniGame: React.FC = () => {
 
   const allMetalsCleared = fragments.every((f) => f.collected);
 
-  // Dust builds while crushing without extractor
+  // Dust builds while crushing without extractor; extractor clears continuously
   useEffect(() => {
-    if (phase !== 'CRUSH' || extractorOn) {
-      if (extractorOn) setDustLevel((d) => Math.max(0, d - 8));
-      return;
+    if (extractorOn) {
+      const clearId = setInterval(() => {
+        setDustLevel((d) => Math.max(0, d - 10));
+      }, 250);
+      return () => clearInterval(clearId);
     }
+    if (phase !== 'CRUSH') return;
     const id = setInterval(() => {
       setDustLevel((d) => Math.min(92, d + 3));
     }, 400);
@@ -202,10 +205,40 @@ export const UrnFillingMiniGame: React.FC = () => {
     if (hatchLoaded) setLoadingSorting(true);
   };
 
+  const dumpHatchForMagnetRecovery = () => {
+    setHatchLoaded(false);
+    setHatchFill(0);
+    setLoadingSorting(false);
+    setProcessing(false);
+    setCremulatorProgress(0);
+    setMagnetCleared(false);
+    setPhase('MAGNET');
+    // Spill hopper contents back onto the tray for another magnet pass
+    setBones((prev) =>
+      prev.map((b, i) => ({
+        ...b,
+        x: 18 + ((i * 9) % 64),
+        y: 22 + ((i * 11) % 48),
+      }))
+    );
+    setFragments((prev) =>
+      prev.map((f, i) =>
+        f.collected
+          ? f
+          : {
+              ...f,
+              x: 14 + ((i * 10) % 70),
+              y: 16 + ((i * 15) % 55),
+            }
+      )
+    );
+  };
+
   const engageCremulator = () => {
     if (!hatchLoaded || !cremulatorOwned || processing) return;
     if (!magnetCleared && !allMetalsCleared) {
       damageCremulator();
+      dumpHatchForMagnetRecovery();
       return;
     }
     setProcessing(true);
@@ -306,10 +339,18 @@ export const UrnFillingMiniGame: React.FC = () => {
           ${CREMULATOR_REPLACEMENT_COST}) to continue processing.
         </p>
         <p className="font-mono text-emerald-400">Cash: ${cash}</p>
+        <p className="text-xs text-amber-200/90 max-w-sm">
+          After purchase you must finish the magnet sweep before Engaging again
+          — the hopper has been dumped back onto the tray.
+        </p>
         <button
           type="button"
           disabled={cash < CREMULATOR_REPLACEMENT_COST}
-          onPointerDown={() => buyReplacementCremulator()}
+          onPointerDown={() => {
+            if (buyReplacementCremulator()) {
+              dumpHatchForMagnetRecovery();
+            }
+          }}
           className={`px-5 py-3 rounded font-bold ${
             cash >= CREMULATOR_REPLACEMENT_COST
               ? 'bg-amber-500 text-zinc-950'

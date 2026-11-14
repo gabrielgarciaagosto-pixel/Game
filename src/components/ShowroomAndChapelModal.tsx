@@ -18,7 +18,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
     finalizeServiceAndNextCase,
     setActiveStation,
     takeCaseToStation,
-    selectActiveCase,
+    focusCase,
   } = useGameStore();
 
   const [tab, setTab] = useState<'BUY' | 'CHAPEL'>('BUY');
@@ -26,9 +26,9 @@ export const ShowroomAndChapelModal: React.FC = () => {
 
   useEffect(() => {
     if (currentCase && currentCase.id !== activeCaseId) {
-      selectActiveCase(currentCase.id);
+      focusCase(currentCase.id);
     }
-  }, [currentCase, activeCaseId, selectActiveCase]);
+  }, [currentCase, activeCaseId, focusCase]);
 
   if (!currentCase) {
     return (

@@ -131,16 +131,16 @@ export const CremationMiniGame: React.FC = () => {
     completeCremation,
     setActiveStation,
     takeCaseToStation,
-    selectActiveCase,
+    focusCase,
   } = useGameStore();
 
   const currentCase = caseAtLocation(cases, 'CREMATION', activeCaseId);
 
   useEffect(() => {
     if (currentCase && currentCase.id !== activeCaseId) {
-      selectActiveCase(currentCase.id);
+      focusCase(currentCase.id);
     }
-  }, [currentCase, activeCaseId, selectActiveCase]);
+  }, [currentCase, activeCaseId, focusCase]);
 
   const targets = currentCase
     ? getCremationTargets(currentCase.weightLbs)

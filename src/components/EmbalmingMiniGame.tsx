@@ -33,15 +33,15 @@ export const EmbalmingMiniGame: React.FC = () => {
     completeEmbalming,
     setActiveStation,
     takeCaseToStation,
-    selectActiveCase,
+    focusCase,
   } = useGameStore();
   const currentCase = caseAtLocation(cases, 'EMBALMING', activeCaseId);
 
   useEffect(() => {
     if (currentCase && currentCase.id !== activeCaseId) {
-      selectActiveCase(currentCase.id);
+      focusCase(currentCase.id);
     }
-  }, [currentCase, activeCaseId, selectActiveCase]);
+  }, [currentCase, activeCaseId, focusCase]);
 
   const [selectedFluid, setSelectedFluid] = useState<FluidType>('FORMALDEHYDE');
   const [poured, setPoured] = useState({
