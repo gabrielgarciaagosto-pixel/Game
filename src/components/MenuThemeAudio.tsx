@@ -37,7 +37,9 @@ export const MenuThemeAudio: React.FC = () => {
         loop: true,
         durationMs: CROSSFADE_MS,
       });
-    } else if (audioManager.getCurrentId() === 'theme') {
+    } else {
+      // Always invalidate in-flight splash loads — getCurrentId() may still
+      // be null while unlock/preload is awaiting.
       void audioManager.fadeOut(CROSSFADE_MS);
     }
   }, [hasStartedGame, audioMode]);

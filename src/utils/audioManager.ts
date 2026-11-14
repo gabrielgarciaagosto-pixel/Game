@@ -111,6 +111,11 @@ class AudioManager {
     }
   }
 
+  /** True when a later crossfadeTo/fadeOut/stop invalidated this call. */
+  private isStale(gen: number): boolean {
+    return gen !== this.generation;
+  }
+
   private stopVoice(voice: Voice, when: number) {
     try {
       voice.source.stop(when);
@@ -206,16 +211,45 @@ class AudioManager {
     return voice;
   }
 
-  private scheduleOneShotNearEnd(id: MusicBedId, buffer: AudioBuffer) {
+  /**
+   * Fire onOneShotNearEnd when AudioContext time reaches
+   * voice.startedAt + duration - crossfade — not wall-clock.
+   * If the context is suspended (no gesture / backgrounded), currentTime
+   * freezes and we wait until it advances again.
+   */
+  private scheduleOneShotNearEnd(
+    id: MusicBedId,
+    buffer: AudioBuffer,
+    voice: Voice
+  ) {
     this.clearHandoffTimer();
     const fadeSec = this.crossfadeMs / 1000;
-    // Start the next bed slightly before this one ends
-    const leadMs = Math.max(40, (buffer.duration - fadeSec) * 1000);
-    this.handoffTimer = window.setTimeout(() => {
+    const handoffAt =
+      voice.startedAt + Math.max(0.05, buffer.duration - fadeSec);
+
+    const tick = () => {
       this.handoffTimer = null;
       if (this.currentId !== id) return;
+      const ctx = this.ctx;
+      if (!ctx) return;
+
+      if (ctx.state === 'suspended' || ctx.currentTime < handoffAt) {
+        // Poll until the audio clock reaches the handoff point
+        const remainingSec =
+          ctx.state === 'suspended'
+            ? 0.1
+            : Math.max(0.016, handoffAt - ctx.currentTime);
+        this.handoffTimer = window.setTimeout(
+          tick,
+          Math.min(250, remainingSec * 1000)
+        );
+        return;
+      }
+
       this.onOneShotNearEnd?.(id);
-    }, leadMs);
+    };
+
+    this.handoffTimer = window.setTimeout(tick, 40);
   }
 
   /**
@@ -227,18 +261,6 @@ class AudioManager {
     id: MusicBedId,
     options?: { loop?: boolean; volume?: number; durationMs?: number }
   ): Promise<void> {
-    if (!this.unlocked) {
-      await this.unlock();
-    }
-    const ctx = this.getOrCreateContext();
-    if (ctx.state === 'suspended') {
-      try {
-        await ctx.resume();
-      } catch {
-        /* ignore */
-      }
-    }
-
     const loop =
       options?.loop ?? (id === 'theme' || id === 'crematoryLoop');
     const volume = options?.volume ?? DEFAULT_VOLUME[id];
@@ -250,14 +272,32 @@ class AudioManager {
       return;
     }
 
-    const buffer = await this.preload(id);
-    this.clearHandoffTimer();
-
+    // Invalidate any in-flight crossfade before awaiting unlock/preload
     this.generation += 1;
     const gen = this.generation;
+
+    if (!this.unlocked) {
+      await this.unlock();
+    }
+    if (this.isStale(gen)) return;
+
+    const ctx = this.getOrCreateContext();
+    if (ctx.state === 'suspended') {
+      try {
+        await ctx.resume();
+      } catch {
+        /* ignore */
+      }
+    }
+    if (this.isStale(gen)) return;
+
+    const buffer = await this.preload(id);
+    if (this.isStale(gen)) return;
+
+    this.clearHandoffTimer();
     this.fadeOutVoices(fadeSec);
     this.currentId = id;
-    this.startVoice(id, buffer, {
+    const voice = this.startVoice(id, buffer, {
       loop,
       volume,
       fadeInSec: fadeSec,
@@ -265,7 +305,7 @@ class AudioManager {
     });
 
     if (!loop) {
-      this.scheduleOneShotNearEnd(id, buffer);
+      this.scheduleOneShotNearEnd(id, buffer, voice);
     }
 
     window.setTimeout(() => this.pruneVoices(), fadeMs + 100);
