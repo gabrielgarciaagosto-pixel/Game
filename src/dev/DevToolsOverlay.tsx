@@ -409,6 +409,10 @@ export const DevToolsOverlay: React.FC = () => {
                 onClick={() => actions.markActiveEmbalmed()}
               />
               <Btn
+                label="Retort burn"
+                onClick={() => actions.startRetortBurn()}
+              />
+              <Btn
                 label="Finish burn + cremulator"
                 onClick={() => actions.instantFinishBurn()}
               />

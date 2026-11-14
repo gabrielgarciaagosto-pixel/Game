@@ -1,47 +1,38 @@
-import React from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 
 export type EmbalmFluid = 'WATER' | 'FORMALDEHYDE' | 'SOFTENER';
 
 export const FLUID_TINT: Record<
   EmbalmFluid,
-  { stream: string; streamEdge: string; splash: string; fill: string }
+  { stream: string; edge: string; splash: string; deep: string }
 > = {
   FORMALDEHYDE: {
     stream: 'rgba(244, 114, 182, 0.92)',
-    streamEdge: 'rgba(251, 207, 232, 0.55)',
-    splash: 'rgba(244, 114, 182, 0.55)',
-    fill: '#f472b6',
+    edge: 'rgba(253, 224, 240, 0.85)',
+    splash: 'rgba(244, 114, 182, 0.7)',
+    deep: 'rgba(157, 23, 77, 0.55)',
   },
   SOFTENER: {
     stream: 'rgba(167, 139, 250, 0.9)',
-    streamEdge: 'rgba(221, 214, 254, 0.5)',
-    splash: 'rgba(167, 139, 250, 0.5)',
-    fill: '#a78bfa',
+    edge: 'rgba(237, 233, 254, 0.8)',
+    splash: 'rgba(167, 139, 250, 0.65)',
+    deep: 'rgba(91, 33, 182, 0.5)',
   },
   WATER: {
-    stream: 'rgba(125, 211, 252, 0.85)',
-    streamEdge: 'rgba(224, 242, 254, 0.55)',
-    splash: 'rgba(125, 211, 252, 0.45)',
-    fill: '#7dd3fc',
+    stream: 'rgba(125, 211, 252, 0.88)',
+    edge: 'rgba(240, 249, 255, 0.9)',
+    splash: 'rgba(125, 211, 252, 0.6)',
+    deep: 'rgba(12, 74, 110, 0.45)',
   },
 };
 
 type BottleProps = {
   kind: 'FORMALDEHYDE' | 'SOFTENER';
-  tiltDegrees: number;
-  isPouring: boolean;
-  isGlugging: boolean;
-  className?: string;
 };
 
-/** Classic rectangular arterial-style bottle — generic labels, no brand marks. */
-export const ChemicalBottle: React.FC<BottleProps> = ({
-  kind,
-  tiltDegrees,
-  isPouring,
-  isGlugging,
-  className = '',
-}) => {
+/** Arterial bottle. Positioning and tilt live on the wrapper so the mouth stays measurable. */
+export const ChemicalBottle: React.FC<BottleProps> = ({ kind }) => {
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
   const isForm = kind === 'FORMALDEHYDE';
   const bodyFill = isForm ? '#f9a8d4' : '#c4b5fd';
   const bodyDeep = isForm ? '#db2777' : '#7c3aed';
@@ -50,291 +41,634 @@ export const ChemicalBottle: React.FC<BottleProps> = ({
   const title = isForm ? '20-INDEX' : 'HUMECTANT';
   const subtitle = isForm ? 'ARTERIAL FLUID' : 'TISSUE SOFTENER';
   const chemLine = isForm ? 'FORMALDEHYDE' : 'SOFTENER';
-
-  const tilt = isPouring ? tiltDegrees : 0;
-  const glugNudge = isPouring && isGlugging ? 'embalm-glug' : '';
+  const bodyId = `bottle-body-${uid}`;
+  const plasticId = `bottle-plastic-${uid}`;
 
   return (
-    <div
-      className={`pointer-events-none absolute left-[6%] md:left-[10%] bottom-[12%] origin-[70%_18%] transition-transform duration-150 ease-out ${className}`}
-      style={{
-        transform: `translateX(${isPouring ? tilt * 0.35 : 0}%) rotate(${tilt}deg)`,
-        width: '4.75rem',
-      }}
-      aria-hidden
-    >
-      <div className={glugNudge}>
-      <svg viewBox="0 0 76 168" className="w-full h-auto drop-shadow-lg">
-        <defs>
-          <linearGradient id={`bottle-body-${kind}`} x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor={bodyDeep} stopOpacity="0.55" />
-            <stop offset="35%" stopColor={bodyFill} stopOpacity="0.95" />
-            <stop offset="100%" stopColor={bodyDeep} stopOpacity="0.75" />
-          </linearGradient>
-          <linearGradient id={`bottle-plastic-${kind}`} x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#e2e8f0" stopOpacity="0.35" />
-            <stop offset="40%" stopColor="#f8fafc" stopOpacity="0.15" />
-            <stop offset="100%" stopColor="#94a3b8" stopOpacity="0.4" />
-          </linearGradient>
-        </defs>
-        {/* Cap */}
-        <rect x="26" y="2" width="24" height="14" rx="2" fill="#475569" />
-        <rect x="28" y="4" width="20" height="3" rx="1" fill="#64748b" />
-        <rect x="30" y="16" width="16" height="8" rx="1.5" fill="#334155" />
-        {/* Neck */}
-        <path
-          d="M30 24 h16 v14 c0 4 -2 6 -8 6 s-8 -2 -8 -6 z"
-          fill="#cbd5e1"
-          opacity="0.85"
-        />
-        {/* Shoulder + body */}
-        <path
-          d="M18 48
-             C18 40, 26 38, 38 38
-             C50 38, 58 40, 58 48
-             L58 152
-             C58 158, 52 162, 38 162
-             C24 162, 18 158, 18 152 Z"
-          fill={`url(#bottle-body-${kind})`}
-          stroke="#1e293b"
-          strokeWidth="1.2"
-        />
-        {/* Plastic sheen */}
-        <path
-          d="M22 50
-             C22 44, 28 42, 38 42
-             C48 42, 54 44, 54 50
-             L54 148
-             C54 152, 48 156, 38 156
-             C28 156, 22 152, 22 148 Z"
-          fill={`url(#bottle-plastic-${kind})`}
-        />
-        {/* Label */}
-        <rect
-          x="24"
-          y="62"
-          width="28"
-          height="58"
-          rx="2"
-          fill={labelBg}
-          stroke={labelInk}
-          strokeWidth="0.8"
-          opacity="0.96"
-        />
-        <text
-          x="38"
-          y="76"
-          textAnchor="middle"
-          fill={labelInk}
-          fontSize="6.5"
-          fontFamily="ui-monospace, monospace"
-          fontWeight="700"
-        >
-          {title}
-        </text>
-        <line x1="28" y1="80" x2="48" y2="80" stroke={labelInk} strokeWidth="0.6" />
-        <text
-          x="38"
-          y="92"
-          textAnchor="middle"
-          fill={labelInk}
-          fontSize="4.8"
-          fontFamily="ui-sans-serif, system-ui, sans-serif"
-          fontWeight="600"
-        >
-          {subtitle}
-        </text>
-        <text
-          x="38"
-          y="104"
-          textAnchor="middle"
-          fill={labelInk}
-          fontSize="5.2"
-          fontFamily="ui-monospace, monospace"
-          fontWeight="700"
-        >
-          {chemLine}
-        </text>
-        <text
-          x="38"
-          y="114"
-          textAnchor="middle"
-          fill="#64748b"
-          fontSize="4"
-          fontFamily="ui-sans-serif, system-ui, sans-serif"
-        >
-          {isForm ? 'Prep Grade' : 'Moisture'}
-        </text>
-      </svg>
-      {/* Mouth marker for stream origin (visual only) */}
-      <div
-        className="absolute w-2 h-2 rounded-full bg-transparent"
-        style={{ top: '2%', left: '58%' }}
-        data-embalm-mouth
+    <svg viewBox="0 0 76 168" className="w-full h-full drop-shadow-lg">
+      <defs>
+        <linearGradient id={bodyId} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor={bodyDeep} stopOpacity="0.55" />
+          <stop offset="35%" stopColor={bodyFill} stopOpacity="0.95" />
+          <stop offset="100%" stopColor={bodyDeep} stopOpacity="0.75" />
+        </linearGradient>
+        <linearGradient id={plasticId} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#e2e8f0" stopOpacity="0.35" />
+          <stop offset="40%" stopColor="#f8fafc" stopOpacity="0.15" />
+          <stop offset="100%" stopColor="#94a3b8" stopOpacity="0.4" />
+        </linearGradient>
+      </defs>
+      <rect x="26" y="2" width="24" height="14" rx="2" fill="#475569" />
+      <rect x="28" y="4" width="20" height="3" rx="1" fill="#64748b" />
+      <rect x="30" y="16" width="16" height="8" rx="1.5" fill="#334155" />
+      <path d="M30 24 h16 v14 c0 4 -2 6 -8 6 s-8 -2 -8 -6 z" fill="#cbd5e1" opacity="0.85" />
+      <path
+        d="M18 48 C18 40, 26 38, 38 38 C50 38, 58 40, 58 48 L58 152 C58 158, 52 162, 38 162 C24 162, 18 158, 18 152 Z"
+        fill={`url(#${bodyId})`}
+        stroke="#1e293b"
+        strokeWidth="1.2"
       />
-      </div>
-    </div>
+      <path
+        d="M22 50 C22 44, 28 42, 38 42 C48 42, 54 44, 54 50 L54 148 C54 152, 48 156, 38 156 C28 156, 22 152, 22 148 Z"
+        fill={`url(#${plasticId})`}
+      />
+      <rect x="24" y="62" width="28" height="58" rx="2" fill={labelBg} stroke={labelInk} strokeWidth="0.8" />
+      <text x="38" y="76" textAnchor="middle" fill={labelInk} fontSize="6.5" fontFamily="ui-monospace, monospace" fontWeight="700">
+        {title}
+      </text>
+      <line x1="28" y1="80" x2="48" y2="80" stroke={labelInk} strokeWidth="0.6" />
+      <text x="38" y="92" textAnchor="middle" fill={labelInk} fontSize="4.8" fontFamily="ui-sans-serif, system-ui, sans-serif" fontWeight="600">
+        {subtitle}
+      </text>
+      <text x="38" y="104" textAnchor="middle" fill={labelInk} fontSize="5.2" fontFamily="ui-monospace, monospace" fontWeight="700">
+        {chemLine}
+      </text>
+      <text x="38" y="114" textAnchor="middle" fill="#64748b" fontSize="4" fontFamily="ui-sans-serif, system-ui, sans-serif">
+        {isForm ? 'Prep Grade' : 'Moisture'}
+      </text>
+    </svg>
   );
 };
 
-type HoseProps = {
-  extended: boolean;
-  isPouring: boolean;
+type Vec = { x: number; y: number };
+type RopePoint = { x: number; y: number; px: number; py: number };
+type StreamBit = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  age: number;
+  life: number;
+  wobble: number;
+  w: number;
+};
+type SplashBit = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  age: number;
+  life: number;
+  r: number;
+  kind: 'drop' | 'spray' | 'ripple' | 'puddle' | 'glint';
 };
 
-/** Garden/lab hose that slides in from off-screen when adding water. */
-export const WaterHose: React.FC<HoseProps> = ({ extended, isPouring }) => {
-  return (
-    <div
-      className={`pointer-events-none absolute top-[8%] right-0 z-20 transition-transform duration-500 ease-out ${
-        extended ? 'translate-x-0' : 'translate-x-[108%]'
-      }`}
-      aria-hidden
-      style={{ width: '58%', maxWidth: '22rem' }}
-    >
-      <svg viewBox="0 0 320 120" className="w-full h-auto drop-shadow-md">
-        <defs>
-          <linearGradient id="hose-skin" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#64748b" />
-            <stop offset="45%" stopColor="#94a3b8" />
-            <stop offset="100%" stopColor="#475569" />
-          </linearGradient>
-        </defs>
-        {/* Coil coming from off-screen right */}
-        <path
-          d="M320 28
-             C280 20, 250 18, 220 28
-             C190 38, 170 52, 150 58
-             C120 68, 95 62, 78 52
-             C60 42, 48 36, 36 42"
-          fill="none"
-          stroke="url(#hose-skin)"
-          strokeWidth="14"
-          strokeLinecap="round"
-        />
-        <path
-          d="M320 28
-             C280 20, 250 18, 220 28
-             C190 38, 170 52, 150 58
-             C120 68, 95 62, 78 52
-             C60 42, 48 36, 36 42"
-          fill="none"
-          stroke="#1e293b"
-          strokeWidth="2"
-          strokeOpacity="0.35"
-          strokeLinecap="round"
-        />
-        {/* Nozzle */}
-        <g transform="translate(18, 34)">
-          <rect x="0" y="0" width="28" height="16" rx="3" fill="#334155" />
-          <rect x="22" y="2" width="14" height="12" rx="2" fill="#0ea5e9" />
-          <rect x="32" y="4" width="8" height="8" rx="1" fill="#38bdf8" />
-          {isPouring && (
-            <circle cx="40" cy="8" r="3" fill="#7dd3fc" opacity="0.7" className="embalm-stream-pulse" />
-          )}
-        </g>
-      </svg>
-    </div>
-  );
-};
+const ROPE_N = 18;
+const BOTTLE_W = 68;
 
-type StreamProps = {
+function clamp(n: number, a: number, b: number) {
+  return Math.max(a, Math.min(b, n));
+}
+
+function bottleBox() {
+  const w = BOTTLE_W;
+  const h = w * (168 / 76);
+  return { w, h, ox: 0.5, oy: 0.17 };
+}
+
+/** Mouth and aim in stage pixels. Grip is the neck, under the finger. */
+function bottleEmitter(grip: Vec, tiltDeg: number): { mouth: Vec; dir: Vec } {
+  const rad = (tiltDeg * Math.PI) / 180;
+  const dir = { x: Math.sin(rad), y: -Math.cos(rad) };
+  return {
+    mouth: { x: grip.x + dir.x * 26, y: grip.y + dir.y * 18 },
+    dir,
+  };
+}
+
+function drawSmooth(ctx: CanvasRenderingContext2D, pts: Vec[]) {
+  if (pts.length < 2) return;
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length - 1; i++) {
+    const xc = (pts[i].x + pts[i + 1].x) / 2;
+    const yc = (pts[i].y + pts[i + 1].y) / 2;
+    ctx.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc);
+  }
+  ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+}
+
+function normalAt(pts: StreamBit[], i: number): Vec {
+  const a = pts[Math.max(0, i - 1)];
+  const b = pts[Math.min(pts.length - 1, i + 1)];
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  return { x: -dy / len, y: dx / len };
+}
+
+function fillRibbon(
+  ctx: CanvasRenderingContext2D,
+  run: StreamBit[],
+  color: string,
+  widthScale: number
+) {
+  if (run.length < 2) return;
+  ctx.beginPath();
+  for (let i = 0; i < run.length; i++) {
+    const n = normalAt(run, i);
+    const taper = Math.max(0.28, 1 - run[i].age / run[i].life);
+    const w = run[i].w * taper * widthScale;
+    const x = run[i].x + n.x * w;
+    const y = run[i].y + n.y * w;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  for (let i = run.length - 1; i >= 0; i--) {
+    const n = normalAt(run, i);
+    const taper = Math.max(0.28, 1 - run[i].age / run[i].life);
+    const w = run[i].w * taper * widthScale;
+    ctx.lineTo(run[i].x - n.x * w, run[i].y - n.y * w);
+  }
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+}
+
+export type PourPointer = { x: number; y: number };
+
+type PourStageProps = {
+  pointerRef: React.RefObject<PourPointer>;
+  tankRef: React.RefObject<HTMLDivElement | null>;
   fluid: EmbalmFluid;
-  active: boolean;
+  isPouring: boolean;
+  tiltDegrees: number;
   isGlugging: boolean;
-  from: 'bottle' | 'hose';
+  flowOzPerSec: number;
   fillPercent: number;
 };
 
-/** Tank box sits mid-right of the pour overlay — map fill only inside that band. */
-const TANK_SURFACE_EMPTY = 72; // % overlay Y at empty tank floor
-const TANK_SURFACE_FULL = 44; // % overlay Y at full tank rim
-const STREAM_MOUTH_Y = 28;
-
-function tankSurfaceY(fillPercent: number): number {
-  const t = Math.max(0, Math.min(100, fillPercent)) / 100;
-  const surface =
-    TANK_SURFACE_EMPTY - t * (TANK_SURFACE_EMPTY - TANK_SURFACE_FULL);
-  // Always land below the mouth so the ribbon never pours upward.
-  return Math.max(STREAM_MOUTH_Y + 10, surface);
-}
-
-/** Liquid ribbon from bottle mouth or hose tip into the tank, plus splash. */
-export const PourStream: React.FC<StreamProps> = ({
+/**
+ * Bottle under the finger, slack hose from the left, and a lagged gravity stream.
+ * Gameplay (proximity → tilt → ounces) stays in the mini-game; this is the picture.
+ */
+export const PourStage: React.FC<PourStageProps> = ({
+  pointerRef,
+  tankRef,
   fluid,
-  active,
+  isPouring,
+  tiltDegrees,
   isGlugging,
-  from,
+  flowOzPerSec,
   fillPercent,
 }) => {
-  if (!active) return null;
-  const tint = FLUID_TINT[fluid];
-  const endY = tankSurfaceY(fillPercent);
-  const midY = STREAM_MOUTH_Y + (endY - STREAM_MOUTH_Y) * 0.45;
+  const stageRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const bottleRef = useRef<HTMLDivElement>(null);
+  const live = useRef({
+    fluid,
+    isPouring,
+    tiltDegrees,
+    isGlugging,
+    flowOzPerSec,
+    fillPercent,
+  });
+  live.current = {
+    fluid,
+    isPouring,
+    tiltDegrees,
+    isGlugging,
+    flowOzPerSec,
+    fillPercent,
+  };
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const stage = stageRef.current;
+    const bottleEl = bottleRef.current;
+    if (!canvas || !stage || !bottleEl) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rope: RopePoint[] = [];
+    const stream: StreamBit[] = [];
+    const splash: SplashBit[] = [];
+    const emit = { x: 0, y: 0, dx: 0, dy: 1, ready: false };
+    let dripUntil = 0;
+    let sheen = 0;
+    let last = performance.now();
+    let raf = 0;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const maxStream = reduced ? 28 : 60;
+    const maxSplash = reduced ? 24 : 52;
+
+    const ensureRope = (w: number, h: number) => {
+      if (rope.length === ROPE_N) return;
+      rope.length = 0;
+      for (let i = 0; i < ROPE_N; i++) {
+        const t = i / (ROPE_N - 1);
+        const x = 4 + t * w * 0.22;
+        const y = h * 0.34 + Math.sin(t * Math.PI) * h * 0.32;
+        rope.push({ x, y, px: x, py: y });
+      }
+    };
+
+    const stepRope = (w: number, h: number, dt: number, target: Vec, pouring: boolean) => {
+      ensureRope(w, h);
+      const damp = 0.985;
+      const grav = 520;
+      for (let i = 1; i < rope.length; i++) {
+        const p = rope[i];
+        const vx = (p.x - p.px) * damp;
+        const vy = (p.y - p.py) * damp;
+        p.px = p.x;
+        p.py = p.y;
+        p.x += vx;
+        p.y += vy + grav * dt * dt;
+      }
+      const lastP = rope[rope.length - 1];
+      const follow = pouring ? 0.22 : 0.08;
+      lastP.x += (target.x - lastP.x) * follow;
+      lastP.y += (target.y - lastP.y) * follow;
+
+      const pin = { x: 0, y: h * 0.38 };
+      const span = Math.hypot(target.x - pin.x, target.y - pin.y);
+      const rest = Math.max(span * 1.34, span + 48) / (rope.length - 1);
+      for (let k = 0; k < 8; k++) {
+        rope[0].x = pin.x;
+        rope[0].y = pin.y;
+        rope[0].px = pin.x;
+        rope[0].py = pin.y;
+        for (let i = 0; i < rope.length - 1; i++) {
+          const a = rope[i];
+          const b = rope[i + 1];
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const dist = Math.hypot(dx, dy) || 0.0001;
+          const diff = (dist - rest) / dist;
+          const ox = dx * diff * 0.5;
+          const oy = dy * diff * 0.5;
+          if (i > 0) {
+            a.x += ox;
+            a.y += oy;
+          }
+          b.x -= ox;
+          b.y -= oy;
+        }
+      }
+    };
+
+    const nozzleTip = (): { tip: Vec; dir: Vec } => {
+      const n = rope.length;
+      const a = rope[n - 2];
+      const b = rope[n - 1];
+      let dx = b.x - a.x;
+      let dy = b.y - a.y;
+      const len = Math.hypot(dx, dy) || 1;
+      dx /= len;
+      dy /= len;
+      // The hose may climb into the hand. The spout itself droops, so water leaves downward.
+      let ax = dx * 0.35 + 0.25;
+      let ay = 0.9;
+      const al = Math.hypot(ax, ay) || 1;
+      ax /= al;
+      ay /= al;
+      return {
+        tip: { x: b.x + ax * 30, y: b.y + ay * 30 },
+        dir: { x: ax, y: ay },
+      };
+    };
+
+    const pushStream = (mouth: Vec, dir: Vec, speed: number, width: number) => {
+      if (stream.length >= maxStream) stream.splice(0, stream.length - maxStream + 1);
+      const wob = (Math.random() - 0.5) * 0.45;
+      const px = -dir.y;
+      const py = dir.x;
+      stream.push({
+        x: mouth.x + px * wob * 3,
+        y: mouth.y + py * wob * 3,
+        vx: (dir.x + px * wob * 0.35) * speed,
+        vy: (dir.y + py * wob * 0.35) * speed,
+        age: 0,
+        life: 0.95,
+        wobble: Math.random() * Math.PI * 2,
+        w: width,
+      });
+    };
+
+    const burst = (x: number, y: number, inTank: boolean) => {
+      if (splash.length > maxSplash) splash.splice(0, 8);
+      splash.push({
+        x,
+        y,
+        vx: 0,
+        vy: 0,
+        age: 0,
+        life: 0.7,
+        r: inTank ? 22 : 16,
+        kind: 'ripple',
+      });
+      splash.push({
+        x,
+        y,
+        vx: 0,
+        vy: 0,
+        age: 0,
+        life: inTank ? 1.3 : 1.6,
+        r: inTank ? 10 : 14,
+        kind: 'puddle',
+      });
+      const drops = reduced ? 4 : 9;
+      for (let i = 0; i < drops; i++) {
+        const ang = -Math.PI * 0.85 + Math.random() * Math.PI * 0.7;
+        const sp = 50 + Math.random() * 140;
+        splash.push({
+          x,
+          y,
+          vx: Math.cos(ang) * sp,
+          vy: Math.sin(ang) * sp,
+          age: 0,
+          life: 0.45 + Math.random() * 0.35,
+          r: 1.4 + Math.random() * 1.8,
+          kind: i % 3 === 0 ? 'spray' : 'drop',
+        });
+      }
+      splash.push({
+        x: x + (Math.random() - 0.5) * 10,
+        y,
+        vx: 0,
+        vy: -10,
+        age: 0,
+        life: 0.35,
+        r: 2,
+        kind: 'glint',
+      });
+      if (inTank) sheen = Math.min(1, sheen + 0.35);
+    };
+
+    const frame = (now: number) => {
+      raf = requestAnimationFrame(frame);
+      const dt = Math.min(0.033, (now - last) / 1000);
+      last = now;
+      const box = stage.getBoundingClientRect();
+      const w = box.width;
+      const h = box.height;
+      if (w < 8 || h < 8) return;
+
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const pw = Math.round(w * dpr);
+      const ph = Math.round(h * dpr);
+      if (canvas.width !== pw || canvas.height !== ph) {
+        canvas.width = pw;
+        canvas.height = ph;
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+
+      const snap = live.current;
+      const tint = FLUID_TINT[snap.fluid];
+      const pointer = pointerRef.current ?? { x: w * 0.2, y: h * 0.4 };
+      const pouring = snap.isPouring;
+      const water = snap.fluid === 'WATER';
+      const glug =
+        pouring && snap.isGlugging ? Math.sin(now / 1000 * 18) * 2.6 : 0;
+      const tilt = pouring ? snap.tiltDegrees + glug : 0;
+      const { w: bw, h: bh, ox, oy } = bottleBox();
+
+      let mouth: Vec;
+      let dir: Vec;
+
+      if (water) {
+        const target = pouring
+          ? {
+              x: clamp(pointer.x, 28, w - 18),
+              y: clamp(pointer.y + 12, 20, h - 16),
+            }
+          : { x: w * 0.2, y: h * 0.78 };
+        stepRope(w, h, dt, target, pouring);
+        const nozzle = nozzleTip();
+        mouth = nozzle.tip;
+        dir = nozzle.dir;
+        bottleEl.style.display = 'none';
+      } else {
+        const grip = pouring
+          ? {
+              x: clamp(pointer.x, 20, w - 20),
+              y: clamp(pointer.y + 36, 24, h - 20),
+            }
+          : { x: w * 0.16, y: h - 28 };
+        const emitted = bottleEmitter(grip, tilt);
+        mouth = emitted.mouth;
+        dir = emitted.dir;
+        bottleEl.style.display = 'block';
+        bottleEl.style.width = `${bw}px`;
+        bottleEl.style.height = `${bh}px`;
+        bottleEl.style.left = `${grip.x - bw * ox}px`;
+        bottleEl.style.top = `${grip.y - bh * oy}px`;
+        bottleEl.style.transformOrigin = `${ox * 100}% ${oy * 100}%`;
+        bottleEl.style.transform = `rotate(${tilt}deg)`;
+      }
+
+      const lag = reduced ? 0.7 : 0.42;
+      if (!emit.ready) {
+        emit.x = mouth.x;
+        emit.y = mouth.y;
+        emit.dx = dir.x;
+        emit.dy = dir.y;
+        emit.ready = true;
+      } else {
+        emit.x += (mouth.x - emit.x) * lag;
+        emit.y += (mouth.y - emit.y) * lag;
+        emit.dx += (dir.x - emit.dx) * 0.35;
+        emit.dy += (dir.y - emit.dy) * 0.35;
+      }
+      const dlen = Math.hypot(emit.dx, emit.dy) || 1;
+      const edir = { x: emit.dx / dlen, y: emit.dy / dlen };
+
+      const flow = pouring ? snap.flowOzPerSec : 0;
+      const emitting = pouring && flow > 0.05;
+      if (emitting) dripUntil = now + 520;
+      const dripping = !emitting && now < dripUntil;
+
+      if (emitting) {
+        const speed = 120 + Math.min(flow, 70) * 3.2;
+        const width = 3.4 + Math.min(flow, 40) / 18 + (snap.isGlugging ? 0.7 : 0);
+        const nBits = 1;
+        for (let i = 0; i < nBits; i++) {
+          pushStream({ x: emit.x, y: emit.y }, edir, speed, width);
+        }
+      } else if (dripping && Math.random() < dt * 8) {
+        pushStream(
+          { x: emit.x, y: emit.y },
+          { x: edir.x * 0.25, y: Math.max(0.35, edir.y) },
+          70,
+          1.3
+        );
+        splash.push({
+          x: emit.x,
+          y: emit.y,
+          vx: 0,
+          vy: 20,
+          age: 0,
+          life: 0.25,
+          r: 1.6,
+          kind: 'glint',
+        });
+      }
+
+      const tankEl = tankRef.current;
+      let tank: { x: number; y: number; w: number; h: number; surface: number } | null =
+        null;
+      if (tankEl) {
+        const tr = tankEl.getBoundingClientRect();
+        const fill = clamp(snap.fillPercent, 0, 100) / 100;
+        tank = {
+          x: tr.left - box.left,
+          y: tr.top - box.top,
+          w: tr.width,
+          h: tr.height,
+          surface: tr.top - box.top + tr.height * (1 - fill),
+        };
+      }
+
+      const g = 980;
+      for (let i = stream.length - 1; i >= 0; i--) {
+        const p = stream[i];
+        p.vy += g * dt;
+        p.age += dt;
+        const sp = Math.hypot(p.vx, p.vy) || 1;
+        const nx = -p.vy / sp;
+        const ny = p.vx / sp;
+        const wob = Math.sin(p.age * 16 + p.wobble) * (reduced ? 0 : 5);
+        p.vx += nx * wob * dt;
+        p.vy += ny * wob * dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        let hit: { x: number; y: number; inTank: boolean } | null = null;
+        if (tank && p.x > tank.x + 4 && p.x < tank.x + tank.w - 4 && p.y >= tank.surface && p.vy > 0) {
+          hit = { x: p.x, y: tank.surface, inTank: true };
+        } else if (p.y > h - 6) {
+          hit = { x: p.x, y: h - 6, inTank: false };
+        }
+        if (hit || p.age > p.life) {
+          if (hit) burst(hit.x, hit.y, hit.inTank);
+          stream.splice(i, 1);
+        }
+      }
+
+      sheen = Math.max(0, sheen - dt * 0.55);
+      for (let i = splash.length - 1; i >= 0; i--) {
+        const s = splash[i];
+        s.age += dt;
+        if (s.kind === 'drop' || s.kind === 'spray') {
+          s.vy += g * dt;
+          s.x += s.vx * dt;
+          s.y += s.vy * dt;
+        }
+        if (s.age > s.life) splash.splice(i, 1);
+      }
+
+      if (water && rope.length > 1) {
+        drawSmooth(ctx, rope);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 16;
+        ctx.stroke();
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 7;
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(248,250,252,0.45)';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath();
+        ctx.arc(0, h * 0.34, 8, 0, Math.PI * 2);
+        ctx.fill();
+        const tip = nozzleTip();
+        const b = rope[rope.length - 1];
+        ctx.save();
+        ctx.translate(b.x, b.y);
+        ctx.rotate(Math.atan2(tip.dir.y, tip.dir.x));
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(-4, -7, 18, 14);
+        ctx.fillStyle = '#0ea5e9';
+        ctx.fillRect(10, -5, 14, 10);
+        ctx.fillStyle = '#e0f2fe';
+        ctx.fillRect(22, -3, 6, 6);
+        ctx.restore();
+      }
+
+      const runs: StreamBit[][] = [];
+      let run: StreamBit[] = [];
+      for (let i = 0; i < stream.length; i++) {
+        const p = stream[i];
+        const prev = run[run.length - 1];
+        if (prev && Math.hypot(p.x - prev.x, p.y - prev.y) > 36) {
+          if (run.length > 1) runs.push(run);
+          run = [];
+        }
+        run.push(p);
+      }
+      if (run.length > 1) runs.push(run);
+      for (const piece of runs) {
+        fillRibbon(ctx, piece, tint.deep, 1);
+        fillRibbon(ctx, piece, tint.stream, 0.72);
+        fillRibbon(ctx, piece, tint.edge, 0.28);
+      }
+
+      for (const s of splash) {
+        const t = s.age / s.life;
+        const fade = 1 - t;
+        if (s.kind === 'ripple') {
+          ctx.beginPath();
+          ctx.ellipse(s.x, s.y, s.r * (0.4 + t * 1.8), s.r * (0.18 + t * 0.45), 0, 0, Math.PI * 2);
+          ctx.strokeStyle = tint.edge;
+          ctx.globalAlpha = fade * 0.85;
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        } else if (s.kind === 'puddle') {
+          ctx.beginPath();
+          ctx.ellipse(s.x, s.y, s.r * (0.8 + t), s.r * 0.28, 0, 0, Math.PI * 2);
+          ctx.fillStyle = tint.splash;
+          ctx.globalAlpha = fade * 0.45;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        } else if (s.kind === 'glint') {
+          ctx.globalAlpha = fade;
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(s.x, s.y + s.vy * s.age, 2.2, 2.2);
+          ctx.globalAlpha = 1;
+        } else {
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, s.r * (s.kind === 'spray' ? 0.7 : 1), 0, Math.PI * 2);
+          ctx.fillStyle = s.kind === 'spray' ? tint.edge : tint.stream;
+          ctx.globalAlpha = fade;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      if (tank && sheen > 0.02) {
+        ctx.beginPath();
+        ctx.ellipse(
+          tank.x + tank.w * 0.5,
+          tank.surface + 3,
+          tank.w * 0.32,
+          5,
+          0,
+          0,
+          Math.PI * 2
+        );
+        ctx.fillStyle = `rgba(255,255,255,${0.28 * sheen})`;
+        ctx.fill();
+      }
+    };
+
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, [pointerRef, tankRef]);
+
+  const showBottle = fluid === 'FORMALDEHYDE' || fluid === 'SOFTENER';
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-[15]" aria-hidden>
-      {/* Stream path */}
-      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-        <defs>
-          <linearGradient id={`stream-grad-${fluid}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={tint.streamEdge} />
-            <stop offset="40%" stopColor={tint.stream} />
-            <stop offset="100%" stopColor={tint.stream} stopOpacity="0.35" />
-          </linearGradient>
-        </defs>
-        {from === 'bottle' ? (
-          <path
-            d={`M 22 ${STREAM_MOUTH_Y}
-                C 34 ${STREAM_MOUTH_Y + 4 + (isGlugging ? 2 : 0)}, 52 ${midY + (isGlugging ? 3 : 0)}, 72 ${endY - 4}
-                C 78 ${endY - 2}, 80 ${endY - 1}, 82 ${endY}`}
-            fill="none"
-            stroke={`url(#stream-grad-${fluid})`}
-            strokeWidth={isGlugging ? 2.4 : 1.7}
-            strokeLinecap="round"
-            className={isGlugging ? 'embalm-stream-wobble' : ''}
-            opacity="0.95"
-          />
-        ) : (
-          <path
-            d={`M 72 ${STREAM_MOUTH_Y}
-                C 74 ${STREAM_MOUTH_Y + 8}, 78 ${midY + (isGlugging ? 2 : 0)}, 82 ${endY}`}
-            fill="none"
-            stroke={`url(#stream-grad-${fluid})`}
-            strokeWidth={isGlugging ? 2.6 : 2}
-            strokeLinecap="round"
-            className={isGlugging ? 'embalm-stream-wobble' : ''}
-            opacity="0.95"
-          />
-        )}
-      </svg>
-
-      {/* Splash / ripples at tank surface */}
-      <div
-        className="absolute right-[11%] md:right-[13%] w-16 md:w-20"
-        style={{ top: `${endY}%` }}
-      >
-        <div
-          className="embalm-splash-ring absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border"
-          style={{
-            width: '2.5rem',
-            height: '0.85rem',
-            borderColor: tint.splash,
-            boxShadow: `0 0 10px ${tint.splash}`,
-          }}
-        />
-        <div
-          className="embalm-splash-ring-delay absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border"
-          style={{
-            width: '1.4rem',
-            height: '0.5rem',
-            borderColor: tint.streamEdge,
-          }}
-        />
-        <div
-          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full"
-          style={{ background: tint.stream, opacity: 0.8 }}
-        />
+    <div ref={stageRef} className="pointer-events-none absolute inset-0 z-[12]" aria-hidden>
+      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
+      <div ref={bottleRef} className="absolute left-0 top-0" style={{ display: 'none' }}>
+        {showBottle ? (
+          <ChemicalBottle kind={fluid === 'SOFTENER' ? 'SOFTENER' : 'FORMALDEHYDE'} />
+        ) : null}
       </div>
     </div>
   );

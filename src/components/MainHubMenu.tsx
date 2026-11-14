@@ -1,27 +1,226 @@
-import React from 'react';
-import { displayCaseName } from '../types/game';
-import { useGameStore } from '../store/useGameStore';
+import React, { useRef, useState } from 'react';
+import {
+  bankMsUntilForeclosure,
+  formatFamilyCountdown,
+} from '../data/bankForeclosure';
+import { resolveCortege } from '../data/funeralFleets';
+import { getUrnById } from '../data/urnCatalog';
+import { useTapAction } from '../hooks/useTapAction';
 import { gameNow } from '../utils/gameNow';
 import { getCremationTargets } from '../utils/mortuaryMath';
 import { retortProgress } from '../retort/retortTypes';
+import { directiveLabel, displayCaseName, type StationId } from '../types/game';
+import { useGameStore, type LastCaseNote } from '../store/useGameStore';
+import { HubAtmosphere } from './hub/HubAtmosphere';
+import type { DecedentCase } from '../types/game';
+
+type StatId = 'cash' | 'rep' | 'int' | 'oss' | 'urns';
+
+const BOB: { dur: string; delay: string }[] = [
+  { dur: '4.6s', delay: '0s' },
+  { dur: '5.5s', delay: '-1.3s' },
+  { dur: '3.8s', delay: '-0.5s' },
+  { dur: '6.2s', delay: '-2.2s' },
+  { dur: '4.3s', delay: '-0.9s' },
+  { dur: '5.7s', delay: '-1.8s' },
+  { dur: '5.0s', delay: '-2.7s' },
+];
+
+function lastCaseLine(note: LastCaseNote | null, cases: DecedentCase[]): string {
+  const newest = cases.reduce<DecedentCase | null>(
+    (best, c) => (!best || c.arrivedAt > best.arrivedAt ? c : best),
+    null
+  );
+  const newestAt = newest?.arrivedAt ?? 0;
+  if (note && note.at >= newestAt) {
+    const live = cases.find((c) => c.id === note.id);
+    const name = live ? displayCaseName(live) : note.name;
+    return `${name} · ${note.service}`;
+  }
+  if (newest) {
+    return `${displayCaseName(newest)} · ${directiveLabel(newest.directive)}`;
+  }
+  if (note) return `${note.name} · ${note.service}`;
+  return 'None yet';
+}
+
+function HubBurst({ id }: { id: StationId }) {
+  if (id === 'CREMATION') {
+    return (
+      <span className="hub-fx hub-fx-flame">
+        <i />
+        <i />
+        <i />
+        <i />
+        <i />
+      </span>
+    );
+  }
+  if (id === 'URN_FILLING') {
+    return (
+      <span className="hub-fx hub-fx-dust">
+        <i />
+        <i />
+        <i />
+        <i />
+        <i />
+        <i />
+      </span>
+    );
+  }
+  if (id === 'COOLER') {
+    return (
+      <span className="hub-fx hub-fx-frost">
+        <i />
+        <i />
+        <i />
+        <i />
+      </span>
+    );
+  }
+  if (id === 'EMBALMING') {
+    return (
+      <span className="hub-fx hub-fx-drip">
+        <i />
+        <i />
+        <i />
+      </span>
+    );
+  }
+  if (id === 'SHOWROOM') {
+    return (
+      <span className="hub-fx hub-fx-chapel">
+        <i />
+        <i />
+        <i />
+        <i />
+      </span>
+    );
+  }
+  if (id === 'URN_VAULT') {
+    return (
+      <span className="hub-fx hub-fx-gold">
+        <i />
+        <i />
+        <i />
+        <i />
+      </span>
+    );
+  }
+  return (
+    <span className="hub-fx hub-fx-crt">
+      <i />
+    </span>
+  );
+}
+
+function HubRoomButton({
+  id,
+  title,
+  subtitle,
+  badge,
+  color,
+  wide,
+  bob,
+  bursting,
+  onPick,
+}: {
+  id: StationId;
+  title: string;
+  subtitle: string;
+  badge?: string;
+  color: string;
+  wide: boolean;
+  bob: { dur: string; delay: string };
+  bursting: boolean;
+  onPick: (id: StationId) => void;
+}) {
+  const tap = useTapAction(() => onPick(id));
+  return (
+    <div
+      className={`hub-bob ${wide ? 'col-span-2' : ''}`}
+      style={{
+        ['--bob-dur' as string]: bob.dur,
+        ['--bob-delay' as string]: bob.delay,
+      }}
+    >
+      <button
+        type="button"
+        {...tap}
+        className={`min-h-[7.25rem] w-full rounded-2xl bg-gradient-to-br ${color} border p-3 flex flex-col justify-between items-start text-left shadow-[0_10px_30px_rgba(0,0,0,0.35)] active:scale-[0.98] relative overflow-hidden ${
+          wide ? 'min-h-[6.5rem]' : ''
+        }`}
+      >
+        {bursting && <HubBurst id={id} />}
+        <span aria-hidden className="absolute -right-2 -bottom-3 text-5xl opacity-[0.1] font-black pointer-events-none">
+          {title.slice(0, 1)}
+        </span>
+        <span className="relative text-[15px] font-extrabold tracking-wide">{title}</span>
+        {badge && (
+          <span className="relative px-2 py-1 text-[10px] font-bold bg-red-600 text-white rounded animate-pulse">
+            {badge}
+          </span>
+        )}
+        <span className="relative text-[11px] text-slate-300">{subtitle}</span>
+      </button>
+    </div>
+  );
+}
+
+function StatChip({
+  id,
+  active,
+  onTap,
+  children,
+  className,
+}: {
+  id: StatId;
+  active: boolean;
+  onTap: (id: StatId) => void;
+  children: React.ReactNode;
+  className: string;
+}) {
+  const tap = useTapAction(() => onTap(id));
+  return (
+    <button
+      type="button"
+      {...tap}
+      aria-expanded={active}
+      className={`bg-slate-950/80 px-2.5 py-1.5 rounded-lg border font-mono text-[11px] ${className} ${
+        active ? 'ring-1 ring-amber-300/70' : ''
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export const MainHubMenu: React.FC = () => {
   const {
     setActiveStation,
     cases,
-    activeCaseId,
     cash,
     reputation,
     intermentScore,
     ossilegiumCommuneGrams,
     retort,
     urnInventory,
+    lastCase,
+    ownedProperty,
+    activeLoans,
+    ownedFleetIds,
+    fleetAssignment,
+    negativeCashSinceMs,
+    bankForeclosed,
   } = useGameStore();
 
   const coolerCases = cases.filter((c) => c.location === 'COOLER');
   const vaultCount = cases.filter((c) => c.location === 'URN_VAULT').length;
-  const activeCase = cases.find((c) => c.id === activeCaseId) ?? null;
   const retortCase = cases.find((c) => c.id === retort.caseId);
   const urnOwned = Object.values(urnInventory).reduce((a, b) => a + b, 0);
+  const [openStat, setOpenStat] = useState<StatId | null>(null);
+  const [burst, setBurst] = useState<StationId | null>(null);
+  const navTimer = useRef<number | null>(null);
 
   const untaggedUrgentCount = coolerCases.filter(
     (c) => !c.isTagged && gameNow() < c.tagExpiresAt
@@ -37,61 +236,122 @@ export const MainHubMenu: React.FC = () => {
         )
       : null;
 
-  const tiles = [
+  const tiles: {
+    id: StationId;
+    title: string;
+    subtitle: string;
+    badge?: string;
+    color: string;
+  }[] = [
     {
-      id: 'COOLER' as const,
+      id: 'COOLER',
       title: 'COOLER',
       subtitle: `${coolerCases.length} / 6 Bays Occupied`,
-      badge:
-        untaggedUrgentCount > 0
-          ? `${untaggedUrgentCount} UNTAGGED`
-          : undefined,
-      color: 'from-cyan-950 via-slate-950 to-slate-950 border-cyan-500/45',
+      badge: untaggedUrgentCount > 0 ? `${untaggedUrgentCount} UNTAGGED` : undefined,
+      color: 'from-cyan-950/80 via-slate-950/65 to-slate-950/80 border-cyan-500/45',
     },
     {
-      id: 'EMBALMING' as const,
+      id: 'EMBALMING',
       title: 'EMBALMING',
       subtitle: 'Arterial mix & pour table',
-      color: 'from-emerald-950 via-slate-950 to-slate-950 border-emerald-500/45',
+      color: 'from-emerald-950/80 via-slate-950/65 to-slate-950/80 border-emerald-500/45',
     },
     {
-      id: 'CREMATION' as const,
+      id: 'CREMATION',
       title: 'CREMATORY',
       subtitle:
         burnPct != null
           ? `Running · ${burnPct}% — tap to return`
           : 'Millennium · door · tools · dial',
       badge: burnPct != null ? `BURN ${burnPct}%` : undefined,
-      color: 'from-orange-950 via-slate-950 to-slate-950 border-orange-500/45',
+      color: 'from-orange-950/75 via-slate-950/60 to-slate-950/78 border-orange-500/45',
     },
     {
-      id: 'URN_FILLING' as const,
+      id: 'URN_FILLING',
       title: 'URN PROCESSING',
       subtitle: 'Crush, magnet, cremulator',
-      color: 'from-amber-950 via-slate-950 to-slate-950 border-amber-500/45',
+      color: 'from-amber-950/75 via-slate-950/60 to-slate-950/78 border-amber-500/45',
     },
     {
-      id: 'SHOWROOM' as const,
+      id: 'SHOWROOM',
       title: 'CHAPEL',
       subtitle: 'Bier, flowers, family service',
-      color: 'from-violet-950 via-slate-950 to-slate-950 border-violet-500/45',
+      color: 'from-violet-950/75 via-slate-950/60 to-slate-950/78 border-violet-500/45',
     },
     {
-      id: 'URN_VAULT' as const,
+      id: 'URN_VAULT',
       title: 'URN VAULT',
       subtitle: `${vaultCount} sealed · collection display`,
-      color: 'from-stone-900 via-slate-950 to-slate-950 border-stone-500/45',
+      color: 'from-stone-900/75 via-slate-950/60 to-slate-950/78 border-stone-500/45',
     },
     {
-      id: 'COMPUTER' as const,
+      id: 'COMPUTER',
       title: 'COMPUTER',
       subtitle: `Desktop · Records · Shop · Fleets (${urnOwned} urns)`,
-      color: 'from-teal-950 via-slate-950 to-slate-950 border-teal-500/45',
+      color: 'from-teal-950/75 via-slate-950/60 to-slate-950/78 border-teal-500/45',
     },
   ];
 
+  const pickRoom = (id: StationId) => {
+    setOpenStat(null);
+    setBurst(id);
+    if (navTimer.current != null) window.clearTimeout(navTimer.current);
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    navTimer.current = window.setTimeout(() => {
+      setActiveStation(id);
+    }, reduced ? 0 : 680);
+  };
+
+  const debt = activeLoans.reduce((sum, l) => sum + l.principalRemaining, 0);
+  const coach = resolveCortege(ownedFleetIds, fleetAssignment).coach;
+  const urnLines = Object.entries(urnInventory)
+    .filter(([, n]) => n > 0)
+    .slice(0, 4)
+    .map(([id, n]) => `${getUrnById(id)?.name ?? id} ×${n}`);
+  const urnExtra = Object.values(urnInventory).filter((n) => n > 0).length - urnLines.length;
+
+  const statCopy: Record<StatId, { title: string; body: string; detail: string }> = {
+    cash: {
+      title: 'Cash',
+      body: 'House operating balance. Service payouts, vessel sales, fines, and loan drafts all post here. A negative balance starts the bank’s foreclosure clock.',
+      detail: `$${cash.toLocaleString()} on hand · ${ownedProperty.label}, ${ownedProperty.city} ${ownedProperty.stateCode} · loans $${debt.toLocaleString()} outstanding${
+        cash < 0 && negativeCashSinceMs != null && !bankForeclosed
+          ? ` · foreclosure in ${formatFamilyCountdown(bankMsUntilForeclosure(negativeCashSinceMs, gameNow()) ?? 0)}`
+          : ''
+      }`,
+    },
+    rep: {
+      title: 'Reputation',
+      body: 'Standing with families and the board. Finer urns and caskets in the emporium unlock as it rises. Decay, fines, and failed services cut it.',
+      detail: `Now ${reputation}.`,
+    },
+    int: {
+      title: 'Interment',
+      body: 'House total from the funeral coach. Each successful service adds that coach’s interment. Recovery vans add reputation; escorts add cash.',
+      detail: coach
+        ? `House interment ${intermentScore}. Coach ${coach.name} adds ${coach.interment} per successful service.`
+        : `House interment ${intermentScore}. No coach in the garage yet.`,
+    },
+    oss: {
+      title: 'Ossilegium Commune',
+      body: 'Communal cremains kept by the house. Finishing a cremation sets aside about two percent of that case’s bone ash.',
+      detail: `${ossilegiumCommuneGrams} g on hand.`,
+    },
+    urns: {
+      title: 'Urns in stock',
+      body: 'Vessels on the shelf for cremation families. Staging one for a case takes it out of this count.',
+      detail:
+        urnOwned === 0
+          ? 'Shelf is empty.'
+          : `${urnOwned} on the shelf. ${urnLines.join(', ')}${urnExtra > 0 ? ` +${urnExtra} more` : ''}.`,
+    },
+  };
+
+  const open = openStat ? statCopy[openStat] : null;
+
   return (
-    <div className="safe-hub w-full h-full bg-[#070b12] text-slate-100 flex flex-col select-none overflow-hidden">
+    <div className="safe-hub relative w-full h-full bg-[#070b12] text-slate-100 flex flex-col select-none overflow-hidden">
+      <HubAtmosphere />
       <div
         className="pointer-events-none absolute inset-0 opacity-70"
         style={{
@@ -100,7 +360,16 @@ export const MainHubMenu: React.FC = () => {
         }}
       />
 
-      <div className="relative shrink-0 border-b border-slate-800/90 pb-2 space-y-2 px-1">
+      {openStat && (
+        <button
+          type="button"
+          aria-label="Dismiss stat"
+          className="fixed inset-0 z-30 cursor-default bg-transparent"
+          onClick={() => setOpenStat(null)}
+        />
+      )}
+
+      <div className="relative z-40 shrink-0 border-b border-slate-800/90 pb-2 space-y-2 px-1">
         <div>
           <h1 className="text-lg font-black tracking-[0.08em] text-slate-50 leading-tight">
             OSSUARIAN
@@ -108,65 +377,86 @@ export const MainHubMenu: React.FC = () => {
               FIRST URN
             </span>
           </h1>
-          <p className="text-[11px] text-slate-400 leading-snug">
-            Selected:{' '}
-            <span className="text-amber-300 font-semibold">
-              {activeCase
-                ? `${displayCaseName(activeCase)} · ${activeCase.location}`
-                : 'None — Cooler'}
-            </span>
+          <p className="text-[11px] text-slate-400 leading-snug" data-hub-last-case>
+            Last case:{' '}
+            <span className="text-amber-300 font-semibold">{lastCaseLine(lastCase, cases)}</span>
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-1.5 font-mono text-[11px]">
-          <div className="bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-slate-800">
+        <div className="flex flex-wrap gap-1.5">
+          <StatChip
+            id="cash"
+            active={openStat === 'cash'}
+            onTap={(id) => setOpenStat((s) => (s === id ? null : id))}
+            className="border-slate-800"
+          >
             $
-            <span
-              className={`font-bold ${cash < 0 ? 'text-red-400' : 'text-emerald-400'}`}
-            >
+            <span className={`font-bold ${cash < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
               {cash.toLocaleString()}
             </span>
-          </div>
-          <div className="bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-slate-800">
+          </StatChip>
+          <StatChip
+            id="rep"
+            active={openStat === 'rep'}
+            onTap={(id) => setOpenStat((s) => (s === id ? null : id))}
+            className="border-slate-800"
+          >
             REP <span className="text-sky-400 font-bold">{reputation}</span>
-          </div>
-          <div className="bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-amber-700/50">
-            INT{' '}
-            <span className="text-amber-200 font-bold">{intermentScore}</span>
-          </div>
-          <div className="bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-slate-800">
+          </StatChip>
+          <StatChip
+            id="int"
+            active={openStat === 'int'}
+            onTap={(id) => setOpenStat((s) => (s === id ? null : id))}
+            className="border-amber-700/50"
+          >
+            INT <span className="text-amber-200 font-bold">{intermentScore}</span>
+          </StatChip>
+          <StatChip
+            id="oss"
+            active={openStat === 'oss'}
+            onTap={(id) => setOpenStat((s) => (s === id ? null : id))}
+            className="border-slate-800"
+          >
             OSS <span className="text-violet-300 font-bold">{ossilegiumCommuneGrams}g</span>
-          </div>
-          <div className="bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-amber-900/50">
+          </StatChip>
+          <StatChip
+            id="urns"
+            active={openStat === 'urns'}
+            onTap={(id) => setOpenStat((s) => (s === id ? null : id))}
+            className="border-amber-900/50"
+          >
             URNS <span className="text-amber-300 font-bold">{urnOwned}</span>
-          </div>
+          </StatChip>
         </div>
+
+        {open && (
+          <div
+            className="rounded-xl border border-slate-700 bg-slate-950/95 p-3 text-[12px] text-slate-300 shadow-xl"
+            data-hub-stat={openStat}
+          >
+            <div className="text-[10px] uppercase tracking-[0.16em] text-amber-200/90">
+              {open.title}
+            </div>
+            <p className="mt-1 leading-snug">{open.body}</p>
+            <p className="mt-2 font-mono text-[11px] text-slate-100 leading-snug">{open.detail}</p>
+          </div>
+        )}
       </div>
 
-      <div className="relative flex-1 min-h-0 grid grid-cols-2 gap-2.5 content-start py-3 overflow-y-auto pb-20">
-        {tiles.map((tile) => (
-          <button
+      <div className="relative z-10 flex-1 min-h-0 grid grid-cols-2 gap-2.5 content-start py-3 overflow-y-auto pb-20">
+        {tiles.map((tile, index) => (
+          <HubRoomButton
             key={tile.id}
-            type="button"
-            onClick={() => setActiveStation(tile.id)}
-            style={{ touchAction: 'manipulation' }}
-            className={`min-h-[7.25rem] w-full rounded-2xl bg-gradient-to-br ${tile.color} border p-3 flex flex-col justify-between items-start text-left shadow-[0_10px_30px_rgba(0,0,0,0.35)] active:scale-[0.98] transition-transform relative overflow-hidden ${
-              tile.id === 'COMPUTER' ? 'col-span-2 min-h-[6.5rem]' : ''
-            }`}
-          >
-            <span className="absolute -right-2 -bottom-3 text-5xl opacity-[0.1] font-black pointer-events-none">
-              {tile.title.slice(0, 1)}
-            </span>
-            <span className="text-[15px] font-extrabold tracking-wide">
-              {tile.title}
-            </span>
-            {tile.badge && (
-              <span className="px-2 py-1 text-[10px] font-bold bg-red-600 text-white rounded animate-pulse">
-                {tile.badge}
-              </span>
-            )}
-            <span className="text-[11px] text-slate-300">{tile.subtitle}</span>
-          </button>
+            id={tile.id}
+            title={tile.title}
+            subtitle={tile.subtitle}
+            badge={tile.badge}
+            color={tile.color}
+            wide={tile.id === 'COMPUTER'}
+            bob={BOB[index] ?? BOB[0]}
+            bursting={burst === tile.id}
+            onPick={pickRoom}
+          />
         ))}
       </div>
     </div>

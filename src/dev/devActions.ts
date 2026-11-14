@@ -342,6 +342,38 @@ export function fillCooler() {
   toast(added > 0 ? `Filled cooler (+${added})` : 'Cooler already full');
 }
 
+/** Put a case in the chamber and fire the retort so the hub shows a live burn. */
+export function startRetortBurn() {
+  const state = useGameStore.getState();
+  const target =
+    state.cases.find((c) => c.location !== 'EMBALMING') ?? state.cases[0];
+  if (!target) {
+    toast('No case to burn');
+    return;
+  }
+  useGameStore.setState({
+    cases: state.cases.map((c) =>
+      c.id === target.id ? { ...c, location: 'CREMATION' as const } : c
+    ),
+    activeCaseId: target.id,
+    activeStation: 'OVERVIEW',
+    retort: {
+      ...IDLE_RETORT,
+      caseId: target.id,
+      phase: 'BURN',
+      blowerOn: true,
+      heated: true,
+      secondaryOn: true,
+      primaryOn: true,
+      secondaryTemp: 1500,
+      primaryTemp: 1450,
+      elapsedSec: 40,
+      audioMode: 'LOOP',
+    },
+  });
+  toast('Retort burning');
+}
+
 export function clearCooler() {
   useGameStore.setState((s) => {
     const keep = s.cases.filter((c) => c.location !== 'COOLER');

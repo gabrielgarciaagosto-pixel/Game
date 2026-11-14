@@ -8,11 +8,7 @@ import {
   calculatePourPhysics,
   evaluateEmbalmingRank,
 } from '../utils/mortuaryMath';
-import {
-  ChemicalBottle,
-  PourStream,
-  WaterHose,
-} from './embalming/EmbalmingPourVisuals';
+import { PourStage } from './embalming/EmbalmingPourVisuals';
 
 type FluidType = 'WATER' | 'FORMALDEHYDE' | 'SOFTENER';
 
@@ -57,9 +53,9 @@ export const EmbalmingMiniGame: React.FC = () => {
 
   const [isPouring, setIsPouring] = useState(false);
   const [proximity, setProximity] = useState(0);
-  /** Water hose slide takes ~500ms — hold stream until nozzle is on-screen. */
-  const [hoseStreamReady, setHoseStreamReady] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const tankRef = useRef<HTMLDivElement>(null);
+  const pointerRef = useRef({ x: 80, y: 120 });
   const lastGlugHaptic = useRef(0);
   const proximityRef = useRef(0);
   const selectedFluidRef = useRef<FluidType>(selectedFluid);
@@ -71,15 +67,6 @@ export const EmbalmingMiniGame: React.FC = () => {
   useEffect(() => {
     selectedFluidRef.current = selectedFluid;
   }, [selectedFluid]);
-
-  useEffect(() => {
-    if (selectedFluid === 'WATER' && isPouring) {
-      setHoseStreamReady(false);
-      const t = window.setTimeout(() => setHoseStreamReady(true), 480);
-      return () => window.clearTimeout(t);
-    }
-    setHoseStreamReady(false);
-  }, [selectedFluid, isPouring]);
 
   useEffect(() => {
     if (!isPouring) return;
@@ -311,10 +298,24 @@ export const EmbalmingMiniGame: React.FC = () => {
         ref={containerRef}
         onPointerDown={(e) => {
           (e.currentTarget as HTMLDivElement).setPointerCapture?.(e.pointerId);
+          const rect = containerRef.current?.getBoundingClientRect();
+          if (rect) {
+            pointerRef.current = {
+              x: e.clientX - rect.left,
+              y: e.clientY - rect.top,
+            };
+          }
           setIsPouring(true);
           updateProximityFromEvent(e, containerRef.current, setProximity);
         }}
         onPointerMove={(e) => {
+          const rect = containerRef.current?.getBoundingClientRect();
+          if (rect) {
+            pointerRef.current = {
+              x: e.clientX - rect.left,
+              y: e.clientY - rect.top,
+            };
+          }
           if (!isPouring && e.buttons === 0) return;
           updateProximityFromEvent(e, containerRef.current, setProximity);
         }}
@@ -331,45 +332,24 @@ export const EmbalmingMiniGame: React.FC = () => {
               targets.totalVolumeOz) *
               100
           );
-          const showBottle =
-            selectedFluid === 'FORMALDEHYDE' || selectedFluid === 'SOFTENER';
-          const hoseExtended = selectedFluid === 'WATER' && isPouring;
-          const streamActive =
-            isPouring &&
-            physics.currentFlowOzPerSec > 0.01 &&
-            (selectedFluid !== 'WATER' || hoseStreamReady);
-
           return (
             <>
-              {showBottle && (
-                <ChemicalBottle
-                  kind={
-                    selectedFluid === 'SOFTENER' ? 'SOFTENER' : 'FORMALDEHYDE'
-                  }
-                  tiltDegrees={physics.tiltDegrees}
-                  isPouring={isPouring}
-                  isGlugging={physics.isGlugging}
-                />
-              )}
-              {selectedFluid === 'WATER' && (
-                <WaterHose
-                  extended={hoseExtended}
-                  isPouring={isPouring && hoseStreamReady}
-                />
-              )}
-              <PourStream
+              <PourStage
+                pointerRef={pointerRef}
+                tankRef={tankRef}
                 fluid={selectedFluid}
-                active={streamActive}
+                isPouring={isPouring}
+                tiltDegrees={physics.tiltDegrees}
                 isGlugging={physics.isGlugging}
-                from={selectedFluid === 'WATER' ? 'hose' : 'bottle'}
+                flowOzPerSec={physics.currentFlowOzPerSec}
                 fillPercent={fillPercent}
               />
 
-              <div className="z-10 pointer-events-none max-w-[55%] self-start mt-3">
+              <div className="z-30 pointer-events-none max-w-[55%] self-start mt-3">
                 <p className="text-xs md:text-sm uppercase tracking-wider text-slate-400">
                   {selectedFluid === 'WATER'
-                    ? 'HOLD TO RUN WATER HOSE INTO THE TANK — DRAG RIGHT FOR FASTER FLOW'
-                    : 'TAP, HOLD & DRAG RIGHT TOWARD EMBALMING MACHINE TO TIP BOTTLE FASTER'}
+                    ? 'HOLD THE NOZZLE — HOSE FEEDS FROM THE LEFT — DRAG RIGHT FOR FASTER FLOW'
+                    : 'HOLD THE BOTTLE UNDER YOUR FINGER — DRAG RIGHT TO TIP IT FASTER'}
                 </p>
                 <p className="text-base md:text-lg font-mono text-emerald-300 mt-1">
                   {selectedFluid === 'WATER' ? 'Hose' : 'Bottle'} Tilt:{' '}
@@ -385,7 +365,10 @@ export const EmbalmingMiniGame: React.FC = () => {
                 </p>
               </div>
 
-              <div className="w-28 h-36 md:w-36 md:h-44 border-4 border-slate-400 rounded-b-lg relative bg-slate-950 flex flex-col justify-end overflow-hidden z-10 shadow-[inset_0_0_24px_rgba(0,0,0,0.55)]">
+              <div
+                ref={tankRef}
+                className="w-28 h-36 md:w-36 md:h-44 border-4 border-slate-400 rounded-b-lg relative bg-slate-950 flex flex-col justify-end overflow-hidden z-10 shadow-[inset_0_0_24px_rgba(0,0,0,0.55)]"
+              >
                 <div
                   style={{ height: `${fillPercent}%` }}
                   className={`w-full transition-all ${

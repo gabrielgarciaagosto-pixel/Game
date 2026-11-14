@@ -1,15 +1,24 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import type {
-  CaseInboxFile,
-  CaseLocation,
-  DecedentCase,
-  PreferredCasketMaterial,
-  PreferredUrnMaterial,
-  Rank,
-  ShowroomItem,
-  StationId,
+import {
+  directiveLabel,
+  type CaseInboxFile,
+  type CaseLocation,
+  type DecedentCase,
+  type PreferredCasketMaterial,
+  type PreferredUrnMaterial,
+  type Rank,
+  type ShowroomItem,
+  type StationId,
 } from '../types/game';
+
+/** Most recent intake or finished service, for the hub “Last case” line. */
+export type LastCaseNote = {
+  id: string;
+  name: string;
+  service: string;
+  at: number;
+};
 import {
   IDLE_RETORT,
   type RetortMachine,
@@ -192,6 +201,13 @@ interface GameState {
   fleetAssignment: FleetAssignment;
   /** Lifetime interment from funeral coaches (persisted) */
   intermentScore: number;
+  /** Newest intake or last finished service (persisted). */
+  lastCase: LastCaseNote | null;
+  /**
+   * Wall-clock when the player left the embalming table.
+   * Fumes linger on the hub. Not persisted.
+   */
+  embalmingLeftAtMs: number | null;
   /** Working cremulator available for urn processing */
   cremulatorOwned: boolean;
   cremulatorDamaged: boolean;
@@ -750,6 +766,7 @@ export function freshPersistedGameFields() {
     ownedFleetIds: [] as string[],
     fleetAssignment: { ...EMPTY_FLEET_ASSIGNMENT },
     intermentScore: 0,
+    lastCase: null as LastCaseNote | null,
   };
 }
 
@@ -762,6 +779,18 @@ export function pauseGamePersistWrites() {
       removeItem: () => {},
     })),
   });
+}
+
+function normalizeLastCase(raw: unknown): LastCaseNote | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Partial<LastCaseNote>;
+  if (typeof r.name !== 'string' || typeof r.service !== 'string') return null;
+  return {
+    id: typeof r.id === 'string' ? r.id : '',
+    name: r.name,
+    service: r.service,
+    at: typeof r.at === 'number' ? r.at : 0,
+  };
 }
 
 /** Restore default localStorage persist after a wipe cycle. */
@@ -780,6 +809,7 @@ export const useGameStore = create<GameState>()(
   intakeToast: null,
   legalAlert: null,
   serviceFeedback: null,
+  embalmingLeftAtMs: null,
 
   getActiveCase: () => resolveActiveCase(get()),
 
@@ -817,19 +847,25 @@ export const useGameStore = create<GameState>()(
           : toast,
       legalAlert: null,
       serviceFeedback: null,
+      embalmingLeftAtMs: null,
     }),
 
   setActiveStation: (station) => {
+    const prev = get().activeStation;
+    const leftEmbalming =
+      prev === 'EMBALMING' && station !== 'EMBALMING'
+        ? { embalmingLeftAtMs: Date.now() }
+        : {};
     // Emporium lives on the Computer as a shop browser tab
     if (station === 'EMPORIUM') {
-      set({ activeStation: 'COMPUTER', computerOpenApp: 'SHOP' });
+      set({ activeStation: 'COMPUTER', computerOpenApp: 'SHOP', ...leftEmbalming });
       return;
     }
     if (station === 'COMPUTER') {
-      set({ activeStation: 'COMPUTER', computerOpenApp: null });
+      set({ activeStation: 'COMPUTER', computerOpenApp: null, ...leftEmbalming });
       return;
     }
-    set({ activeStation: station });
+    set({ activeStation: station, ...leftEmbalming });
   },
 
   setComputerOpenApp: (app) => set({ computerOpenApp: app }),
@@ -915,6 +951,12 @@ export const useGameStore = create<GameState>()(
       inboxFiles: [toInboxFile(next), ...state.inboxFiles],
       intakeToast: 'New Remains Received in Cooler',
       activeCaseId: state.activeCaseId ?? next.id,
+      lastCase: {
+        id: next.id,
+        name: next.name,
+        service: directiveLabel(next.directive),
+        at: next.arrivedAt,
+      },
     });
     return true;
   },
@@ -2573,6 +2615,13 @@ export const useGameStore = create<GameState>()(
                 decayRepHit
         ),
         intermentScore: intermentTotal,
+        lastCase: {
+          id: c.id,
+          name: c.name,
+          service:
+            chosenDisposition === 'BURIAL' ? 'Burial service' : 'Cremation service',
+          at: gameNow(),
+        },
         legalAlert: alertMsg,
         serviceFeedback: serviceFailed
           ? null
@@ -2755,6 +2804,7 @@ export const useGameStore = create<GameState>()(
         ownedFleetIds: state.ownedFleetIds,
         fleetAssignment: state.fleetAssignment,
         intermentScore: state.intermentScore,
+        lastCase: state.lastCase,
       }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<GameState>;
@@ -2845,6 +2895,7 @@ export const useGameStore = create<GameState>()(
             typeof p.intermentScore === 'number'
               ? p.intermentScore
               : current.intermentScore ?? 0,
+          lastCase: normalizeLastCase(p.lastCase) ?? current.lastCase ?? null,
           intakeToast: null,
           legalAlert: null,
           serviceFeedback: null,
