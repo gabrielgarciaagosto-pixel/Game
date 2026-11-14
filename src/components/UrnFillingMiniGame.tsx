@@ -129,6 +129,8 @@ export const UrnFillingMiniGame: React.FC = () => {
     Array<{ id: number; x: number; y: number; life: number }>
   >([]);
   const particleId = useRef(0);
+  const tiltingRef = useRef(false);
+  const urnFillRef = useRef(0);
 
   const trayRef = useRef<HTMLDivElement>(null);
   const pourRef = useRef<HTMLDivElement>(null);
@@ -338,38 +340,48 @@ export const UrnFillingMiniGame: React.FC = () => {
     requestAnimationFrame(tick);
   };
 
-  const handlePourMove = (e: React.PointerEvent) => {
-    if (!isTilting || !pourRef.current) return;
+  const applyPourAt = (clientY: number) => {
+    if (!tiltingRef.current || !pourRef.current) return;
     const rect = pourRef.current.getBoundingClientRect();
-    const normY = 1 - (e.clientY - rect.top) / rect.height;
+    const normY = 1 - (clientY - rect.top) / rect.height;
     const nextTilt = Math.max(0, Math.min(78, normY * 78));
     setTilt(nextTilt);
     if (nextTilt > 18) {
       setAshPouring(true);
       startAshPourSfx(0.12 + (nextTilt / 78) * 0.18);
       const rate = ((nextTilt - 18) / 60) * 1.85;
-      const spilling = nextTilt >= SPILL_TILT && urnFill >= FILL_LINE - 4;
+      const spilling =
+        nextTilt >= SPILL_TILT && urnFillRef.current >= FILL_LINE - 4;
       if (spilling) {
         setSpillGrams((s) => Math.min(40, +(s + rate * 0.35).toFixed(1)));
-        setUrnFill((v) => Math.min(100, +(v + rate * 0.25).toFixed(1)));
+        const next = Math.min(100, +(urnFillRef.current + rate * 0.25).toFixed(1));
+        urnFillRef.current = next;
+        setUrnFill(next);
       } else {
-        setUrnFill((v) => Math.min(100, +(v + rate).toFixed(1)));
+        const next = Math.min(100, +(urnFillRef.current + rate).toFixed(1));
+        urnFillRef.current = next;
+        setUrnFill(next);
       }
-      // Ash particles
       if (Math.random() < 0.55) {
         const id = ++particleId.current;
         const x = 42 + Math.random() * 16 + (spilling ? 18 : 0);
-        setParticles((prev) =>
-          [
-            ...prev.slice(-28),
-            { id, x, y: 28 + Math.random() * 8, life: 1 },
-          ]
-        );
+        setParticles((prev) => [
+          ...prev.slice(-28),
+          { id, x, y: 28 + Math.random() * 8, life: 1 },
+        ]);
       }
     } else {
       setAshPouring(false);
       stopAshPourSfx();
     }
+  };
+
+  const endPour = () => {
+    if (!tiltingRef.current) return;
+    tiltingRef.current = false;
+    setIsTilting(false);
+    setAshPouring(false);
+    stopAshPourSfx();
   };
 
   useEffect(() => {
@@ -388,36 +400,10 @@ export const UrnFillingMiniGame: React.FC = () => {
     return () => stopAshPourSfx();
   }, []);
 
-  // Window move/up so pour tracks when setPointerCapture is rejected
+  // Sole move/up path — avoids double-fill from element + window listeners
   useEffect(() => {
-    const onWinMove = (e: PointerEvent) => {
-      if (!isTilting || !pourRef.current) return;
-      const rect = pourRef.current.getBoundingClientRect();
-      const normY = 1 - (e.clientY - rect.top) / rect.height;
-      const nextTilt = Math.max(0, Math.min(78, normY * 78));
-      setTilt(nextTilt);
-      if (nextTilt > 18) {
-        setAshPouring(true);
-        startAshPourSfx(0.12 + (nextTilt / 78) * 0.18);
-        const rate = ((nextTilt - 18) / 60) * 1.85;
-        const spilling = nextTilt >= SPILL_TILT && urnFill >= FILL_LINE - 4;
-        if (spilling) {
-          setSpillGrams((s) => Math.min(40, +(s + rate * 0.35).toFixed(1)));
-          setUrnFill((v) => Math.min(100, +(v + rate * 0.25).toFixed(1)));
-        } else {
-          setUrnFill((v) => Math.min(100, +(v + rate).toFixed(1)));
-        }
-      } else {
-        setAshPouring(false);
-        stopAshPourSfx();
-      }
-    };
-    const onWinUp = () => {
-      if (!isTilting) return;
-      setIsTilting(false);
-      setAshPouring(false);
-      stopAshPourSfx();
-    };
+    const onWinMove = (e: PointerEvent) => applyPourAt(e.clientY);
+    const onWinUp = () => endPour();
     window.addEventListener('pointermove', onWinMove);
     window.addEventListener('pointerup', onWinUp);
     window.addEventListener('pointercancel', onWinUp);
@@ -426,7 +412,7 @@ export const UrnFillingMiniGame: React.FC = () => {
       window.removeEventListener('pointerup', onWinUp);
       window.removeEventListener('pointercancel', onWinUp);
     };
-  }, [isTilting, urnFill]);
+  }, []);
 
   // Resume ash-ready cases after Emporium / station hops
   useEffect(() => {
@@ -1034,30 +1020,15 @@ export const UrnFillingMiniGame: React.FC = () => {
             ref={pourRef}
             className="relative flex-1 rounded-xl border-2 border-zinc-700 bg-gradient-to-b from-zinc-900 to-zinc-950 flex items-end justify-center pb-6 touch-none overflow-hidden"
             onPointerDown={(e) => {
+              e.preventDefault();
+              tiltingRef.current = true;
               setIsTilting(true);
               try {
                 e.currentTarget.setPointerCapture(e.pointerId);
               } catch {
-                /* window listeners still drive pour */
+                /* window pointermove/up still drive the pour */
               }
-              handlePourMove(e);
-            }}
-            onPointerMove={handlePourMove}
-            onPointerUp={() => {
-              setIsTilting(false);
-              setAshPouring(false);
-              stopAshPourSfx();
-            }}
-            onPointerCancel={() => {
-              setIsTilting(false);
-              setAshPouring(false);
-              stopAshPourSfx();
-            }}
-            onPointerLeave={() => {
-              if (!isTilting) return;
-              setIsTilting(false);
-              setAshPouring(false);
-              stopAshPourSfx();
+              applyPourAt(e.clientY);
             }}
           >
             {/* Funnel */}
