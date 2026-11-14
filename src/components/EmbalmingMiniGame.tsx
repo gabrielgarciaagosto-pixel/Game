@@ -8,6 +8,11 @@ import {
   calculatePourPhysics,
   evaluateEmbalmingRank,
 } from '../utils/mortuaryMath';
+import {
+  ChemicalBottle,
+  PourStream,
+  WaterHose,
+} from './embalming/EmbalmingPourVisuals';
 
 type FluidType = 'WATER' | 'FORMALDEHYDE' | 'SOFTENER';
 
@@ -306,60 +311,102 @@ export const EmbalmingMiniGame: React.FC = () => {
         onPointerCancel={() => setIsPouring(false)}
         className="relative flex-1 bg-slate-900 rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-between px-6 md:px-12 overflow-hidden touch-none"
       >
-        <div className="z-10 pointer-events-none max-w-[60%]">
-          <p className="text-xs md:text-sm uppercase tracking-wider text-slate-400">
-            TAP, HOLD & DRAG RIGHT TOWARD EMBALMING MACHINE TO TIP BOTTLE FASTER
-          </p>
-          <p className="text-base md:text-lg font-mono text-emerald-300 mt-1">
-            Bottle Tilt: {isPouring ? `${physics.tiltDegrees}°` : '0°'} | Flow
-            Rate:{' '}
-            {isPouring ? `${physics.currentFlowOzPerSec} oz/s` : '0 oz/s'}{' '}
-            {physics.isGlugging && isPouring && (
-              <span className="text-amber-400 font-bold animate-pulse">
-                [GLUGGING!]
-              </span>
-            )}
-          </p>
-        </div>
+        {(() => {
+          const fillPercent = Math.min(
+            100,
+            ((displayedPoured.waterOz +
+              displayedPoured.formaldehydeOz +
+              displayedPoured.softenerOz) /
+              targets.totalVolumeOz) *
+              100
+          );
+          const showBottle =
+            selectedFluid === 'FORMALDEHYDE' || selectedFluid === 'SOFTENER';
+          const hoseExtended = selectedFluid === 'WATER' && isPouring;
+          const streamActive =
+            isPouring && physics.currentFlowOzPerSec > 0.01;
 
-        <div className="w-28 h-36 md:w-36 md:h-44 border-4 border-slate-400 rounded-b-lg relative bg-slate-950 flex flex-col justify-end overflow-hidden">
-          <div
-            style={{
-              height: `${Math.min(
-                100,
-                ((displayedPoured.waterOz +
-                  displayedPoured.formaldehydeOz +
-                  displayedPoured.softenerOz) /
-                  targets.totalVolumeOz) *
-                  100
-              )}%`,
-            }}
-            className="w-full bg-gradient-to-t from-rose-600/80 via-violet-500/70 to-sky-400/70 transition-all"
-          />
-          <span className="absolute inset-0 flex items-center justify-center text-xs font-mono text-white drop-shadow">
-            TANK
-          </span>
-        </div>
+          return (
+            <>
+              {showBottle && (
+                <ChemicalBottle
+                  kind={
+                    selectedFluid === 'SOFTENER' ? 'SOFTENER' : 'FORMALDEHYDE'
+                  }
+                  tiltDegrees={physics.tiltDegrees}
+                  isPouring={isPouring}
+                  isGlugging={physics.isGlugging}
+                />
+              )}
+              {selectedFluid === 'WATER' && (
+                <WaterHose extended={hoseExtended} isPouring={isPouring} />
+              )}
+              <PourStream
+                fluid={selectedFluid}
+                active={streamActive}
+                isGlugging={physics.isGlugging}
+                from={selectedFluid === 'WATER' ? 'hose' : 'bottle'}
+                fillPercent={fillPercent}
+              />
+
+              <div className="z-10 pointer-events-none max-w-[55%] self-start mt-3">
+                <p className="text-xs md:text-sm uppercase tracking-wider text-slate-400">
+                  {selectedFluid === 'WATER'
+                    ? 'HOLD TO RUN WATER HOSE INTO THE TANK — DRAG RIGHT FOR FASTER FLOW'
+                    : 'TAP, HOLD & DRAG RIGHT TOWARD EMBALMING MACHINE TO TIP BOTTLE FASTER'}
+                </p>
+                <p className="text-base md:text-lg font-mono text-emerald-300 mt-1">
+                  {selectedFluid === 'WATER' ? 'Hose' : 'Bottle'} Tilt:{' '}
+                  {isPouring ? `${physics.tiltDegrees}°` : '0°'} | Flow Rate:{' '}
+                  {isPouring
+                    ? `${physics.currentFlowOzPerSec} oz/s`
+                    : '0 oz/s'}{' '}
+                  {physics.isGlugging && isPouring && (
+                    <span className="text-amber-400 font-bold animate-pulse">
+                      [GLUGGING!]
+                    </span>
+                  )}
+                </p>
+              </div>
+
+              <div className="w-28 h-36 md:w-36 md:h-44 border-4 border-slate-400 rounded-b-lg relative bg-slate-950 flex flex-col justify-end overflow-hidden z-10 shadow-[inset_0_0_24px_rgba(0,0,0,0.55)]">
+                <div
+                  style={{ height: `${fillPercent}%` }}
+                  className={`w-full transition-all ${
+                    isPouring ? 'embalm-tank-ripple' : ''
+                  } bg-gradient-to-t from-rose-600/80 via-violet-500/70 to-sky-400/70`}
+                />
+                <span className="absolute inset-0 flex items-center justify-center text-xs font-mono text-white drop-shadow">
+                  TANK
+                </span>
+              </div>
+            </>
+          );
+        })()}
       </div>
 
       <div className="flex flex-wrap justify-between items-center mt-4 gap-3">
         <div className="flex gap-2 flex-wrap">
-          {(['FORMALDEHYDE', 'SOFTENER', 'WATER'] as FluidType[]).map(
-            (fluid) => (
-              <button
-                key={fluid}
-                type="button"
-                onPointerDown={() => setSelectedFluid(fluid)}
-                className={`px-4 py-2 rounded font-semibold text-sm ${
-                  selectedFluid === fluid
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-slate-800 text-slate-300'
-                }`}
-              >
-                Select {fluid}
-              </button>
-            )
-          )}
+          {(
+            [
+              { id: 'FORMALDEHYDE' as const, label: 'Select FORMALDEHYDE' },
+              { id: 'SOFTENER' as const, label: 'Select SOFTENER' },
+              { id: 'WATER' as const, label: 'Add water' },
+            ] as const
+          ).map((fluid) => (
+            <button
+              key={fluid.id}
+              type="button"
+              onPointerDown={() => setSelectedFluid(fluid.id)}
+              className={`px-4 py-2 rounded font-semibold text-sm ${
+                selectedFluid === fluid.id
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-slate-800 text-slate-300'
+              }`}
+            >
+              {fluid.label}
+            </button>
+          ))}
         </div>
 
         <button

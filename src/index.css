@@ -168,3 +168,82 @@ canvas {
     radial-gradient(80% 55% at 50% 100%, rgba(234, 88, 12, 0.28), transparent 62%);
   background-size: 100% 14px, 22px 100%, auto;
 }
+
+/* Embalming pour visuals (cosmetic only — physics unchanged) */
+@keyframes embalm-glug {
+  0%,
+  100% {
+    transform: rotate(0deg) translateX(0);
+  }
+  25% {
+    transform: rotate(2.4deg) translateX(1px);
+  }
+  75% {
+    transform: rotate(-1.8deg) translateX(-1px);
+  }
+}
+
+@keyframes embalm-splash {
+  0% {
+    transform: translate(-50%, -50%) scale(0.55);
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.55);
+    opacity: 0;
+  }
+}
+
+@keyframes embalm-stream-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes embalm-stream-wobble {
+  0%,
+  100% {
+    stroke-width: 1.7;
+  }
+  50% {
+    stroke-width: 2.6;
+  }
+}
+
+@keyframes embalm-tank-ripple {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.08);
+  }
+}
+
+.embalm-glug {
+  animation: embalm-glug 0.28s ease-in-out infinite;
+}
+
+.embalm-splash-ring {
+  animation: embalm-splash 0.9s ease-out infinite;
+}
+
+.embalm-splash-ring-delay {
+  animation: embalm-splash 0.9s ease-out 0.28s infinite;
+}
+
+.embalm-stream-pulse {
+  animation: embalm-stream-pulse 0.45s ease-in-out infinite;
+}
+
+.embalm-stream-wobble {
+  animation: embalm-stream-wobble 0.22s ease-in-out infinite;
+}
+
+.embalm-tank-ripple {
+  animation: embalm-tank-ripple 0.55s ease-in-out infinite;
+}
