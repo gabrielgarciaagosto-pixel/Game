@@ -24,14 +24,19 @@ export const SERVICE_MANIFEST_URL = '/audio/services/manifest.json';
 
 const DEFAULT_MANIFEST: ServicePlaylistManifest = {
   version: 1,
-  playback: 'shuffle',
+  playback: 'sequence',
   volume: 0.26,
   crossfadeMs: 1400,
   tracks: [
     {
-      id: 'placeholder-chapel-theme',
-      file: '/audio/ossuarian-theme.m4a',
-      title: 'Soft theme (placeholder)',
+      id: 'chapel-service-1',
+      file: '/audio/services/chapel-service-1.m4a',
+      title: 'Chapel Service I',
+    },
+    {
+      id: 'chapel-service-2',
+      file: '/audio/services/chapel-service-2.m4a',
+      title: 'Chapel Service II',
     },
   ],
 };
