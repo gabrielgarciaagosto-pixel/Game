@@ -4,6 +4,7 @@ import type {
   CaseInboxFile,
   CaseLocation,
   DecedentCase,
+  PreferredCasketMaterial,
   PreferredUrnMaterial,
   Rank,
   ShowroomItem,
@@ -17,8 +18,42 @@ import { stepRetortBurn, stepRetortDoor } from '../retort/tickRetort';
 import { playIntakeBell } from '../utils/soundEffects';
 import { getCremationTargets } from '../utils/mortuaryMath';
 import { getUrnById, URN_MATERIALS } from '../data/urnCatalog';
+import {
+  CASKET_MATERIALS,
+  getCasketById,
+} from '../data/casketCatalog';
+import {
+  CHAPEL_DECOR_CATALOG,
+  defaultChapelLayout,
+  maxFlowerStands,
+  type ChapelLayoutPiece,
+  type ChapelServiceLayout,
+  type ChapelThemeSelection,
+  type FlowerKind,
+} from '../data/chapelDecor';
+import {
+  coolerBayCapacity,
+  crematoryBurnSpeed,
+  DEFAULT_FACILITY_LEVELS,
+  missingCollectionReqs,
+  nextFacilityTier,
+  type FacilityUpgradeId,
+  type FacilityUpgradeLevels,
+  vaultSlotCapacity,
+} from '../data/facilityUpgrades';
+import {
+  consumeRareStock,
+  createShopRotation,
+  isHourGatedCasket,
+  isHourGatedUrn,
+  RARE_SCHEDULE,
+  type ShopRotationState,
+} from '../data/shopRotation';
+import {
+  satisfactionToRewards,
+  scoreChapelArrangement,
+} from '../utils/chapelSatisfaction';
 
-const MAX_COOLER_BAYS = 6;
 const TAG_WINDOW_MS = 60_000;
 const INTAKE_MIN_MS = 180_000;
 const INTAKE_MAX_MS = 300_000;
@@ -38,6 +73,16 @@ interface GameState {
   showroomInventory: ShowroomItem[];
   /** Owned counts keyed by urn catalog id */
   urnInventory: Record<string, number>;
+  /** Owned counts keyed by casket catalog id (collection — not consumed by upgrades) */
+  casketInventory: Record<string, number>;
+  /** Permanent chapel décor ids owned via Emporium */
+  chapelOwnedDecor: string[];
+  /** Per-case chapel layout ( bier + flowers + theme ), persisted */
+  chapelLayouts: Record<string, ChapelServiceLayout>;
+  /** Tier levels for facility upgrades */
+  facilityLevels: FacilityUpgradeLevels;
+  /** Hour-window rare stock remaining (persisted) */
+  shopRotation: ShopRotationState;
   placedFlowers: Array<'LILIES' | 'ROSES' | 'WREATH'>;
   serviceRatingBonus: number;
   legalAlert: string | null;
@@ -94,12 +139,28 @@ interface GameState {
   completeUrnFilling: (bonusCash: number, caseId: string) => void;
   storeUrnInVault: (caseId: string) => void;
   buyShowroomItem: (itemId: string) => void;
-  buyUrn: (urnId: string) => void;
+  buyUrn: (urnId: string) => boolean;
+  buyCasket: (casketId: string) => boolean;
+  buyChapelDecor: (decorId: string) => boolean;
+  buyFacilityUpgrade: (id: FacilityUpgradeId) => boolean;
   offerUrnToCase: (caseId: string, urnId: string | null) => void;
+  offerCasketToCase: (caseId: string, casketId: string | null) => void;
+  ensureChapelLayout: (caseId: string) => void;
+  setChapelTheme: (
+    caseId: string,
+    theme: Partial<ChapelThemeSelection>
+  ) => void;
+  moveChapelPiece: (
+    caseId: string,
+    pieceId: string,
+    x: number,
+    y: number
+  ) => void;
   placeFloralSpray: (
     flower: 'LILIES' | 'ROSES' | 'WREATH',
     caseId: string
   ) => void;
+  removeChapelFlower: (caseId: string, pieceId: string) => void;
   finalizeServiceAndNextCase: (
     chosenDisposition: 'BURIAL' | 'CREMATION',
     caseId: string
@@ -107,6 +168,8 @@ interface GameState {
   clearLegalAlert: () => void;
   damageCremulator: () => void;
   buyReplacementCremulator: () => boolean;
+  coolerCapacity: () => number;
+  vaultCapacity: () => number;
 }
 
 export const CREMULATOR_REPLACEMENT_COST = 1850;
@@ -207,6 +270,7 @@ export function generateRandomCase(now = Date.now()): DecedentCase {
     'WREATH',
   ];
   const urnMats = URN_MATERIALS as PreferredUrnMaterial[];
+  const casketMats = CASKET_MATERIALS as PreferredCasketMaterial[];
 
   const pickedCond = conditions[Math.floor(Math.random() * conditions.length)];
   return {
@@ -218,7 +282,10 @@ export function generateRandomCase(now = Date.now()): DecedentCase {
     directive: directives[Math.floor(Math.random() * directives.length)],
     preferredFlowers: flowers[Math.floor(Math.random() * flowers.length)],
     preferredUrnMaterial: urnMats[Math.floor(Math.random() * urnMats.length)],
+    preferredCasketMaterial:
+      casketMats[Math.floor(Math.random() * casketMats.length)],
     offeredUrnId: null,
+    offeredCasketId: null,
     location: 'COOLER',
     isEmbalmed: false,
     isCremated: false,
@@ -414,6 +481,14 @@ export const useGameStore = create<GameState>()(
   retort: { ...IDLE_RETORT },
   placedFlowers: [],
   serviceRatingBonus: 0,
+  casketInventory: {
+    casket_oak_half: 1,
+    casket_pine_tapered: 1,
+  },
+  chapelOwnedDecor: [],
+  chapelLayouts: {},
+  facilityLevels: { ...DEFAULT_FACILITY_LEVELS },
+  shopRotation: createShopRotation(),
   showroomInventory: defaultShowroomInventory,
   urnInventory: {
     urn_carrara_classic: 1,
@@ -504,11 +579,17 @@ export const useGameStore = create<GameState>()(
 
   clearIntakeToast: () => set({ intakeToast: null }),
 
+  coolerCapacity: () =>
+    coolerBayCapacity(get().facilityLevels.cooler_bays || 0),
+
+  vaultCapacity: () => vaultSlotCapacity(get().facilityLevels.vault || 0),
+
   receiveNewIntake: () => {
     const state = get();
     const coolerCount = state.cases.filter((c) => c.location === 'COOLER')
       .length;
-    if (coolerCount >= MAX_COOLER_BAYS) return false;
+    const cap = coolerBayCapacity(state.facilityLevels.cooler_bays || 0);
+    if (coolerCount >= cap) return false;
     const next = generateRandomCase();
     playIntakeBell();
     set({
@@ -647,12 +728,26 @@ export const useGameStore = create<GameState>()(
       const targets = cremationCase
         ? getCremationTargets(cremationCase.weightLbs)
         : null;
+      const speed = crematoryBurnSpeed(state.facilityLevels.crematory || 0);
       const progress =
         targets != null
           ? Math.min(1, r.elapsedSec / targets.targetDurationSec)
           : 0;
       const maxSafe = targets?.getMaxSafeTempF(progress) ?? 1600;
-      const next = stepRetortBurn(r, maxSafe);
+      let next = stepRetortBurn(r, maxSafe);
+      // Apply efficiency upgrade as extra elapsed time on burn ticks
+      if (
+        speed > 1 &&
+        next.phase === 'BURN' &&
+        next.primaryOn &&
+        next.elapsedSec > r.elapsedSec
+      ) {
+        const delta = next.elapsedSec - r.elapsedSec;
+        next = {
+          ...next,
+          elapsedSec: r.elapsedSec + delta * speed,
+        };
+      }
 
       const heatNormalized = Math.min(
         1,
@@ -880,12 +975,25 @@ export const useGameStore = create<GameState>()(
       return;
     }
     if (active.directive === 'BURIAL_VIEWING') {
+      // Case is destroyed — return any staged urn/casket to stock
+      const inventory = { ...state.urnInventory };
+      const casketInv = { ...state.casketInventory };
+      if (active.offeredUrnId) {
+        inventory[active.offeredUrnId] =
+          (inventory[active.offeredUrnId] ?? 0) + 1;
+      }
+      if (active.offeredCasketId) {
+        casketInv[active.offeredCasketId] =
+          (casketInv[active.offeredCasketId] ?? 0) + 1;
+      }
       set({
         cash: state.cash - 2500,
         reputation: Math.max(0, state.reputation - 40),
         legalAlert: `LAWSUIT FILED! ${active.name}'s contract specified Traditional Burial & Viewing Only. You were fined $2,500 for Wrongful Cremation!`,
         cases: state.cases.filter((c) => c.id !== active.id),
         inboxFiles: state.inboxFiles.filter((f) => f.id !== active.id),
+        urnInventory: inventory,
+        casketInventory: casketInv,
         activeCaseId:
           state.cases.find((c) => c.id !== active.id)?.id ?? null,
         placedFlowers: [],
@@ -941,6 +1049,14 @@ export const useGameStore = create<GameState>()(
     set((state) => {
       const active = resolveCase(state, caseId);
       if (!active || !active.isUrnFilled) return state;
+      const vaultCount = state.cases.filter((c) => c.location === 'URN_VAULT')
+        .length;
+      const cap = vaultSlotCapacity(state.facilityLevels.vault || 0);
+      if (vaultCount >= cap) {
+        return {
+          legalAlert: `VAULT FULL (${cap} niches). Expand the columbarium in Emporium Upgrades.`,
+        };
+      }
       return {
         activeCaseId: caseId,
         cases: updateCaseById(state.cases, caseId, (c) => ({
@@ -964,19 +1080,101 @@ export const useGameStore = create<GameState>()(
       };
     }),
 
-  buyUrn: (urnId) =>
-    set((state) => {
-      const urn = getUrnById(urnId);
-      if (!urn || state.cash < urn.cost) return state;
-      return {
-        cash: state.cash - urn.cost,
-        reputation: state.reputation + Math.min(10, urn.prestigeBonus),
-        urnInventory: {
-          ...state.urnInventory,
-          [urnId]: (state.urnInventory[urnId] ?? 0) + 1,
-        },
-      };
-    }),
+  buyUrn: (urnId) => {
+    const state = get();
+    const urn = getUrnById(urnId);
+    if (!urn || state.cash < urn.cost) return false;
+    if (state.reputation < (urn.reputationRequired ?? 0)) return false;
+
+    let shopRotation = state.shopRotation;
+    if (isHourGatedUrn(urnId)) {
+      const entry = RARE_SCHEDULE.find(
+        (e) => e.kind === 'urn' && e.id === urnId
+      );
+      if (!entry) return false;
+      const next = consumeRareStock(shopRotation, entry);
+      if (!next) return false;
+      shopRotation = next;
+    }
+
+    set({
+      cash: state.cash - urn.cost,
+      reputation: state.reputation + Math.min(10, urn.prestigeBonus),
+      urnInventory: {
+        ...state.urnInventory,
+        [urnId]: (state.urnInventory[urnId] ?? 0) + 1,
+      },
+      shopRotation,
+    });
+    return true;
+  },
+
+  buyCasket: (casketId) => {
+    const state = get();
+    const casket = getCasketById(casketId);
+    if (!casket || state.cash < casket.cost) return false;
+    if (state.reputation < (casket.reputationRequired ?? 0)) return false;
+
+    let shopRotation = state.shopRotation;
+    if (isHourGatedCasket(casketId)) {
+      const entry = RARE_SCHEDULE.find(
+        (e) => e.kind === 'casket' && e.id === casketId
+      );
+      if (!entry) return false;
+      const next = consumeRareStock(shopRotation, entry);
+      if (!next) return false;
+      shopRotation = next;
+    }
+
+    set({
+      cash: state.cash - casket.cost,
+      reputation: state.reputation + Math.min(10, casket.prestigeBonus),
+      casketInventory: {
+        ...state.casketInventory,
+        [casketId]: (state.casketInventory[casketId] ?? 0) + 1,
+      },
+      shopRotation,
+    });
+    return true;
+  },
+
+  buyChapelDecor: (decorId) => {
+    const state = get();
+    const item = CHAPEL_DECOR_CATALOG.find((d) => d.id === decorId);
+    if (!item) return false;
+    if (state.chapelOwnedDecor.includes(decorId)) return false;
+    if (state.cash < item.cost) return false;
+    set({
+      cash: state.cash - item.cost,
+      reputation: state.reputation + Math.min(6, item.satisfactionBonus),
+      chapelOwnedDecor: [...state.chapelOwnedDecor, decorId],
+    });
+    return true;
+  },
+
+  buyFacilityUpgrade: (id) => {
+    const state = get();
+    const level = state.facilityLevels[id] ?? 0;
+    const tier = nextFacilityTier(id, level);
+    if (!tier) return false;
+    if (state.cash < tier.cost) return false;
+    // Ownership-only gate — never consumes collection items
+    const missing = missingCollectionReqs(
+      tier.requires,
+      state.urnInventory,
+      state.casketInventory
+    );
+    if (missing.length > 0) return false;
+    set({
+      cash: state.cash - tier.cost,
+      facilityLevels: {
+        ...state.facilityLevels,
+        [id]: level + 1,
+      },
+      reputation: state.reputation + 3 + level,
+    });
+    return true;
+  },
 
   offerUrnToCase: (caseId, urnId) =>
     set((state) => {
@@ -985,7 +1183,6 @@ export const useGameStore = create<GameState>()(
       const previousId = active.offeredUrnId;
       let inventory = { ...state.urnInventory };
 
-      // Return previously offered vessel to stock
       if (previousId) {
         inventory[previousId] = (inventory[previousId] ?? 0) + 1;
       }
@@ -1005,6 +1202,95 @@ export const useGameStore = create<GameState>()(
       };
     }),
 
+  offerCasketToCase: (caseId, casketId) =>
+    set((state) => {
+      const active = resolveCase(state, caseId);
+      if (!active) return state;
+      const previousId = active.offeredCasketId;
+      let inventory = { ...state.casketInventory };
+
+      if (previousId) {
+        inventory[previousId] = (inventory[previousId] ?? 0) + 1;
+      }
+
+      if (casketId) {
+        const available = inventory[casketId] ?? 0;
+        if (available <= 0) return state;
+        inventory[casketId] = available - 1;
+      }
+
+      return {
+        casketInventory: inventory,
+        cases: updateCaseById(state.cases, caseId, (c) => ({
+          ...c,
+          offeredCasketId: casketId,
+        })),
+      };
+    }),
+
+  ensureChapelLayout: (caseId) =>
+    set((state) => {
+      if (state.chapelLayouts[caseId]) return state;
+      const active = resolveCase(state, caseId);
+      if (!active) return state;
+      const isCremationDisplay =
+        active.isUrnFilled || active.directive === 'CREMATION_DIRECT';
+      return {
+        chapelLayouts: {
+          ...state.chapelLayouts,
+          [caseId]: defaultChapelLayout(caseId, isCremationDisplay),
+        },
+      };
+    }),
+
+  setChapelTheme: (caseId, theme) =>
+    set((state) => {
+      const layout =
+        state.chapelLayouts[caseId] ??
+        defaultChapelLayout(caseId, false);
+      const owned = new Set(state.chapelOwnedDecor);
+      const nextTheme: ChapelThemeSelection = {
+        ...layout.theme,
+        ...theme,
+      };
+      // Only allow owned décor ids
+      const gate = (id: string | null | undefined) =>
+        id && owned.has(id) ? id : null;
+      nextTheme.wallId = gate(nextTheme.wallId);
+      nextTheme.floorId = gate(nextTheme.floorId);
+      nextTheme.draperyId = gate(nextTheme.draperyId);
+      nextTheme.lightingId = gate(nextTheme.lightingId);
+      nextTheme.pewsId = gate(nextTheme.pewsId);
+      nextTheme.ornamentIds = (nextTheme.ornamentIds ?? []).filter((id) =>
+        owned.has(id)
+      );
+      return {
+        chapelLayouts: {
+          ...state.chapelLayouts,
+          [caseId]: { ...layout, theme: nextTheme },
+        },
+      };
+    }),
+
+  moveChapelPiece: (caseId, pieceId, x, y) =>
+    set((state) => {
+      const layout = state.chapelLayouts[caseId];
+      if (!layout) return state;
+      const nx = Math.max(0.05, Math.min(0.95, x));
+      const ny = Math.max(0.08, Math.min(0.92, y));
+      return {
+        chapelLayouts: {
+          ...state.chapelLayouts,
+          [caseId]: {
+            ...layout,
+            pieces: layout.pieces.map((p) =>
+              p.id === pieceId ? { ...p, x: nx, y: ny } : p
+            ),
+          },
+        },
+      };
+    }),
+
   placeFloralSpray: (flower, caseId) =>
     set((state) => {
       const active = resolveCase(state, caseId);
@@ -1012,7 +1298,25 @@ export const useGameStore = create<GameState>()(
       const itemId = flowerItemId[flower];
       const item = state.showroomInventory.find((i) => i.id === itemId);
       if (!item || item.ownedCount <= 0) return state;
-      if (state.placedFlowers.includes(flower)) return state;
+
+      const layout =
+        state.chapelLayouts[caseId] ??
+        defaultChapelLayout(
+          caseId,
+          active.isUrnFilled || active.directive === 'CREMATION_DIRECT'
+        );
+      const stands = layout.pieces.filter((p) =>
+        ['LILIES', 'ROSES', 'WREATH'].includes(p.kind)
+      ).length;
+      const maxStands = maxFlowerStands(state.chapelOwnedDecor);
+      if (stands >= maxStands) return state;
+
+      const piece: ChapelLayoutPiece = {
+        id: `flower_${flower}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        kind: flower as FlowerKind,
+        x: 0.2 + (stands % 3) * 0.25,
+        y: 0.7 + Math.floor(stands / 3) * 0.08,
+      };
 
       const preferredMatch = flower === active.preferredFlowers ? 15 : 5;
       return {
@@ -1021,6 +1325,44 @@ export const useGameStore = create<GameState>()(
         serviceRatingBonus: state.serviceRatingBonus + preferredMatch,
         showroomInventory: state.showroomInventory.map((i) =>
           i.id === itemId ? { ...i, ownedCount: i.ownedCount - 1 } : i
+        ),
+        chapelLayouts: {
+          ...state.chapelLayouts,
+          [caseId]: {
+            ...layout,
+            pieces: [...layout.pieces, piece],
+          },
+        },
+      };
+    }),
+
+  removeChapelFlower: (caseId, pieceId) =>
+    set((state) => {
+      const layout = state.chapelLayouts[caseId];
+      if (!layout) return state;
+      const piece = layout.pieces.find((p) => p.id === pieceId);
+      if (!piece || !['LILIES', 'ROSES', 'WREATH'].includes(piece.kind)) {
+        return state;
+      }
+      const flower = piece.kind as FlowerKind;
+      const itemId = flowerItemId[flower];
+      return {
+        chapelLayouts: {
+          ...state.chapelLayouts,
+          [caseId]: {
+            ...layout,
+            pieces: layout.pieces.filter((p) => p.id !== pieceId),
+          },
+        },
+        placedFlowers: (() => {
+          const idx = state.placedFlowers.indexOf(flower);
+          if (idx < 0) return state.placedFlowers;
+          const next = [...state.placedFlowers];
+          next.splice(idx, 1);
+          return next;
+        })(),
+        showroomInventory: state.showroomInventory.map((i) =>
+          i.id === itemId ? { ...i, ownedCount: i.ownedCount + 1 } : i
         ),
       };
     }),
@@ -1060,18 +1402,58 @@ export const useGameStore = create<GameState>()(
         alertMsg = `COMPLIANCE FINE ($1,200): Direct cremation finalized without completing the retort burn!`;
       }
 
-      const flowerBonus = Math.round(
-        c.basePayout * (state.serviceRatingBonus / 100)
-      );
       const offered = getUrnById(c.offeredUrnId);
-      const urnMatch =
-        offered != null && offered.material === c.preferredUrnMaterial;
-      const urnSale = offered ? offered.resaleValue : 0;
-      const urnTasteBonus = urnMatch ? Math.round(urnSale * 0.2) : 0;
-      const decayPenalty = Math.round(c.basePayout * (c.decayLevel / 100) * 0.8);
+      const offeredCasket = getCasketById(c.offeredCasketId);
+      const failedService = fine > 0;
       const lateService =
         c.serviceDateMs != null && Date.now() > c.serviceDateMs;
       const lateFine = lateService ? 900 : 0;
+      const serviceFailed = failedService || lateFine > 0;
+
+      const layout = state.chapelLayouts[c.id];
+      const chapelScore = scoreChapelArrangement({
+        pieces: layout?.pieces ?? [],
+        preferred: c.preferredFlowers,
+        ownedDecorIds: state.chapelOwnedDecor,
+        theme: layout?.theme ?? {
+          wallId: null,
+          floorId: null,
+          draperyId: null,
+          lightingId: null,
+          pewsId: null,
+          ornamentIds: [],
+        },
+        decayLevel: c.decayLevel,
+      });
+      const chapelRewards = satisfactionToRewards(chapelScore.total);
+
+      const flowerBonus = serviceFailed
+        ? 0
+        : Math.round(
+            c.basePayout *
+              ((state.serviceRatingBonus + chapelRewards.payoutBoostPct) /
+                100)
+          );
+
+      const urnMatch =
+        offered != null && offered.material === c.preferredUrnMaterial;
+      const urnSale = !serviceFailed && offered ? offered.resaleValue : 0;
+      const urnTasteBonus =
+        !serviceFailed && urnMatch ? Math.round(urnSale * 0.2) : 0;
+
+      const casketMatch =
+        offeredCasket != null &&
+        offeredCasket.material === c.preferredCasketMaterial;
+      const casketSale =
+        !serviceFailed &&
+        chosenDisposition === 'BURIAL' &&
+        offeredCasket
+          ? offeredCasket.resaleValue
+          : 0;
+      const casketTasteBonus =
+        !serviceFailed && casketMatch ? Math.round(casketSale * 0.2) : 0;
+
+      const decayPenalty = Math.round(c.basePayout * (c.decayLevel / 100) * 0.8);
       if (lateService && !alertMsg) {
         alertMsg = `LATE SERVICE ($900): Viewing/service date missed — family satisfaction collapsed.`;
       }
@@ -1079,41 +1461,77 @@ export const useGameStore = create<GameState>()(
         alertMsg = `FAMILY OUTRAGE: Remains showed advanced decomposition (decay ${Math.round(c.decayLevel)}%).`;
       }
 
-      const netPayout =
-        fine > 0 || lateFine > 0
-          ? -(fine + lateFine)
-          : Math.max(
-              0,
-              c.basePayout +
-                flowerBonus +
-                urnSale +
-                urnTasteBonus +
-                (c.isUrnFilled ? 150 : 0) -
-                decayPenalty
-            );
+      const tipCash = serviceFailed ? 0 : chapelRewards.tipCash;
+
+      const netPayout = serviceFailed
+        ? -(fine + lateFine)
+        : Math.max(
+            0,
+            c.basePayout +
+              flowerBonus +
+              urnSale +
+              urnTasteBonus +
+              casketSale +
+              casketTasteBonus +
+              tipCash +
+              (c.isUrnFilled ? 150 : 0) -
+              decayPenalty
+          );
 
       const remaining = state.cases.filter((x) => x.id !== c.id);
       const decayRepHit = Math.floor(c.decayLevel / 10);
       const urnRep =
-        offered && fine === 0 && lateFine === 0
+        offered && !serviceFailed
           ? Math.min(12, offered.prestigeBonus + (urnMatch ? 4 : 0))
           : 0;
+      const casketRep =
+        offeredCasket && !serviceFailed && chosenDisposition === 'BURIAL'
+          ? Math.min(
+              12,
+              offeredCasket.prestigeBonus + (casketMatch ? 4 : 0)
+            )
+          : 0;
 
-      // Offered urn is sold with the service (already removed from inventory)
+      const inventory = { ...state.urnInventory };
+      const casketInv = { ...state.casketInventory };
+      if (serviceFailed && c.offeredUrnId) {
+        inventory[c.offeredUrnId] = (inventory[c.offeredUrnId] ?? 0) + 1;
+      }
+      if (serviceFailed && c.offeredCasketId) {
+        casketInv[c.offeredCasketId] =
+          (casketInv[c.offeredCasketId] ?? 0) + 1;
+      }
+      // Burial without offering: if casket was staged but disposition is cremation, restore
+      if (
+        !serviceFailed &&
+        chosenDisposition === 'CREMATION' &&
+        c.offeredCasketId
+      ) {
+        casketInv[c.offeredCasketId] =
+          (casketInv[c.offeredCasketId] ?? 0) + 1;
+      }
+
+      const { [c.id]: _removedLayout, ...restLayouts } = state.chapelLayouts;
+
       return {
         cash: state.cash + netPayout,
         reputation: Math.max(
           0,
-          fine > 0 || lateFine > 0
+          serviceFailed
             ? state.reputation - 15 - decayRepHit
             : state.reputation +
                 Math.min(20, Math.floor(state.serviceRatingBonus / 5)) +
-                urnRep -
+                chapelRewards.reputationDelta +
+                urnRep +
+                casketRep -
                 decayRepHit
         ),
         legalAlert: alertMsg,
         cases: remaining,
         inboxFiles: state.inboxFiles.filter((f) => f.id !== c.id),
+        urnInventory: inventory,
+        casketInventory: casketInv,
+        chapelLayouts: restLayouts,
         activeCaseId: remaining[0]?.id ?? null,
         placedFlowers: [],
         serviceRatingBonus: 0,
@@ -1157,6 +1575,11 @@ export const useGameStore = create<GameState>()(
         inboxFiles: state.inboxFiles,
         showroomInventory: state.showroomInventory,
         urnInventory: state.urnInventory,
+        casketInventory: state.casketInventory,
+        chapelOwnedDecor: state.chapelOwnedDecor,
+        chapelLayouts: state.chapelLayouts,
+        facilityLevels: state.facilityLevels,
+        shopRotation: state.shopRotation,
         placedFlowers: state.placedFlowers,
         serviceRatingBonus: state.serviceRatingBonus,
         cremulatorOwned: state.cremulatorOwned,
@@ -1173,13 +1596,24 @@ export const useGameStore = create<GameState>()(
           ...c,
           preferredUrnMaterial:
             c.preferredUrnMaterial ?? URN_MATERIALS[0],
+          preferredCasketMaterial:
+            c.preferredCasketMaterial ?? CASKET_MATERIALS[0],
           offeredUrnId: c.offeredUrnId ?? null,
+          offeredCasketId: c.offeredCasketId ?? null,
         }));
         return {
           ...current,
           ...p,
           cases,
           urnInventory: p.urnInventory ?? current.urnInventory,
+          casketInventory: p.casketInventory ?? current.casketInventory,
+          chapelOwnedDecor: p.chapelOwnedDecor ?? current.chapelOwnedDecor,
+          chapelLayouts: p.chapelLayouts ?? current.chapelLayouts,
+          facilityLevels: {
+            ...DEFAULT_FACILITY_LEVELS,
+            ...(p.facilityLevels ?? {}),
+          },
+          shopRotation: p.shopRotation ?? current.shopRotation,
           showroomInventory: p.showroomInventory ?? current.showroomInventory,
           intakeToast: null,
           legalAlert: null,

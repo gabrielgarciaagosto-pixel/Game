@@ -11,9 +11,11 @@ export const CoolerRoom: React.FC = () => {
     setActiveStation,
     takeCaseToStation,
     expireUntaggedNames,
+    coolerCapacity,
   } = useGameStore();
 
   const coolerCases = cases.filter((c) => c.location === 'COOLER');
+  const bayCount = coolerCapacity();
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -29,11 +31,11 @@ export const CoolerRoom: React.FC = () => {
       <div className="shrink-0 flex justify-between items-start border-b border-cyan-900/60 pb-2 gap-2 px-1">
         <div className="min-w-0">
           <h2 className="text-base font-bold text-cyan-400">
-            COOLER — 38°F BAYS
+            COOLER — 38°F · {bayCount} BAYS
           </h2>
           <p className="text-[10px] text-slate-400 leading-snug">
             Tap name within 60s to toe-tag. Use Prep / Cremate / Chapel to move
-            remains.
+            remains. Expand bays in Emporium Upgrades.
           </p>
         </div>
         <button
@@ -46,7 +48,7 @@ export const CoolerRoom: React.FC = () => {
       </div>
 
       <div className="flex-1 min-h-0 grid grid-cols-2 gap-2.5 content-start py-3 overflow-y-auto">
-        {Array.from({ length: 6 }).map((_, index) => {
+        {Array.from({ length: bayCount }).map((_, index) => {
           const body = coolerCases[index];
           if (!body) {
             return (

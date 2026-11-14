@@ -41,6 +41,16 @@ export type PreferredUrnMaterial =
   | 'STONE'
   | 'PORCELAIN';
 
+export type PreferredCasketMaterial =
+  | 'OAK'
+  | 'CHERRY'
+  | 'WALNUT'
+  | 'PINE'
+  | 'MAHOGANY'
+  | 'STEEL'
+  | 'BRONZE'
+  | 'COPPER';
+
 export interface DecedentCase {
   id: string;
   name: string;
@@ -51,8 +61,12 @@ export interface DecedentCase {
   preferredFlowers: 'LILIES' | 'ROSES' | 'WREATH';
   /** Family taste when selecting a vessel for cremains */
   preferredUrnMaterial: PreferredUrnMaterial;
+  /** Family taste when selecting a casket for burial viewing */
+  preferredCasketMaterial: PreferredCasketMaterial;
   /** Catalog urn offered/sold to this family at chapel */
   offeredUrnId: string | null;
+  /** Catalog casket offered/sold for burial services */
+  offeredCasketId: string | null;
   location: CaseLocation;
   isEmbalmed: boolean;
   embalmRank?: Rank;

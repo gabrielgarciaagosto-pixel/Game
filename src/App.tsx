@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { CaseInboxWidget } from './components/CaseInboxWidget';
 import { CoolerRoom } from './components/CoolerRoom';
 import { CremationMiniGame } from './components/CremationMiniGame';
@@ -16,6 +17,18 @@ import { displayCaseName } from './types/game';
 import { useGameStore } from './store/useGameStore';
 
 function App() {
+  const [hydrated, setHydrated] = useState(() =>
+    useGameStore.persist.hasHydrated()
+  );
+
+  useEffect(() => {
+    const unsub = useGameStore.persist.onFinishHydration(() => {
+      setHydrated(true);
+    });
+    setHydrated(useGameStore.persist.hasHydrated());
+    return unsub;
+  }, []);
+
   useIntakeSpawner();
   useRetortEngine();
 
@@ -36,6 +49,13 @@ function App() {
 
   const activeCase =
     cases.find((c) => c.id === activeCaseId) ?? cases[0] ?? null;
+
+  // Wait for persist merge so returning players don't flash splash + theme
+  if (!hydrated) {
+    return (
+      <div className="fixed inset-0 bg-slate-950" aria-busy="true" />
+    );
+  }
 
   return (
     <>

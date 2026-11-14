@@ -13,21 +13,23 @@ export const UrnVaultRoom: React.FC = () => {
     setActiveStation,
     moveCaseTo,
     urnInventory,
+    vaultCapacity,
   } = useGameStore();
   const vault = cases.filter((c) => c.location === 'URN_VAULT');
   const selected = vault.find((c) => c.id === activeCaseId) ?? null;
   const collection = URN_CATALOG.filter((u) => (urnInventory[u.id] ?? 0) > 0);
+  const niches = vaultCapacity();
 
   return (
     <div className="safe-screen fixed inset-0 z-40 bg-stone-950 text-stone-100 flex flex-col select-none overflow-hidden">
       <div className="shrink-0 flex justify-between items-start border-b border-stone-700 pb-3 gap-3">
         <div className="min-w-0">
           <h2 className="text-lg font-bold text-amber-400">
-            URN VAULT — COLLECTION
+            URN VAULT — {vault.length}/{niches} NICHES
           </h2>
           <p className="text-[10px] text-stone-400 leading-snug">
-            Sealed cremains await family pickup. Your purchased vessels are
-            displayed below as a private collection.
+            Sealed cremains await family pickup. Expand niches in Emporium
+            Upgrades. Purchased vessels display below as a private collection.
           </p>
           {selected && (
             <div className="mt-2">

@@ -236,16 +236,39 @@ export const UrnFillingMiniGame: React.FC = () => {
 
   const engageCremulator = () => {
     if (!hatchLoaded || !cremulatorOwned || processing) return;
+    const levels = useGameStore.getState().facilityLevels;
+    const dmgChance = (() => {
+      const lvl = levels.cremulator || 0;
+      if (lvl <= 0) return 0.35;
+      if (lvl === 1) return 0.18;
+      if (lvl === 2) return 0.08;
+      return 0.02;
+    })();
+    const speed = (() => {
+      const lvl = levels.cremulator || 0;
+      if (lvl <= 0) return 1;
+      if (lvl === 1) return 1.1;
+      if (lvl === 2) return 1.25;
+      return 1.5;
+    })();
     if (!magnetCleared && !allMetalsCleared) {
-      damageCremulator();
+      if (Math.random() < dmgChance) {
+        damageCremulator();
+      } else {
+        useGameStore.setState({
+          legalAlert:
+            'Close call — implants rattled the drum, but the upgraded mill held.',
+        });
+      }
       dumpHatchForMagnetRecovery();
       return;
     }
     setProcessing(true);
     setLoadingSorting(false);
     const start = performance.now();
+    const duration = 2800 / speed;
     const tick = (now: number) => {
-      const p = Math.min(100, ((now - start) / 2800) * 100);
+      const p = Math.min(100, ((now - start) / duration) * 100);
       setCremulatorProgress(p);
       if (p < 100) requestAnimationFrame(tick);
       else setProcessing(false);

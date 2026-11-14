@@ -29,6 +29,8 @@ export interface UrnCatalogEntry {
   cost: number;
   resaleValue: number;
   prestigeBonus: number;
+  /** Emporium lock — min reputation to purchase */
+  reputationRequired: number;
   /** Palette for the vessel renderer */
   palette: {
     body: string;
@@ -52,6 +54,7 @@ export const URN_CATALOG: UrnCatalogEntry[] = [
     cost: 320,
     resaleValue: 780,
     prestigeBonus: 10,
+    reputationRequired: 0,
     palette: {
       body: '#f5f5f4',
       bodyDeep: '#d6d3d1',
@@ -72,6 +75,7 @@ export const URN_CATALOG: UrnCatalogEntry[] = [
     cost: 410,
     resaleValue: 940,
     prestigeBonus: 12,
+    reputationRequired: 110,
     palette: {
       body: '#1c1917',
       bodyDeep: '#0c0a09',
@@ -92,6 +96,7 @@ export const URN_CATALOG: UrnCatalogEntry[] = [
     cost: 480,
     resaleValue: 1100,
     prestigeBonus: 14,
+    reputationRequired: 140,
     palette: {
       body: '#b45309',
       bodyDeep: '#78350f',
@@ -112,6 +117,7 @@ export const URN_CATALOG: UrnCatalogEntry[] = [
     cost: 390,
     resaleValue: 860,
     prestigeBonus: 11,
+    reputationRequired: 80,
     palette: {
       body: '#3f6212',
       bodyDeep: '#365314',
@@ -132,6 +138,7 @@ export const URN_CATALOG: UrnCatalogEntry[] = [
     cost: 260,
     resaleValue: 620,
     prestigeBonus: 8,
+    reputationRequired: 0,
     palette: {
       body: '#7c2d12',
       bodyDeep: '#451a03',
@@ -152,6 +159,7 @@ export const URN_CATALOG: UrnCatalogEntry[] = [
     cost: 180,
     resaleValue: 420,
     prestigeBonus: 7,
+    reputationRequired: 0,
     palette: {
       body: '#9f1239',
       bodyDeep: '#4c0519',
@@ -172,6 +180,7 @@ export const URN_CATALOG: UrnCatalogEntry[] = [
     cost: 240,
     resaleValue: 560,
     prestigeBonus: 9,
+    reputationRequired: 0,
     palette: {
       body: '#86efac',
       bodyDeep: '#166534',
@@ -192,6 +201,7 @@ export const URN_CATALOG: UrnCatalogEntry[] = [
     cost: 350,
     resaleValue: 820,
     prestigeBonus: 12,
+    reputationRequired: 40,
     palette: {
       body: '#1e3a8a',
       bodyDeep: '#172554',
@@ -212,6 +222,7 @@ export const URN_CATALOG: UrnCatalogEntry[] = [
     cost: 290,
     resaleValue: 700,
     prestigeBonus: 10,
+    reputationRequired: 0,
     palette: {
       body: '#f59e0b',
       bodyDeep: '#92400e',
@@ -232,6 +243,7 @@ export const URN_CATALOG: UrnCatalogEntry[] = [
     cost: 360,
     resaleValue: 880,
     prestigeBonus: 13,
+    reputationRequired: 80,
     palette: {
       body: '#64748b',
       bodyDeep: '#0f172a',
@@ -252,6 +264,7 @@ export const URN_CATALOG: UrnCatalogEntry[] = [
     cost: 220,
     resaleValue: 510,
     prestigeBonus: 7,
+    reputationRequired: 0,
     palette: {
       body: '#cbd5e1',
       bodyDeep: '#475569',
@@ -272,6 +285,7 @@ export const URN_CATALOG: UrnCatalogEntry[] = [
     cost: 310,
     resaleValue: 740,
     prestigeBonus: 9,
+    reputationRequired: 0,
     palette: {
       body: '#334155',
       bodyDeep: '#020617',
@@ -292,6 +306,7 @@ export const URN_CATALOG: UrnCatalogEntry[] = [
     cost: 370,
     resaleValue: 860,
     prestigeBonus: 12,
+    reputationRequired: 80,
     palette: {
       body: '#64748b',
       bodyDeep: '#334155',
@@ -312,6 +327,7 @@ export const URN_CATALOG: UrnCatalogEntry[] = [
     cost: 250,
     resaleValue: 590,
     prestigeBonus: 8,
+    reputationRequired: 0,
     palette: {
       body: '#d6a57a',
       bodyDeep: '#92400e',
@@ -332,6 +348,7 @@ export const URN_CATALOG: UrnCatalogEntry[] = [
     cost: 340,
     resaleValue: 800,
     prestigeBonus: 11,
+    reputationRequired: 0,
     palette: {
       body: '#fafafa',
       bodyDeep: '#e5e5e5',
@@ -352,6 +369,7 @@ export const URN_CATALOG: UrnCatalogEntry[] = [
     cost: 420,
     resaleValue: 980,
     prestigeBonus: 14,
+    reputationRequired: 110,
     palette: {
       body: '#171717',
       bodyDeep: '#0a0a0a',
@@ -372,6 +390,7 @@ export const URN_CATALOG: UrnCatalogEntry[] = [
     cost: 190,
     resaleValue: 450,
     prestigeBonus: 6,
+    reputationRequired: 0,
     palette: {
       body: '#e7d3a8',
       bodyDeep: '#a16207',
@@ -392,6 +411,7 @@ export const URN_CATALOG: UrnCatalogEntry[] = [
     cost: 450,
     resaleValue: 1050,
     prestigeBonus: 13,
+    reputationRequired: 110,
     palette: {
       body: '#be123c',
       bodyDeep: '#7f1d1d',

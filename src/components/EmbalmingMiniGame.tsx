@@ -163,7 +163,55 @@ export const EmbalmingMiniGame: React.FC = () => {
     performance.now() / 1000,
     maxFlowForFluid(selectedFluid)
   );
-  const evaluation = evaluateEmbalmingRank(displayedPoured, targets);
+  const embalmLvl = useGameStore.getState().facilityLevels.embalming || 0;
+  const embalmBoost =
+    embalmLvl <= 0 ? 0 : embalmLvl === 1 ? 0.08 : embalmLvl === 2 ? 0.16 : 0.25;
+  const rawEval = evaluateEmbalmingRank(displayedPoured, targets);
+  const boostedError = Math.max(0, rawEval.errorPercent * (1 - embalmBoost));
+  const evaluationFinal =
+    embalmBoost <= 0
+      ? rawEval
+      : boostedError <= 1.5
+        ? {
+            ...rawEval,
+            rank: 'S+' as const,
+            errorPercent: +boostedError.toFixed(2),
+            tipMultiplier: 1.5,
+          }
+        : boostedError <= 4
+          ? {
+              ...rawEval,
+              rank: 'S' as const,
+              errorPercent: +boostedError.toFixed(2),
+              tipMultiplier: 1.25,
+            }
+          : boostedError <= 8
+            ? {
+                ...rawEval,
+                rank: 'A' as const,
+                errorPercent: +boostedError.toFixed(2),
+                tipMultiplier: 1.0,
+              }
+            : boostedError <= 15
+              ? {
+                  ...rawEval,
+                  rank: 'B' as const,
+                  errorPercent: +boostedError.toFixed(2),
+                  tipMultiplier: 0.85,
+                }
+              : boostedError <= 30
+                ? {
+                    ...rawEval,
+                    rank: 'C' as const,
+                    errorPercent: +boostedError.toFixed(2),
+                    tipMultiplier: 0.6,
+                  }
+                : {
+                    ...rawEval,
+                    rank: 'F' as const,
+                    errorPercent: +boostedError.toFixed(2),
+                    tipMultiplier: 0.2,
+                  };
   const label = displayCaseName(currentCase);
 
   return (
@@ -318,15 +366,16 @@ export const EmbalmingMiniGame: React.FC = () => {
           type="button"
           onPointerDown={() =>
             completeEmbalming(
-              evaluation.rank,
-              evaluation.tipMultiplier,
+              evaluationFinal.rank,
+              evaluationFinal.tipMultiplier,
               currentCase.id
             )
           }
           className="px-6 py-2 bg-amber-500 active:bg-amber-400 text-slate-950 font-bold rounded"
         >
-          Inject Mixture (Projected Rank: {evaluation.rank} | Error:{' '}
-          {evaluation.errorPercent}%)
+          Inject Mixture (Projected Rank: {evaluationFinal.rank} | Error:{' '}
+          {evaluationFinal.errorPercent}%
+          {embalmBoost > 0 ? ` · bench +${Math.round(embalmBoost * 100)}%` : ''})
         </button>
       </div>
     </div>

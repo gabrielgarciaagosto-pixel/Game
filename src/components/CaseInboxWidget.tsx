@@ -207,19 +207,17 @@ export const CaseInboxWidget: React.FC = () => {
                           Pick service day
                         </span>
                         <label className="text-[10px] text-slate-400 flex items-center gap-1">
-                          Hour
+                          Hour (24h)
                           <select
                             value={pickHour}
                             onChange={(e) => setPickHour(Number(e.target.value))}
-                            className="bg-slate-800 rounded px-1 py-0.5"
+                            className="bg-slate-800 rounded px-1 py-0.5 max-h-40"
                           >
-                            {Array.from({ length: 12 }, (_, i) => i + 9).map(
-                              (h) => (
-                                <option key={h} value={h}>
-                                  {h}:00
-                                </option>
-                              )
-                            )}
+                            {Array.from({ length: 24 }, (_, h) => h).map((h) => (
+                              <option key={h} value={h}>
+                                {String(h).padStart(2, '0')}:00
+                              </option>
+                            ))}
                           </select>
                         </label>
                       </div>
