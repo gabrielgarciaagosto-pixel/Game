@@ -56,6 +56,18 @@ export const ShowroomAndChapelModal: React.FC = () => {
   }, [currentCase, ensureChapelLayout]);
 
   const layout = currentCase ? chapelLayouts[currentCase.id] : undefined;
+  /** Live drag overrides — score uses these; store persists only on release. */
+  const [dragOverrides, setDragOverrides] = React.useState<
+    Record<string, { x: number; y: number }>
+  >({});
+
+  const scoredPieces = useMemo(() => {
+    if (!layout) return [];
+    if (Object.keys(dragOverrides).length === 0) return layout.pieces;
+    return layout.pieces.map((p) =>
+      dragOverrides[p.id] ? { ...p, ...dragOverrides[p.id] } : p
+    );
+  }, [layout, dragOverrides]);
 
   const ownedUrns = useMemo(
     () =>
@@ -86,13 +98,13 @@ export const ShowroomAndChapelModal: React.FC = () => {
       return null;
     }
     return scoreChapelArrangement({
-      pieces: layout.pieces,
+      pieces: scoredPieces,
       preferred: currentCase.preferredFlowers,
       ownedDecorIds: chapelOwnedDecor,
       theme: layout.theme,
       decayLevel: currentCase.decayLevel,
     });
-  }, [currentCase, layout, chapelOwnedDecor]);
+  }, [currentCase, layout, chapelOwnedDecor, scoredPieces]);
 
   const rewards = score ? satisfactionToRewards(score.total) : null;
 
@@ -225,20 +237,39 @@ export const ShowroomAndChapelModal: React.FC = () => {
             style={{ background: pewColor }}
           />
 
-          {layout?.pieces.map((piece) => (
-            <DraggablePiece
-              key={piece.id}
-              piece={piece}
-              offeredUrn={offered}
-              offeredCasket={offeredCasket}
-              onMove={(x, y) => moveChapelPiece(currentCase.id, piece.id, x, y)}
-              onRemoveFlower={() => {
-                if (['LILIES', 'ROSES', 'WREATH'].includes(piece.kind)) {
-                  removeChapelFlower(currentCase.id, piece.id);
+          {layout?.pieces.map((piece) => {
+            const override = dragOverrides[piece.id];
+            const displayPiece = override
+              ? { ...piece, x: override.x, y: override.y }
+              : piece;
+            return (
+              <DraggablePiece
+                key={piece.id}
+                piece={displayPiece}
+                offeredUrn={offered}
+                offeredCasket={offeredCasket}
+                onPreview={(x, y) =>
+                  setDragOverrides((prev) => ({
+                    ...prev,
+                    [piece.id]: { x, y },
+                  }))
                 }
-              }}
-            />
-          ))}
+                onCommit={(x, y) => {
+                  setDragOverrides((prev) => {
+                    const next = { ...prev };
+                    delete next[piece.id];
+                    return next;
+                  });
+                  moveChapelPiece(currentCase.id, piece.id, x, y);
+                }}
+                onRemoveFlower={() => {
+                  if (['LILIES', 'ROSES', 'WREATH'].includes(piece.kind)) {
+                    removeChapelFlower(currentCase.id, piece.id);
+                  }
+                }}
+              />
+            );
+          })}
         </div>
 
         {/* Live score */}
@@ -570,21 +601,32 @@ function DraggablePiece({
   piece,
   offeredUrn,
   offeredCasket,
-  onMove,
+  onPreview,
+  onCommit,
   onRemoveFlower,
 }: {
   piece: ChapelLayoutPiece;
   offeredUrn: ReturnType<typeof getUrnById>;
   offeredCasket: ReturnType<typeof getCasketById>;
-  onMove: (x: number, y: number) => void;
+  onPreview: (x: number, y: number) => void;
+  onCommit: (x: number, y: number) => void;
   onRemoveFlower: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const live = useRef({ x: piece.x, y: piece.y });
-  const [preview, setPreview] = React.useState<{ x: number; y: number } | null>(
-    null
-  );
+  const pointerIdRef = useRef<number | null>(null);
+  const onPreviewRef = useRef(onPreview);
+  const onCommitRef = useRef(onCommit);
+  onPreviewRef.current = onPreview;
+  onCommitRef.current = onCommit;
+
+  const finishDrag = () => {
+    if (!dragging.current) return;
+    dragging.current = false;
+    pointerIdRef.current = null;
+    onCommitRef.current(live.current.x, live.current.y);
+  };
 
   React.useEffect(() => {
     if (!dragging.current) {
@@ -592,11 +634,35 @@ function DraggablePiece({
     }
   }, [piece.x, piece.y]);
 
+  React.useEffect(() => {
+    const onWinUp = (e: PointerEvent) => {
+      if (!dragging.current) return;
+      if (
+        pointerIdRef.current != null &&
+        e.pointerId !== pointerIdRef.current
+      ) {
+        return;
+      }
+      finishDrag();
+    };
+    window.addEventListener('pointerup', onWinUp);
+    window.addEventListener('pointercancel', onWinUp);
+    return () => {
+      window.removeEventListener('pointerup', onWinUp);
+      window.removeEventListener('pointercancel', onWinUp);
+    };
+  }, []);
+
   const onPointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
     dragging.current = true;
+    pointerIdRef.current = e.pointerId;
     live.current = { x: piece.x, y: piece.y };
-    ref.current?.setPointerCapture(e.pointerId);
+    try {
+      ref.current?.setPointerCapture(e.pointerId);
+    } catch {
+      /* window listeners still commit on release */
+    }
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -604,34 +670,29 @@ function DraggablePiece({
     const floor = ref.current?.parentElement;
     if (!floor) return;
     const rect = floor.getBoundingClientRect();
-    const x = Math.max(0.05, Math.min(0.95, (e.clientX - rect.left) / rect.width));
-    const y = Math.max(0.08, Math.min(0.92, (e.clientY - rect.top) / rect.height));
+    const x = Math.max(
+      0.05,
+      Math.min(0.95, (e.clientX - rect.left) / rect.width)
+    );
+    const y = Math.max(
+      0.08,
+      Math.min(0.92, (e.clientY - rect.top) / rect.height)
+    );
     live.current = { x, y };
-    setPreview({ x, y });
-  };
-
-  const onPointerUp = () => {
-    if (!dragging.current) return;
-    dragging.current = false;
-    const { x, y } = live.current;
-    setPreview(null);
-    // Persist once on release — avoid localStorage writes every move
-    onMove(x, y);
+    onPreviewRef.current(x, y);
   };
 
   const isFlower = ['LILIES', 'ROSES', 'WREATH'].includes(piece.kind);
-  const x = preview?.x ?? piece.x;
-  const y = preview?.y ?? piece.y;
 
   return (
     <div
       ref={ref}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      onPointerUp={finishDrag}
+      onPointerCancel={finishDrag}
       className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing touch-none z-10"
-      style={{ left: `${x * 100}%`, top: `${y * 100}%` }}
+      style={{ left: `${piece.x * 100}%`, top: `${piece.y * 100}%` }}
     >
       {piece.kind === 'COFFIN' && (
         <div className="relative">

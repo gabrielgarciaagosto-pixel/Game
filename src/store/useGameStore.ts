@@ -369,18 +369,18 @@ function stationForLocation(location: CaseLocation): StationId | null {
   return null;
 }
 
-function returnPlacedFlowers(state: GameState): ShowroomItem[] {
-  if (state.placedFlowers.length === 0) return state.showroomInventory;
-  return state.showroomInventory.map((item) => {
-    const flowerKey = (
-      Object.keys(flowerItemId) as Array<keyof typeof flowerItemId>
-    ).find((k) => flowerItemId[k] === item.id);
-    if (!flowerKey) return item;
-    const returned = state.placedFlowers.filter((f) => f === flowerKey).length;
-    return returned
-      ? { ...item, ownedCount: item.ownedCount + returned }
-      : item;
-  });
+/** Derive placedFlowers mirror from per-case chapel layout (no inventory change). */
+function flowersFromLayout(
+  state: GameState,
+  caseId: string
+): Array<'LILIES' | 'ROSES' | 'WREATH'> {
+  const layout = state.chapelLayouts[caseId];
+  return (layout?.pieces ?? [])
+    .map((p) => p.kind)
+    .filter(
+      (k): k is 'LILIES' | 'ROSES' | 'WREATH' =>
+        k === 'LILIES' || k === 'ROSES' || k === 'WREATH'
+    );
 }
 
 /** Random delay between 3–5 minutes for the next intake */
@@ -528,15 +528,9 @@ export const useGameStore = create<GameState>()(
     if (state.activeCaseId === caseId) return;
     // Chapel flowers live in per-case layouts (merch already consumed).
     // Do NOT refund on case switch — that double-refunded when sprays were removed later.
-    const layout = state.chapelLayouts[caseId];
-    const flowersOnCase = (layout?.pieces ?? [])
-      .map((p) => p.kind)
-      .filter((k): k is 'LILIES' | 'ROSES' | 'WREATH' =>
-        k === 'LILIES' || k === 'ROSES' || k === 'WREATH'
-      );
     set({
       activeCaseId: caseId,
-      placedFlowers: flowersOnCase,
+      placedFlowers: flowersFromLayout(state, caseId),
       serviceRatingBonus: 0,
     });
   },
@@ -557,12 +551,12 @@ export const useGameStore = create<GameState>()(
         return { ...c, isTagged: true, nameExpired: false };
       });
       if (state.activeCaseId === caseId) return { cases };
+      // Same as selectActiveCase: mirror layout flowers, never refund merch
       return {
         cases,
         activeCaseId: caseId,
-        placedFlowers: [],
+        placedFlowers: flowersFromLayout(state, caseId),
         serviceRatingBonus: 0,
-        showroomInventory: returnPlacedFlowers(state),
       };
     }),
 
