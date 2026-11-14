@@ -405,6 +405,10 @@ export const DevToolsOverlay: React.FC = () => {
                 onClick={() => actions.forcePickFamilyUrnForActive()}
               />
               <Btn
+                label="Mark active embalmed"
+                onClick={() => actions.markActiveEmbalmed()}
+              />
+              <Btn
                 label="Finish burn + cremulator"
                 onClick={() => actions.instantFinishBurn()}
               />
@@ -424,6 +428,10 @@ export const DevToolsOverlay: React.FC = () => {
               <Btn
                 label="Reset facility upgrades"
                 onClick={() => actions.resetFacilityUpgrades()}
+              />
+              <Btn
+                label="Bank QA cash $80k"
+                onClick={() => actions.grantBankTestCash()}
               />
             </Section>
 

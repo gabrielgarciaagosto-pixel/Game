@@ -37,10 +37,22 @@ import {
   DEFAULT_FACILITY_LEVELS,
   missingCollectionReqs,
   nextFacilityTier,
+  totalFacilitySpaceUsed,
   type FacilityUpgradeId,
   type FacilityUpgradeLevels,
   vaultSlotCapacity,
 } from '../data/facilityUpgrades';
+import {
+  STARTER_PROPERTY,
+  earlyPayoffAmount,
+  getPropertyById,
+  loanProductById,
+  makeMortgageLoan,
+  makePersonalLoan,
+  ownedFromListing,
+  type ActiveBankLoan,
+  type OwnedProperty,
+} from '../data/bankProducts';
 import {
   BANK_FORECLOSURE_AFTER_MS,
   BANK_WARNING_AFTER_MS,
@@ -107,7 +119,9 @@ interface GameState {
    * Which Computer desktop app to open (null = desktop).
    * EMPORIUM redirects here with 'SHOP'. Not persisted.
    */
-  computerOpenApp: 'VR441' | 'SHOP' | null;
+  computerOpenApp: 'VR441' | 'SHOP' | 'BANK' | null;
+  /** Optional deep-link tab when opening BANK (not persisted) */
+  bankOpenTab: 'overview' | 'loans' | 'listings' | null;
   cases: DecedentCase[];
   activeCaseId: string | null;
   inboxFiles: CaseInboxFile[];
@@ -153,6 +167,10 @@ interface GameState {
   bankWarningIssued: boolean;
   /** True when 4h debt triggered foreclosure game-over */
   bankForeclosed: boolean;
+  /** Current funeral home property (persisted) */
+  ownedProperty: OwnedProperty;
+  /** Open personal loans + mortgages (persisted) */
+  activeLoans: ActiveBankLoan[];
   /** Working cremulator available for urn processing */
   cremulatorOwned: boolean;
   cremulatorDamaged: boolean;
@@ -171,7 +189,8 @@ interface GameState {
    */
   hardResetGameState: () => void;
   setActiveStation: (station: StationId) => void;
-  setComputerOpenApp: (app: 'VR441' | 'SHOP' | null) => void;
+  setComputerOpenApp: (app: 'VR441' | 'SHOP' | 'BANK' | null) => void;
+  setBankOpenTab: (tab: 'overview' | 'loans' | 'listings' | null) => void;
   patchRetort: (partial: Partial<RetortMachine>) => void;
   ensureRetortForCase: (caseId: string) => void;
   resetRetort: () => void;
@@ -201,6 +220,17 @@ interface GameState {
   tickBankForeclosure: () => void;
   /** Player dismisses foreclosure → wipe save like Reset Game */
   acknowledgeBankForeclosure: () => void;
+  facilitySpaceUsed: () => number;
+  facilitySpaceTotal: () => number;
+  takeBankLoan: (productId: string) => { ok: boolean; message: string };
+  payBankLoanInstallment: (loanId: string) => { ok: boolean; message: string };
+  earlyPayoffBankLoan: (loanId: string) => { ok: boolean; message: string };
+  buyProperty: (
+    listingId: string,
+    method: 'CASH' | 'MORTGAGE'
+  ) => { ok: boolean; message: string };
+  tickBankLoans: () => void;
+  markActiveCaseEmbalmed: () => boolean;
   /** File a cremation permit from the Computer portal (vitals-only match + fee) */
   submitCremationPermit: (
     form: PermitFormDraft,
@@ -234,7 +264,11 @@ interface GameState {
   buyUrn: (urnId: string) => boolean;
   buyCasket: (casketId: string) => boolean;
   buyChapelDecor: (decorId: string) => boolean;
-  buyFacilityUpgrade: (id: FacilityUpgradeId) => boolean;
+  buyFacilityUpgrade: (id: FacilityUpgradeId) => {
+    ok: boolean;
+    reason?: 'cash' | 'collection' | 'space' | 'maxed';
+    message?: string;
+  };
   offerUrnToCase: (caseId: string, urnId: string | null) => void;
   offerCasketToCase: (caseId: string, casketId: string | null) => void;
   ensureChapelLayout: (caseId: string) => void;
@@ -681,6 +715,8 @@ export function freshPersistedGameFields() {
     negativeCashSinceMs: null as number | null,
     bankWarningIssued: false,
     bankForeclosed: false,
+    ownedProperty: ownedFromListing(STARTER_PROPERTY, 0),
+    activeLoans: [] as ActiveBankLoan[],
   };
 }
 
@@ -707,6 +743,7 @@ export const useGameStore = create<GameState>()(
     (set, get) => ({
   ...freshPersistedGameFields(),
   computerOpenApp: null,
+  bankOpenTab: null,
   intakeToast: null,
   legalAlert: null,
   serviceFeedback: null,
@@ -740,6 +777,7 @@ export const useGameStore = create<GameState>()(
     set({
       ...freshPersistedGameFields(),
       computerOpenApp: null,
+      bankOpenTab: null,
       intakeToast: '[DEV] Game reset — back at title.',
       legalAlert: null,
       serviceFeedback: null,
@@ -759,6 +797,11 @@ export const useGameStore = create<GameState>()(
   },
 
   setComputerOpenApp: (app) => set({ computerOpenApp: app }),
+  setBankOpenTab: (tab) => set({ bankOpenTab: tab }),
+
+  facilitySpaceUsed: () => totalFacilitySpaceUsed(get().facilityLevels),
+  facilitySpaceTotal: () => get().ownedProperty?.spaceTotal ?? STARTER_PROPERTY.space,
+
 
   selectActiveCase: (caseId) => {
     const state = get();
@@ -1731,15 +1774,32 @@ export const useGameStore = create<GameState>()(
     const state = get();
     const level = state.facilityLevels[id] ?? 0;
     const tier = nextFacilityTier(id, level);
-    if (!tier) return false;
-    if (state.cash < tier.cost) return false;
-    // Ownership-only gate — never consumes collection items
+    if (!tier) return { ok: false, reason: 'maxed', message: 'Fully upgraded' };
+    if (state.cash < tier.cost) {
+      return { ok: false, reason: 'cash', message: 'Insufficient cash' };
+    }
     const missing = missingCollectionReqs(
       tier.requires,
       state.urnInventory,
       state.casketInventory
     );
-    if (missing.length > 0) return false;
+    if (missing.length > 0) {
+      return {
+        ok: false,
+        reason: 'collection',
+        message: 'Missing collection requirements',
+      };
+    }
+    const used = totalFacilitySpaceUsed(state.facilityLevels);
+    const total = state.ownedProperty?.spaceTotal ?? STARTER_PROPERTY.space;
+    if (used + tier.space > total) {
+      return {
+        ok: false,
+        reason: 'space',
+        message:
+          'Needs more facility space — open First National Bank → Property listings to relocate.',
+      };
+    }
     set({
       cash: state.cash - tier.cost,
       facilityLevels: {
@@ -1747,6 +1807,240 @@ export const useGameStore = create<GameState>()(
         [id]: level + 1,
       },
       reputation: state.reputation + 3 + level,
+      intakeToast: `Upgraded ${id.replace('_', ' ')} (space ${used + tier.space}/${total})`,
+    });
+    return { ok: true };
+  },
+
+  takeBankLoan: (productId) => {
+    const state = get();
+    const product = loanProductById(productId);
+    if (!product) return { ok: false, message: 'Unknown loan product' };
+    if (state.activeLoans.some((l) => l.productId === productId && l.kind === 'PERSONAL')) {
+      return { ok: false, message: 'You already hold this note' };
+    }
+    if (state.activeLoans.filter((l) => l.kind === 'PERSONAL').length >= 2) {
+      return { ok: false, message: 'Personal loan limit (2) reached' };
+    }
+    const now = gameNow();
+    const loan = makePersonalLoan(product, now);
+    set({
+      cash: state.cash + product.principal,
+      activeLoans: [...state.activeLoans, loan],
+      financeLedger: [
+        {
+          id: `led_loan_${now}`,
+          at: now,
+          label: `Loan advance — ${product.name}`,
+          amount: product.principal,
+          kind: 'OTHER' as const,
+        },
+        ...state.financeLedger,
+      ].slice(0, 80),
+      intakeToast: `Loan funded +$${product.principal.toLocaleString()}`,
+    });
+    return { ok: true, message: `Advanced $${product.principal.toLocaleString()}` };
+  },
+
+  payBankLoanInstallment: (loanId) => {
+    const state = get();
+    const loan = state.activeLoans.find((l) => l.id === loanId);
+    if (!loan) return { ok: false, message: 'Loan not found' };
+    if (state.cash < loan.paymentAmount) {
+      return { ok: false, message: 'Insufficient cash for installment' };
+    }
+    const now = gameNow();
+    const principalPay = Math.min(loan.principalRemaining, loan.paymentAmount);
+    const remaining = loan.principalRemaining - principalPay;
+    let activeLoans = state.activeLoans;
+    if (remaining <= 0) {
+      activeLoans = state.activeLoans.filter((l) => l.id !== loanId);
+    } else {
+      activeLoans = state.activeLoans.map((l) =>
+        l.id === loanId
+          ? {
+              ...l,
+              principalRemaining: remaining,
+              nextPaymentDueAt: now + l.paymentEveryMs,
+              missedPayments: 0,
+            }
+          : l
+      );
+    }
+    set({
+      cash: state.cash - loan.paymentAmount,
+      activeLoans,
+      financeLedger: [
+        {
+          id: `led_pay_${now}`,
+          at: now,
+          label: `Loan payment — ${loan.label}`,
+          amount: -loan.paymentAmount,
+          kind: 'OTHER' as const,
+        },
+        ...state.financeLedger,
+      ].slice(0, 80),
+      intakeToast:
+        remaining <= 0
+          ? `Paid off: ${loan.label}`
+          : `Payment $${loan.paymentAmount} on ${loan.label}`,
+    });
+    get().tickBankForeclosure();
+    return { ok: true, message: 'Payment posted' };
+  },
+
+  earlyPayoffBankLoan: (loanId) => {
+    const state = get();
+    const loan = state.activeLoans.find((l) => l.id === loanId);
+    if (!loan) return { ok: false, message: 'Loan not found' };
+    const due = earlyPayoffAmount(loan);
+    if (state.cash < due) {
+      return { ok: false, message: `Need $${due.toLocaleString()} to pay off early` };
+    }
+    const now = gameNow();
+    set({
+      cash: state.cash - due,
+      activeLoans: state.activeLoans.filter((l) => l.id !== loanId),
+      financeLedger: [
+        {
+          id: `led_early_${now}`,
+          at: now,
+          label: `Early payoff — ${loan.label}`,
+          amount: -due,
+          kind: 'OTHER' as const,
+        },
+        ...state.financeLedger,
+      ].slice(0, 80),
+      intakeToast: `Early payoff $${due.toLocaleString()} — ${loan.label}`,
+    });
+    get().tickBankForeclosure();
+    return { ok: true, message: 'Loan closed' };
+  },
+
+  buyProperty: (listingId, method) => {
+    const state = get();
+    const listing = getPropertyById(listingId);
+    if (!listing) return { ok: false, message: 'Listing not found' };
+    if (state.ownedProperty.listingId === listing.id) {
+      return { ok: false, message: 'Already at this property' };
+    }
+    const used = totalFacilitySpaceUsed(state.facilityLevels);
+    if (used > listing.space) {
+      return {
+        ok: false,
+        message: `Too small: need ${used} space, listing has ${listing.space}. Sell/downsize upgrades first (state choice: relocate to a larger pad).`,
+      };
+    }
+    const now = gameNow();
+    const equity = Math.round(state.ownedProperty.purchasedFor * 0.4);
+    let cash = state.cash + equity;
+    let activeLoans = state.activeLoans.filter((l) => l.kind !== 'MORTGAGE');
+    if (method === 'CASH') {
+      if (cash < listing.price) {
+        return { ok: false, message: `Need $${listing.price.toLocaleString()} cash (have $${cash.toLocaleString()} incl. equity)` };
+      }
+      cash -= listing.price;
+    } else {
+      const down = Math.ceil(listing.price * 0.2);
+      if (cash < down) {
+        return { ok: false, message: `Need $${down.toLocaleString()} down payment (20%)` };
+      }
+      cash -= down;
+      const financed = listing.price - down;
+      activeLoans = [...activeLoans, makeMortgageLoan(listing, financed, now)];
+    }
+    const owned = ownedFromListing(listing, listing.price);
+    set({
+      cash,
+      ownedProperty: owned,
+      activeLoans,
+      reputation: state.reputation + listing.repBonus,
+      financeLedger: [
+        {
+          id: `led_prop_${now}`,
+          at: now,
+          label: `${method === 'CASH' ? 'Cash buy' : 'Mortgage'} — ${listing.label}`,
+          amount: method === 'CASH' ? -listing.price : -Math.ceil(listing.price * 0.2),
+          kind: 'OTHER' as const,
+        },
+        ...(equity > 0
+          ? [
+              {
+                id: `led_equity_${now}`,
+                at: now,
+                label: 'Prior property equity',
+                amount: equity,
+                kind: 'OTHER' as const,
+              },
+            ]
+          : []),
+        ...state.financeLedger,
+      ].slice(0, 80),
+      intakeToast: `Relocated to ${listing.city}, ${listing.stateCode} · space ${used}/${listing.space}`,
+      bankOpenTab: 'listings',
+    });
+    return { ok: true, message: `Now operating: ${listing.label}` };
+  },
+
+  tickBankLoans: () => {
+    const state = get();
+    if (!state.hasStartedGame || state.bankForeclosed) return;
+    const now = gameNow();
+    let cash = state.cash;
+    let changed = false;
+    const ledger = [...state.financeLedger];
+    const activeLoans = state.activeLoans.map((loan) => {
+      let next = { ...loan };
+      while (now >= next.nextPaymentDueAt && next.principalRemaining > 0) {
+        changed = true;
+        const pay = Math.min(next.paymentAmount, next.principalRemaining);
+        cash -= next.paymentAmount; // may overdraft → foreclosure timer
+        next.principalRemaining = Math.max(0, next.principalRemaining - pay);
+        if (cash < 0 || state.cash < next.paymentAmount) {
+          next.missedPayments += 1;
+        } else {
+          next.missedPayments = 0;
+        }
+        next.nextPaymentDueAt += next.paymentEveryMs;
+        ledger.unshift({
+          id: `led_auto_${next.id}_${next.nextPaymentDueAt}`,
+          at: now,
+          label: `Auto draft — ${next.label}`,
+          amount: -next.paymentAmount,
+          kind: 'OTHER' as const,
+        });
+        if (next.principalRemaining <= 0) break;
+      }
+      return next;
+    }).filter((l) => l.principalRemaining > 0);
+    if (!changed) return;
+    set({
+      cash,
+      activeLoans,
+      financeLedger: ledger.slice(0, 80),
+      intakeToast:
+        cash < state.cash
+          ? cash < 0
+            ? 'Loan draft overdrew your accounts — bank foreclosure clock applies.'
+            : 'Loan installment drafted.'
+          : state.intakeToast,
+    });
+    get().tickBankForeclosure();
+  },
+
+  markActiveCaseEmbalmed: () => {
+    const state = get();
+    const id = state.activeCaseId;
+    if (!id) return false;
+    const c = state.cases.find((x) => x.id === id);
+    if (!c || c.isEmbalmed) return false;
+    set({
+      cases: state.cases.map((x) =>
+        x.id === id
+          ? { ...x, isEmbalmed: true, embalmRank: x.embalmRank ?? 'A' }
+          : x
+      ),
+      intakeToast: `[DEV] Marked embalmed: ${c.name}`,
     });
     return true;
   },
@@ -2199,7 +2493,7 @@ export const useGameStore = create<GameState>()(
 }),
     {
       name: 'ossuarian-first-urn-v1',
-      version: 3,
+      version: 4,
       migrate: (persisted, version) => {
         const p = (persisted ?? {}) as Record<string, unknown>;
         const rawCases = (p.cases as DecedentCase[] | undefined) ?? [];
@@ -2242,7 +2536,7 @@ export const useGameStore = create<GameState>()(
               null,
           };
         });
-        if (version >= 3) {
+        if (version >= 4) {
           return {
             ...p,
             cases,
@@ -2254,6 +2548,8 @@ export const useGameStore = create<GameState>()(
             negativeCashSinceMs: p.negativeCashSinceMs ?? null,
             bankWarningIssued: p.bankWarningIssued ?? false,
             bankForeclosed: p.bankForeclosed ?? false,
+            ownedProperty: p.ownedProperty ?? ownedFromListing(STARTER_PROPERTY, 0),
+            activeLoans: p.activeLoans ?? [],
           } as never;
         }
         return {
@@ -2261,12 +2557,14 @@ export const useGameStore = create<GameState>()(
           cases,
           chapelLayouts,
           inboxFiles,
-          permitSubmissions: [],
-          permitWrongStreak: 0,
-          financeLedger: [],
-          negativeCashSinceMs: null,
-          bankWarningIssued: false,
-          bankForeclosed: false,
+          permitSubmissions: p.permitSubmissions ?? [],
+          permitWrongStreak: p.permitWrongStreak ?? 0,
+          financeLedger: p.financeLedger ?? [],
+          negativeCashSinceMs: p.negativeCashSinceMs ?? null,
+          bankWarningIssued: p.bankWarningIssued ?? false,
+          bankForeclosed: p.bankForeclosed ?? false,
+          ownedProperty: ownedFromListing(STARTER_PROPERTY, 0),
+          activeLoans: [],
         } as never;
       },
       partialize: (state) => ({
@@ -2300,6 +2598,8 @@ export const useGameStore = create<GameState>()(
         negativeCashSinceMs: state.negativeCashSinceMs,
         bankWarningIssued: state.bankWarningIssued,
         bankForeclosed: state.bankForeclosed,
+        ownedProperty: state.ownedProperty,
+        activeLoans: state.activeLoans,
       }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<GameState>;
@@ -2364,9 +2664,15 @@ export const useGameStore = create<GameState>()(
           bankWarningIssued:
             p.bankWarningIssued ?? current.bankWarningIssued ?? false,
           bankForeclosed: p.bankForeclosed ?? current.bankForeclosed ?? false,
+          ownedProperty:
+            p.ownedProperty ??
+            current.ownedProperty ??
+            ownedFromListing(STARTER_PROPERTY, 0),
+          activeLoans: p.activeLoans ?? current.activeLoans ?? [],
           intakeToast: null,
           legalAlert: null,
           serviceFeedback: null,
+          bankOpenTab: null,
         };
       },
     }

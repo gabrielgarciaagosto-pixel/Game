@@ -55,10 +55,11 @@ export const CaseInboxWidget: React.FC = () => {
     <>
       <button
         type="button"
-        onPointerDown={() => setIsOpen(!isOpen)}
+        onClick={() => setIsOpen(!isOpen)}
         style={{
           bottom: 'var(--files-fab-bottom)',
           right: 'var(--safe-right)',
+          touchAction: 'manipulation',
         }}
         className="fixed z-50 bg-amber-500 active:bg-amber-400 text-slate-950 font-extrabold px-3.5 py-3 rounded-xl shadow-2xl flex items-center gap-2 border-2 border-amber-200 text-sm min-h-12"
       >
@@ -90,11 +91,12 @@ export const CaseInboxWidget: React.FC = () => {
               <button
                 key={file.id}
                 type="button"
-                onPointerDown={() => {
+                onClick={() => {
                   setSelectedFileId(file.id);
                   markFileRead(file.id);
                   setCalendarOpen(false);
                 }}
+                style={{ touchAction: 'manipulation' }}
                 className={`w-full text-left p-2.5 border-b border-slate-800/80 text-xs ${
                   activeFile?.id === file.id ? 'bg-slate-800' : ''
                 }`}
@@ -134,7 +136,8 @@ export const CaseInboxWidget: React.FC = () => {
                   </div>
                   <button
                     type="button"
-                    onPointerDown={() => setIsOpen(false)}
+                    onClick={() => setIsOpen(false)}
+                    style={{ touchAction: 'manipulation' }}
                     className="text-slate-400 active:text-white font-bold px-2"
                   >
                     ✕
@@ -343,7 +346,8 @@ export const CaseInboxWidget: React.FC = () => {
                       )}
                       <button
                         type="button"
-                        onPointerDown={() => setCalendarOpen(true)}
+                        onClick={() => setCalendarOpen(true)}
+                        style={{ touchAction: 'manipulation' }}
                         className="block mt-2 text-sky-300 underline"
                       >
                         Reschedule
@@ -352,7 +356,8 @@ export const CaseInboxWidget: React.FC = () => {
                   ) : (
                     <button
                       type="button"
-                      onPointerDown={() => setCalendarOpen(true)}
+                      onClick={() => setCalendarOpen(true)}
+                      style={{ touchAction: 'manipulation' }}
                       className="w-full py-2.5 bg-sky-600 active:bg-sky-500 rounded font-bold text-sm"
                     >
                       Set Date for Viewing / Service
@@ -391,7 +396,8 @@ export const CaseInboxWidget: React.FC = () => {
                             <button
                               key={day}
                               type="button"
-                              onPointerDown={() => confirmServiceDate(day)}
+                              onClick={() => confirmServiceDate(day)}
+                              style={{ touchAction: 'manipulation' }}
                               className={`py-2 rounded text-[10px] font-semibold ${
                                 isToday
                                   ? 'bg-amber-500 text-slate-950'
@@ -405,7 +411,8 @@ export const CaseInboxWidget: React.FC = () => {
                       </div>
                       <button
                         type="button"
-                        onPointerDown={() => setCalendarOpen(false)}
+                        onClick={() => setCalendarOpen(false)}
+                        style={{ touchAction: 'manipulation' }}
                         className="mt-2 text-[10px] text-slate-500 underline"
                       >
                         Cancel

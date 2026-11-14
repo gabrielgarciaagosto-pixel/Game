@@ -54,8 +54,9 @@ export function addReputation(amount: number) {
 export function setCash(value: number) {
   const n = Math.round(value); // allow negative for bank foreclosure tests
   useGameStore.setState({ cash: n });
-  useGameStore.getState().tickBankForeclosure();
+  // Toast first so tickBankForeclosure can overwrite with BANK NOTICE / FORECLOSURE.
   toast(`Cash = $${n}`);
+  useGameStore.getState().tickBankForeclosure();
 }
 
 export function setCashNegative(amount = -500) {
@@ -65,8 +66,10 @@ export function setCashNegative(amount = -500) {
 export function fastForwardBankHours(familyHours: number) {
   const ms = familyHours * 60 * 6_000; // FAMILY_MINUTE_MS = 6s
   advanceClockBy(ms);
-  useGameStore.getState().tickBankForeclosure();
+  // Toast first so tickBankForeclosure can overwrite with BANK NOTICE / FORECLOSURE.
   toast(`Clock +${familyHours} family hour(s) (bank tick)`);
+  useGameStore.getState().tickBankLoans();
+  useGameStore.getState().tickBankForeclosure();
 }
 
 export function setReputation(value: number) {
@@ -241,12 +244,29 @@ export function maxFacilityUpgrades() {
   for (const def of FACILITY_UPGRADES) {
     facilityLevels[def.id as FacilityUpgradeId] = def.tiers.length;
   }
+  const state = useGameStore.getState();
+  // Expand pad so maxed upgrades aren't soft-locked on starter space.
+  const ownedProperty = {
+    ...state.ownedProperty,
+    spaceTotal: Math.max(state.ownedProperty.spaceTotal, 120),
+  };
   useGameStore.setState({
     facilityLevels,
+    ownedProperty,
     cremulatorOwned: true,
     cremulatorDamaged: false,
   });
-  toast('Facility upgrades maxed');
+  toast('Facility upgrades maxed (+space 120)');
+}
+
+export function markActiveEmbalmed() {
+  const ok = useGameStore.getState().markActiveCaseEmbalmed();
+  toast(ok ? 'Active case marked embalmed' : 'No active case / already embalmed');
+}
+
+export function grantBankTestCash() {
+  setCash(80_000);
+  toast('Cash set $80000 for property/loan QA');
 }
 
 export function resetFacilityUpgrades() {

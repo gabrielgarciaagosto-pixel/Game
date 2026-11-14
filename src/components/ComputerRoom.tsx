@@ -7,6 +7,7 @@ import {
 import { US_PLACE_LABELS } from '../data/usPlaces';
 import { gameDate, subscribeClock } from '../utils/gameNow';
 import { useGameStore } from '../store/useGameStore';
+import { BankBrowser } from './BankBrowser';
 import { FakeBrowserChrome } from './FakeBrowserChrome';
 import { FuneraryEmporium } from './FuneraryEmporium';
 
@@ -18,7 +19,7 @@ function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-type DesktopApp = 'DESKTOP' | 'VR441' | 'SHOP';
+type DesktopApp = 'DESKTOP' | 'VR441' | 'SHOP' | 'BANK';
 
 /**
  * Office computer: desktop wallpaper + icons, apps open in a fake browser.
@@ -37,7 +38,9 @@ export const ComputerRoom: React.FC = () => {
   } = useGameStore();
 
   const [app, setApp] = useState<DesktopApp>(() =>
-    computerOpenApp === 'SHOP' || computerOpenApp === 'VR441'
+    computerOpenApp === 'SHOP' ||
+    computerOpenApp === 'VR441' ||
+    computerOpenApp === 'BANK'
       ? computerOpenApp
       : 'DESKTOP'
   );
@@ -48,7 +51,11 @@ export const ComputerRoom: React.FC = () => {
   const [filingFee, setFilingFee] = useState(() => rollPermitFilingFee());
 
   useEffect(() => {
-    if (computerOpenApp === 'SHOP' || computerOpenApp === 'VR441') {
+    if (
+      computerOpenApp === 'SHOP' ||
+      computerOpenApp === 'VR441' ||
+      computerOpenApp === 'BANK'
+    ) {
       setApp(computerOpenApp);
     }
   }, [computerOpenApp]);
@@ -78,7 +85,7 @@ export const ComputerRoom: React.FC = () => {
     setComputerOpenApp(null);
   };
 
-  const openApp = (next: 'VR441' | 'SHOP') => {
+  const openApp = (next: 'VR441' | 'SHOP' | 'BANK') => {
     setApp(next);
     setComputerOpenApp(next);
   };
@@ -139,8 +146,9 @@ export const ComputerRoom: React.FC = () => {
         <div className="flex-1 p-4 grid grid-cols-2 gap-4 content-start max-w-lg">
           <button
             type="button"
-            onPointerDown={() => openApp('VR441')}
+            onClick={() => openApp('VR441')}
             className="flex flex-col items-center gap-2 p-3 rounded-xl active:bg-white/10"
+            style={{ touchAction: 'manipulation' }}
           >
             <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-emerald-700 to-teal-950 border border-emerald-400/40 flex items-center justify-center shadow-lg font-mono text-xs font-black text-emerald-50">
               VR
@@ -151,14 +159,28 @@ export const ComputerRoom: React.FC = () => {
           </button>
           <button
             type="button"
-            onPointerDown={() => openApp('SHOP')}
+            onClick={() => openApp('SHOP')}
             className="flex flex-col items-center gap-2 p-3 rounded-xl active:bg-white/10"
+            style={{ touchAction: 'manipulation' }}
           >
             <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-amber-600 to-stone-900 border border-amber-300/40 flex items-center justify-center shadow-lg text-lg font-black text-amber-50">
               $
             </div>
             <span className="text-[11px] text-center text-teal-50 font-semibold leading-tight drop-shadow">
               Funerary Emporium
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => openApp('BANK')}
+            className="flex flex-col items-center gap-2 p-3 rounded-xl active:bg-white/10"
+            style={{ touchAction: 'manipulation' }}
+          >
+            <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-lime-700 to-emerald-950 border border-lime-300/50 flex items-center justify-center shadow-lg font-mono text-[10px] font-black text-lime-50 tracking-tight">
+              BANK
+            </div>
+            <span className="text-[11px] text-center text-teal-50 font-semibold leading-tight drop-shadow">
+              First National Bank
             </span>
           </button>
         </div>
@@ -381,6 +403,18 @@ export const ComputerRoom: React.FC = () => {
             onClose={goDesktop}
           >
             <FuneraryEmporium embedded onClose={goDesktop} />
+          </FakeBrowserChrome>
+        </div>
+      )}
+
+      {app === 'BANK' && (
+        <div className="absolute inset-0 z-20">
+          <FakeBrowserChrome
+            title="First National Mortuary Bank"
+            url="https://bank.first-national-mortuary.example/online"
+            onClose={goDesktop}
+          >
+            <BankBrowser />
           </FakeBrowserChrome>
         </div>
       )}

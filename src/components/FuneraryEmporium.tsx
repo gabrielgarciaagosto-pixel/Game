@@ -8,6 +8,7 @@ import {
   FACILITY_UPGRADES,
   missingCollectionReqs,
   nextFacilityTier,
+  totalFacilitySpaceUsed,
   type CollectionReq,
   type FacilityUpgradeId,
 } from '../data/facilityUpgrades';
@@ -29,6 +30,7 @@ import { useGameStore } from '../store/useGameStore';
 import { gameDate, subscribeClock } from '../utils/gameNow';
 import { CasketVessel } from './caskets/CasketVessel';
 import { UrnVessel } from './urns/UrnVessel';
+import { TapButton } from './TapButton';
 
 type ShopTab = 'URNS' | 'CASKETS' | 'CHAPEL' | 'UPGRADES' | 'MERCH';
 
@@ -104,11 +106,27 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
     buyFacilityUpgrade,
     buyShowroomItem,
     setActiveStation,
+    setComputerOpenApp,
+    setBankOpenTab,
+    ownedProperty,
   } = useGameStore();
 
   const [tab, setTab] = useState<ShopTab>('URNS');
   const [inspect, setInspect] = useState<InspectTarget>(null);
   const [now, setNow] = useState(() => gameDate());
+  const [confirmBuy, setConfirmBuy] = useState<{
+    title: string;
+    body: string;
+    run: () => void;
+  } | null>(null);
+  const [spaceBlock, setSpaceBlock] = useState<string | null>(null);
+
+  const spaceUsed = totalFacilitySpaceUsed(facilityLevels);
+  const spaceTotal = ownedProperty?.spaceTotal ?? 20;
+
+  const requestBuy = (title: string, body: string, run: () => void) => {
+    setConfirmBuy({ title, body, run });
+  };
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(gameDate()), 15_000);
@@ -260,8 +278,9 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
           {!embedded && (
             <button
               type="button"
-              onPointerDown={() => setActiveStation('OVERVIEW')}
+              onClick={() => setActiveStation('OVERVIEW')}
               className="px-3 py-1.5 bg-stone-900 border border-stone-700 rounded text-xs font-semibold shrink-0"
+              style={{ touchAction: 'manipulation' }}
             >
               Back
             </button>
@@ -269,8 +288,9 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
           {embedded && onClose && (
             <button
               type="button"
-              onPointerDown={onClose}
+              onClick={onClose}
               className="px-3 py-1.5 bg-stone-900 border border-stone-700 rounded text-xs font-semibold shrink-0"
+              style={{ touchAction: 'manipulation' }}
             >
               Desktop
             </button>
@@ -314,9 +334,7 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                       rare={entry}
                       stock={stock}
                       onInspect={() => setInspect({ kind: 'urn', id: urn.id })}
-                      onBuy={() => {
-                        buyUrn(urn.id);
-                      }}
+                      onBuy={() => requestBuy("Confirm urn", `Purchase for listed price?`, () => { buyUrn(urn.id); })}
                     />
                   ))}
                 </div>
@@ -334,9 +352,7 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                     reputation={reputation}
                     cash={cash}
                     onInspect={() => setInspect({ kind: 'urn', id: urn.id })}
-                    onBuy={() => {
-                      buyUrn(urn.id);
-                    }}
+                    onBuy={() => requestBuy("Confirm urn", `Purchase for listed price?`, () => { buyUrn(urn.id); })}
                   />
                 ))}
               </div>
@@ -369,9 +385,7 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                       onInspect={() =>
                         setInspect({ kind: 'casket', id: casket.id })
                       }
-                      onBuy={() => {
-                        buyCasket(casket.id);
-                      }}
+                      onBuy={() => requestBuy("Confirm casket", `Purchase for listed price?`, () => { buyCasket(casket.id); })}
                     />
                   ))}
                 </div>
@@ -391,9 +405,7 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                     onInspect={() =>
                       setInspect({ kind: 'casket', id: casket.id })
                     }
-                    onBuy={() => {
-                      buyCasket(casket.id);
-                    }}
+                    onBuy={() => requestBuy("Confirm casket", `Purchase for listed price?`, () => { buyCasket(casket.id); })}
                   />
                 ))}
               </div>
@@ -440,12 +452,17 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                         Owned
                       </span>
                     ) : (
-                      <button
-                        type="button"
+                      <TapButton
                         disabled={!canBuy}
-                        onPointerDown={() => {
-                          buyChapelDecor(item.id);
-                        }}
+                        onTap={() =>
+                          requestBuy(
+                            'Confirm décor',
+                            `Buy ${item.name} for $${item.cost}?`,
+                            () => {
+                              buyChapelDecor(item.id);
+                            }
+                          )
+                        }
                         className={`shrink-0 px-3 py-2 rounded font-bold text-xs ${
                           canBuy
                             ? 'bg-amber-500 text-stone-950'
@@ -453,7 +470,7 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                         }`}
                       >
                         Buy ${item.cost}
-                      </button>
+                      </TapButton>
                     )}
                   </div>
                 </div>
@@ -467,8 +484,32 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
             <SectionLabel>Facility upgrades</SectionLabel>
             <p className="text-[10px] text-stone-500 px-0.5">
               Collection gates are ownership-only — required vessels stay in your
-              inventory.
+              inventory. Space {spaceUsed}/{spaceTotal} at{' '}
+              {ownedProperty?.label ?? 'home'}.
             </p>
+            {(spaceBlock ||
+              FACILITY_UPGRADES.some((def) => {
+                const level = facilityLevels[def.id as FacilityUpgradeId] ?? 0;
+                const next = nextFacilityTier(def.id, level);
+                return !!next && spaceUsed + next.space > spaceTotal;
+              })) && (
+              <div className="rounded-lg border border-rose-700/60 bg-rose-950/40 p-2.5 space-y-2">
+                <p className="text-[11px] text-rose-100">
+                  {spaceBlock ??
+                    `Needs more facility space (${spaceUsed}/${spaceTotal} used). Relocate via First National Bank listings.`}
+                </p>
+                <TapButton
+                  onTap={() => {
+                    setComputerOpenApp('BANK');
+                    setBankOpenTab('listings');
+                    onClose?.();
+                  }}
+                  className="w-full py-2 rounded-lg bg-emerald-800 text-[11px] font-black text-emerald-50"
+                >
+                  Open property listings
+                </TapButton>
+              </div>
+            )}
             {FACILITY_UPGRADES.map((def) => {
               const level = facilityLevels[def.id as FacilityUpgradeId] ?? 0;
               const next = nextFacilityTier(def.id, level);
@@ -482,8 +523,10 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
               const missingKeys = new Set(
                 missing.map((m) => `${m.kind}:${m.id}`)
               );
+              const spaceOk =
+                !!next && spaceUsed + next.space <= spaceTotal;
               const canBuy =
-                !!next && cash >= next.cost && missing.length === 0;
+                !!next && cash >= next.cost && missing.length === 0 && spaceOk;
 
               return (
                 <div
@@ -534,7 +577,8 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                                   </span>
                                   <button
                                     type="button"
-                                    onPointerDown={() => jumpToCollection(req)}
+                                    onClick={() => jumpToCollection(req)}
+                                    style={{ touchAction: 'manipulation' }}
                                     className="shrink-0 px-2 py-0.5 rounded border border-stone-700 bg-stone-900 text-[9px] font-bold text-amber-100"
                                   >
                                     Find in shop
@@ -548,21 +592,45 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
 
                       <button
                         type="button"
-                        disabled={!canBuy}
-                        onPointerDown={() => {
-                          buyFacilityUpgrade(def.id);
+                        disabled={
+                          !next ||
+                          missing.length > 0 ||
+                          (spaceOk && cash < next.cost)
+                        }
+                        onClick={() => {
+                          if (!spaceOk) {
+                            setSpaceBlock(
+                              `Needs more facility space (${spaceUsed + next.space} required, ${spaceTotal} available). Relocate via First National Bank listings.`
+                            );
+                            return;
+                          }
+                          requestBuy(
+                            'Confirm upgrade',
+                            `${def.name}: ${next.label} for $${next.cost}? Uses ${next.space} space.`,
+                            () => {
+                              const r = buyFacilityUpgrade(def.id);
+                              if (!r.ok && r.reason === 'space') {
+                                setSpaceBlock(r.message ?? 'Needs more space');
+                              } else {
+                                setSpaceBlock(null);
+                              }
+                            }
+                          );
                         }}
                         className={`mt-2.5 w-full py-2 rounded-lg text-[11px] font-black ${
                           canBuy
                             ? 'bg-amber-500 text-stone-950'
                             : 'bg-stone-800 text-stone-500'
                         }`}
+                        style={{ touchAction: 'manipulation' }}
                       >
                         {missing.length > 0
                           ? 'Missing collection'
-                          : cash < next.cost
-                            ? 'Insufficient cash'
-                            : `Upgrade · $${next.cost}`}
+                          : !spaceOk
+                            ? 'Needs more space'
+                            : cash < next.cost
+                              ? 'Insufficient cash'
+                              : `Upgrade · $${next.cost}`}
                       </button>
                     </div>
                   ) : (
@@ -591,12 +659,17 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                     {item.prestigeBonus}
                   </div>
                 </div>
-                <button
-                  type="button"
+                <TapButton
                   disabled={cash < item.cost}
-                  onPointerDown={() => {
-                    buyShowroomItem(item.id);
-                  }}
+                  onTap={() =>
+                    requestBuy(
+                      'Confirm merch',
+                      `Buy ${item.name} for $${item.cost}?`,
+                      () => {
+                        buyShowroomItem(item.id);
+                      }
+                    )
+                  }
                   className={`px-3 py-2 rounded font-bold text-xs shrink-0 ${
                     cash >= item.cost
                       ? 'bg-amber-500 text-stone-950'
@@ -604,7 +677,7 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                   }`}
                 >
                   Buy ${item.cost}
-                </button>
+                </TapButton>
               </div>
             ))}
             {merch.length === 0 && (
@@ -615,6 +688,33 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
           </div>
         )}
       </div>
+
+      
+      {confirmBuy && (
+        <div className="absolute inset-0 z-[60] bg-black/70 flex items-end justify-center p-4">
+          <div className="w-full max-w-sm rounded-xl border border-amber-700 bg-stone-950 p-4 space-y-3">
+            <h4 className="font-bold text-amber-50">{confirmBuy.title}</h4>
+            <p className="text-[12px] text-stone-300">{confirmBuy.body}</p>
+            <div className="flex gap-2">
+              <TapButton
+                onTap={() => setConfirmBuy(null)}
+                className="flex-1 py-2 rounded-lg bg-stone-800 text-[11px] font-bold"
+              >
+                Cancel
+              </TapButton>
+              <TapButton
+                onTap={() => {
+                  confirmBuy.run();
+                  setConfirmBuy(null);
+                }}
+                className="flex-1 py-2 rounded-lg bg-amber-500 text-stone-950 text-[11px] font-black"
+              >
+                Confirm
+              </TapButton>
+            </div>
+          </div>
+        </div>
+      )}
 
       {inspectedUrn && (
         <UrnInspectModal
@@ -629,9 +729,7 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
               : undefined
           }
           onClose={() => setInspect(null)}
-          onBuy={() => {
-            buyUrn(inspectedUrn.id);
-          }}
+          onBuy={() => requestBuy("Confirm urn", `Purchase for listed price?`, () => { buyUrn(inspectedUrn.id); })}
         />
       )}
 
@@ -648,9 +746,7 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
               : undefined
           }
           onClose={() => setInspect(null)}
-          onBuy={() => {
-            buyCasket(inspectedCasket.id);
-          }}
+          onBuy={() => requestBuy("Confirm casket", `Purchase for listed price?`, () => { buyCasket(inspectedCasket.id); })}
         />
       )}
     </div>
@@ -709,7 +805,8 @@ function FilterChip({
   return (
     <button
       type="button"
-      onPointerDown={onPress}
+      onClick={onPress}
+      style={{ touchAction: 'manipulation' }}
       className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-black tracking-wide border ${
         active
           ? 'bg-amber-500 text-stone-950 border-amber-200'
@@ -771,7 +868,8 @@ function UrnCard({
     <div className="rounded-2xl border border-amber-900/40 bg-gradient-to-b from-[#2a2118] to-[#120e0b] p-2 flex flex-col min-h-[15rem]">
       <button
         type="button"
-        onPointerDown={onInspect}
+        onClick={onInspect}
+        style={{ touchAction: 'manipulation' }}
         className="flex-1 flex flex-col items-center justify-end pb-1"
       >
         <div className="w-full flex justify-between items-start gap-1 mb-1 px-0.5 min-h-[1.1rem]">
@@ -800,7 +898,8 @@ function UrnCard({
         <button
           type="button"
           disabled={!canBuy}
-          onPointerDown={onBuy}
+          onClick={onBuy}
+          style={{ touchAction: 'manipulation' }}
           className={`px-2.5 py-1.5 rounded text-[10px] font-black ${
             canBuy
               ? 'bg-amber-500 text-stone-950'
@@ -846,7 +945,8 @@ function CasketCard({
     <div className="rounded-2xl border border-amber-900/40 bg-gradient-to-b from-[#2a2118] to-[#120e0b] p-2 flex flex-col min-h-[15rem]">
       <button
         type="button"
-        onPointerDown={onInspect}
+        onClick={onInspect}
+        style={{ touchAction: 'manipulation' }}
         className="flex-1 flex flex-col items-center justify-end pb-1"
       >
         <div className="w-full flex justify-between items-start gap-1 mb-1 px-0.5 min-h-[1.1rem]">
@@ -875,7 +975,8 @@ function CasketCard({
         <button
           type="button"
           disabled={!canBuy}
-          onPointerDown={onBuy}
+          onClick={onBuy}
+          style={{ touchAction: 'manipulation' }}
           className={`px-2.5 py-1.5 rounded text-[10px] font-black ${
             canBuy
               ? 'bg-amber-500 text-stone-950'
@@ -933,7 +1034,8 @@ function UrnInspectModal({
           </div>
           <button
             type="button"
-            onPointerDown={onClose}
+            onClick={onClose}
+            style={{ touchAction: 'manipulation' }}
             className="px-2 py-1 rounded bg-stone-900 text-xs"
           >
             Close
@@ -969,7 +1071,8 @@ function UrnInspectModal({
         <button
           type="button"
           disabled={!canBuy}
-          onPointerDown={onBuy}
+          onClick={onBuy}
+          style={{ touchAction: 'manipulation' }}
           className={`mt-4 w-full py-3 rounded-xl font-black ${
             canBuy
               ? 'bg-amber-500 text-stone-950'
@@ -1033,7 +1136,8 @@ function CasketInspectModal({
           </div>
           <button
             type="button"
-            onPointerDown={onClose}
+            onClick={onClose}
+            style={{ touchAction: 'manipulation' }}
             className="px-2 py-1 rounded bg-stone-900 text-xs"
           >
             Close
@@ -1070,7 +1174,8 @@ function CasketInspectModal({
         <button
           type="button"
           disabled={!canBuy}
-          onPointerDown={onBuy}
+          onClick={onBuy}
+          style={{ touchAction: 'manipulation' }}
           className={`mt-4 w-full py-3 rounded-xl font-black ${
             canBuy
               ? 'bg-amber-500 text-stone-950'

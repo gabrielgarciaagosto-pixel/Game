@@ -26,7 +26,8 @@ export const FakeBrowserChrome: React.FC<Props> = ({
           <span className="truncate">{title}</span>
           <button
             type="button"
-            onPointerDown={onClose}
+            onClick={onClose}
+            style={{ touchAction: 'manipulation' }}
             className="shrink-0 text-slate-400 active:text-white text-xs px-1"
             aria-label="Close tab"
           >
@@ -36,7 +37,8 @@ export const FakeBrowserChrome: React.FC<Props> = ({
         <div className="flex-1" />
         <button
           type="button"
-          onPointerDown={onClose}
+          onClick={onClose}
+          style={{ touchAction: 'manipulation' }}
           className="mb-1 px-2 py-1 text-[10px] rounded border border-slate-600 bg-slate-900"
         >
           − Desktop

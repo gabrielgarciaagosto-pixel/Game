@@ -19,6 +19,8 @@ export type CollectionReq =
 export interface FacilityTier {
   tier: number;
   cost: number;
+  /** Facility floor space consumed when this tier is owned */
+  space: number;
   label: string;
   effect: string;
   /** Must own these — not consumed on purchase */
@@ -41,6 +43,7 @@ export const FACILITY_UPGRADES: FacilityUpgradeDef[] = [
       {
         tier: 1,
         cost: 450,
+        space: 2,
         label: 'Bay +2',
         effect: '8 cooler bays',
         requires: [],
@@ -48,6 +51,7 @@ export const FACILITY_UPGRADES: FacilityUpgradeDef[] = [
       {
         tier: 2,
         cost: 900,
+        space: 4,
         label: 'Bay +4',
         effect: '10 cooler bays',
         requires: [],
@@ -55,6 +59,7 @@ export const FACILITY_UPGRADES: FacilityUpgradeDef[] = [
       {
         tier: 3,
         cost: 1600,
+        space: 8,
         label: 'Bay +6',
         effect: '12 cooler bays',
         requires: [],
@@ -69,6 +74,7 @@ export const FACILITY_UPGRADES: FacilityUpgradeDef[] = [
       {
         tier: 1,
         cost: 500,
+        space: 2,
         label: 'Hardened Drum',
         effect: '50% less damage chance',
         requires: [
@@ -78,6 +84,7 @@ export const FACILITY_UPGRADES: FacilityUpgradeDef[] = [
       {
         tier: 2,
         cost: 1100,
+        space: 6,
         label: 'Dual Mill',
         effect: '+25% fill speed, rare damage',
         requires: [
@@ -88,6 +95,7 @@ export const FACILITY_UPGRADES: FacilityUpgradeDef[] = [
       {
         tier: 3,
         cost: 2000,
+        space: 8,
         label: 'Industrial Mill',
         effect: '+50% fill speed, near-immune',
         requires: [
@@ -110,6 +118,7 @@ export const FACILITY_UPGRADES: FacilityUpgradeDef[] = [
       {
         tier: 1,
         cost: 550,
+        space: 3,
         label: 'Tuned Jets',
         effect: 'Burns ~12% faster',
         requires: [
@@ -119,6 +128,7 @@ export const FACILITY_UPGRADES: FacilityUpgradeDef[] = [
       {
         tier: 2,
         cost: 1200,
+        space: 6,
         label: 'Recirc Stack',
         effect: 'Burns ~22% faster',
         requires: [
@@ -129,6 +139,7 @@ export const FACILITY_UPGRADES: FacilityUpgradeDef[] = [
       {
         tier: 3,
         cost: 2200,
+        space: 8,
         label: 'Afterburner Kit',
         effect: 'Burns ~35% faster',
         requires: [
@@ -151,6 +162,7 @@ export const FACILITY_UPGRADES: FacilityUpgradeDef[] = [
       {
         tier: 1,
         cost: 400,
+        space: 2,
         label: 'Precision Needles',
         effect: '+8% grade weight',
         requires: [
@@ -164,6 +176,7 @@ export const FACILITY_UPGRADES: FacilityUpgradeDef[] = [
       {
         tier: 2,
         cost: 950,
+        space: 5,
         label: 'Arterial Pump Mk II',
         effect: '+16% grade weight',
         requires: [
@@ -182,6 +195,7 @@ export const FACILITY_UPGRADES: FacilityUpgradeDef[] = [
       {
         tier: 3,
         cost: 1750,
+        space: 8,
         label: 'Full Prep Suite',
         effect: '+25% grade weight',
         requires: [
@@ -212,6 +226,7 @@ export const FACILITY_UPGRADES: FacilityUpgradeDef[] = [
       {
         tier: 1,
         cost: 350,
+        space: 2,
         label: 'Side Niche',
         effect: 'Vault slots 8',
         requires: [],
@@ -219,6 +234,7 @@ export const FACILITY_UPGRADES: FacilityUpgradeDef[] = [
       {
         tier: 2,
         cost: 800,
+        space: 4,
         label: 'Double Gallery',
         effect: 'Vault slots 12',
         requires: [
@@ -228,6 +244,7 @@ export const FACILITY_UPGRADES: FacilityUpgradeDef[] = [
       {
         tier: 3,
         cost: 1500,
+        space: 8,
         label: 'Grand Columbarium',
         effect: 'Vault slots 18',
         requires: [
@@ -295,6 +312,28 @@ export function nextFacilityTier(
   const def = FACILITY_UPGRADES.find((u) => u.id === id);
   if (!def) return null;
   return def.tiers.find((t) => t.tier === currentLevel + 1) ?? null;
+}
+
+/** Space consumed by owned tiers of one upgrade line. */
+export function spaceForUpgradeLevel(
+  id: FacilityUpgradeId,
+  level: number
+): number {
+  const def = FACILITY_UPGRADES.find((u) => u.id === id);
+  if (!def || level <= 0) return 0;
+  return def.tiers
+    .filter((t) => t.tier <= level)
+    .reduce((sum, t) => sum + t.space, 0);
+}
+
+/** Total facility space used by current upgrade levels. */
+export function totalFacilitySpaceUsed(
+  levels: FacilityUpgradeLevels
+): number {
+  return (Object.keys(levels) as FacilityUpgradeId[]).reduce(
+    (sum, id) => sum + spaceForUpgradeLevel(id, levels[id] ?? 0),
+    0
+  );
 }
 
 /** Ownership check — never consumes inventory. */

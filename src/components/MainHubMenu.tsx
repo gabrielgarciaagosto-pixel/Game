@@ -143,7 +143,8 @@ export const MainHubMenu: React.FC = () => {
           <button
             key={tile.id}
             type="button"
-            onPointerDown={() => setActiveStation(tile.id)}
+            onClick={() => setActiveStation(tile.id)}
+            style={{ touchAction: 'manipulation' }}
             className={`min-h-[7.25rem] w-full rounded-2xl bg-gradient-to-br ${tile.color} border p-3 flex flex-col justify-between items-start text-left shadow-[0_10px_30px_rgba(0,0,0,0.35)] active:scale-[0.98] transition-transform relative overflow-hidden ${
               tile.id === 'COMPUTER' ? 'col-span-2 min-h-[6.5rem]' : ''
             }`}

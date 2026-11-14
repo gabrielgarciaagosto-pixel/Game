@@ -13,6 +13,7 @@ export function useIntakeSpawner() {
   const tickFamilyUrnChoices = useGameStore((s) => s.tickFamilyUrnChoices);
   const tickPermitEvaluations = useGameStore((s) => s.tickPermitEvaluations);
   const tickBankForeclosure = useGameStore((s) => s.tickBankForeclosure);
+  const tickBankLoans = useGameStore((s) => s.tickBankLoans);
 
   useEffect(() => {
     if (!hasStartedGame) return;
@@ -36,6 +37,7 @@ export function useIntakeSpawner() {
       tickDecay();
       tickFamilyUrnChoices();
       tickPermitEvaluations();
+      tickBankLoans();
       tickBankForeclosure();
     }, 1000);
 
@@ -51,6 +53,7 @@ export function useIntakeSpawner() {
     tickDecay,
     tickFamilyUrnChoices,
     tickPermitEvaluations,
+    tickBankLoans,
     tickBankForeclosure,
   ]);
 }
