@@ -1,21 +1,18 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   directiveNeedsCremationPermit,
   emptyPermitForm,
   type PermitFormDraft,
 } from '../data/cremationPermits';
-import {
-  formatVitalsDob,
-  formatVitalsDod,
-  formatVitalsTod,
-  permitStatusLabel,
-} from '../data/decedentVitals';
+import { permitStatusLabel } from '../data/decedentVitals';
 import { US_PLACE_LABELS } from '../data/usPlaces';
-import { directiveLabel, displayCaseName } from '../types/game';
+import { displayCaseName } from '../types/game';
 import { useGameStore } from '../store/useGameStore';
 
 /**
- * Period state-records portal — file cremation permits, cross-check Case Files.
+ * Period state-records portal — file cremation permits.
+ * Vitals are NOT shown here: players must open Case Files (FILES FAB) to copy.
+ * Local form state stays mounted while FILES is open so typed drafts survive.
  */
 export const ComputerRoom: React.FC = () => {
   const {
@@ -31,8 +28,7 @@ export const ComputerRoom: React.FC = () => {
   const cremationCases = useMemo(
     () =>
       cases.filter(
-        (c) =>
-          directiveNeedsCremationPermit(c.directive) && !c.isCremated
+        (c) => directiveNeedsCremationPermit(c.directive) && !c.isCremated
       ),
     [cases]
   );
@@ -45,13 +41,24 @@ export const ComputerRoom: React.FC = () => {
   const [form, setForm] = useState<PermitFormDraft>(emptyPermitForm());
   const [feedback, setFeedback] = useState<string | null>(null);
   const [pobFilter, setPobFilter] = useState('');
+  const [draftCaseId, setDraftCaseId] = useState<string | null>(null);
 
-  const loadCase = (caseId: string) => {
+  const selectCase = (caseId: string) => {
     selectActiveCase(caseId);
-    setForm(emptyPermitForm());
-    setFeedback(null);
-    setPobFilter('');
+    // Switching cases clears the draft; Case Files overlay does not remount us.
+    if (draftCaseId !== caseId) {
+      setForm(emptyPermitForm());
+      setPobFilter('');
+      setFeedback(null);
+      setDraftCaseId(caseId);
+    }
   };
+
+  useEffect(() => {
+    if (selected && draftCaseId == null) {
+      setDraftCaseId(selected.id);
+    }
+  }, [selected, draftCaseId]);
 
   const placeOptions = useMemo(() => {
     const q = pobFilter.trim().toLowerCase();
@@ -66,6 +73,10 @@ export const ComputerRoom: React.FC = () => {
     if (!selected) return;
     const result = submitCremationPermit(selected.id, form);
     setFeedback(result.message);
+    if (result.ok) {
+      setForm(emptyPermitForm());
+      setPobFilter('');
+    }
   };
 
   return (
@@ -91,7 +102,7 @@ export const ComputerRoom: React.FC = () => {
               CREMATION PERMIT REQUEST
             </h1>
             <p className="text-[10px] text-[#9bb8a4] mt-0.5">
-              Form VR-441 · Cross-check against Case Files before submit
+              Form VR-441 · Open FILES to copy vitals — nothing is prefilled
             </p>
           </div>
           <button
@@ -104,11 +115,16 @@ export const ComputerRoom: React.FC = () => {
         </div>
         <div className="mt-2 flex flex-wrap gap-2 font-mono text-[10px]">
           <span className="px-2 py-1 rounded bg-black/30 border border-[#2f6b4f]">
-            ERROR STREAK {permitWrongStreak}/{3}
+            ERROR STREAK {permitWrongStreak}/3
           </span>
           <span className="px-2 py-1 rounded bg-black/30 border border-[#2f6b4f]">
             FILINGS {permitSubmissions.length}
           </span>
+          {selected && (
+            <span className="px-2 py-1 rounded bg-black/30 border border-[#2f6b4f]">
+              STATUS {permitStatusLabel(selected.cremationPermitStatus)}
+            </span>
+          )}
         </div>
       </header>
 
@@ -127,7 +143,7 @@ export const ComputerRoom: React.FC = () => {
             <button
               key={c.id}
               type="button"
-              onPointerDown={() => loadCase(c.id)}
+              onPointerDown={() => selectCase(c.id)}
               className={`w-full text-left px-2.5 py-2 border-b border-[#14281e] text-[11px] ${
                 selected?.id === c.id ? 'bg-[#1a3d2a]' : 'active:bg-[#12241a]'
               }`}
@@ -136,82 +152,29 @@ export const ComputerRoom: React.FC = () => {
                 {displayCaseName(c)}
               </div>
               <div className="text-[9px] text-[#8fbf9a]">
-                {permitStatusLabel(c.cremationPermitStatus)}
+                #{c.id} · {permitStatusLabel(c.cremationPermitStatus)}
               </div>
             </button>
           ))}
         </aside>
 
-        <main className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
+        <main className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3 pb-24">
           {!selected ? (
             <p className="text-sm text-[#8fbf9a] m-auto text-center py-10">
               Select a cremation case to file VR-441.
             </p>
           ) : (
             <>
-              <section className="rounded border border-[#2f6b4f] bg-[#0c1f16]/90 p-3 font-mono text-[11px]">
-                <div className="text-[9px] uppercase tracking-wider text-[#8fbf9a] mb-1">
-                  Case reference (read-only)
-                </div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                  <div>
-                    <span className="text-[#6f947a]">Name</span>
-                    <div className="text-[#e8f5e9] font-bold">
-                      {displayCaseName(selected)}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-[#6f947a]">Directive</span>
-                    <div className="text-amber-200">
-                      {directiveLabel(selected.directive)}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-[#6f947a]">DOB</span>
-                    <div>{formatVitalsDob(selected)}</div>
-                  </div>
-                  <div>
-                    <span className="text-[#6f947a]">DOD</span>
-                    <div>{formatVitalsDod(selected)}</div>
-                  </div>
-                  <div>
-                    <span className="text-[#6f947a]">TOD</span>
-                    <div>{formatVitalsTod(selected)}</div>
-                  </div>
-                  <div>
-                    <span className="text-[#6f947a]">POB</span>
-                    <div className="truncate">{selected.placeOfBirth}</div>
-                  </div>
-                  <div className="col-span-2">
-                    <span className="text-[#6f947a]">Permit status</span>
-                    <div
-                      className={
-                        selected.cremationPermitStatus === 'APPROVED'
-                          ? 'text-emerald-300 font-bold'
-                          : selected.cremationPermitStatus === 'REJECTED'
-                            ? 'text-red-300 font-bold'
-                            : selected.cremationPermitStatus === 'PENDING'
-                              ? 'text-amber-300 font-bold'
-                              : 'text-[#d7e6d2]'
-                      }
-                    >
-                      {permitStatusLabel(selected.cremationPermitStatus)}
-                      {selected.cremationPermitRejectReason
-                        ? ` — ${selected.cremationPermitRejectReason}`
-                        : ''}
-                    </div>
-                  </div>
-                </div>
-                <p className="mt-2 text-[10px] text-[#9bb8a4] leading-snug">
-                  Tip: copy values carefully. Wrong filings delay approval; three
-                  bad filings trigger a state fine. Cremating without APPROVED
-                  status risks a board inspection fine.
-                </p>
-              </section>
+              <p className="text-[11px] text-[#9bb8a4] leading-snug rounded border border-[#2f6b4f]/50 bg-[#0c1f16]/70 px-3 py-2">
+                Use the <strong className="text-[#e8f5e9]">FILES</strong> button
+                to open the case file and copy DOB, DOD, TOD, and place of birth
+                exactly. Wrong filings delay approval; three bad filings trigger
+                a state fine. Typed fields stay while FILES is open.
+              </p>
 
               <section className="rounded border border-[#3a6a8a] bg-[#0b1824]/95 p-3 space-y-2">
                 <div className="text-[9px] uppercase tracking-[0.18em] text-sky-300/80">
-                  VR-441 entry form
+                  VR-441 entry form · case #{selected.id}
                 </div>
 
                 <label className="block text-[10px] text-[#9bb8a4]">
@@ -223,6 +186,8 @@ export const ComputerRoom: React.FC = () => {
                     }
                     className="mt-1 w-full bg-[#061018] border border-[#2a4a5c] rounded px-2 py-2 text-sm text-[#e8f5e9] font-mono"
                     autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
                     spellCheck={false}
                   />
                 </label>
@@ -240,6 +205,7 @@ export const ComputerRoom: React.FC = () => {
                         }))
                       }
                       className="mt-1 w-full bg-[#061018] border border-[#2a4a5c] rounded px-2 py-2 text-sm text-[#e8f5e9] font-mono"
+                      autoComplete="off"
                     />
                   </label>
                   <label className="block text-[10px] text-[#9bb8a4]">
@@ -254,6 +220,7 @@ export const ComputerRoom: React.FC = () => {
                         }))
                       }
                       className="mt-1 w-full bg-[#061018] border border-[#2a4a5c] rounded px-2 py-2 text-sm text-[#e8f5e9] font-mono"
+                      autoComplete="off"
                     />
                   </label>
                 </div>
@@ -262,12 +229,14 @@ export const ComputerRoom: React.FC = () => {
                   Time of death (24h HH:MM)
                   <input
                     value={form.timeOfDeath}
-                    placeholder="14:35"
+                    placeholder="HH:MM"
                     onChange={(e) =>
                       setForm((f) => ({ ...f, timeOfDeath: e.target.value }))
                     }
                     className="mt-1 w-full bg-[#061018] border border-[#2a4a5c] rounded px-2 py-2 text-sm text-[#e8f5e9] font-mono"
                     inputMode="numeric"
+                    autoComplete="off"
+                    spellCheck={false}
                   />
                 </label>
 
@@ -278,6 +247,8 @@ export const ComputerRoom: React.FC = () => {
                     onChange={(e) => setPobFilter(e.target.value)}
                     placeholder="City or ST"
                     className="mt-1 w-full bg-[#061018] border border-[#2a4a5c] rounded px-2 py-2 text-sm text-[#e8f5e9] font-mono"
+                    autoComplete="off"
+                    spellCheck={false}
                   />
                 </label>
                 <label className="block text-[10px] text-[#9bb8a4]">
@@ -288,6 +259,7 @@ export const ComputerRoom: React.FC = () => {
                       setForm((f) => ({ ...f, placeOfBirth: e.target.value }))
                     }
                     className="mt-1 w-full bg-[#061018] border border-[#2a4a5c] rounded px-2 py-2 text-sm text-[#e8f5e9] font-mono max-h-40"
+                    autoComplete="off"
                   >
                     <option value="">— select —</option>
                     {form.placeOfBirth &&
@@ -303,6 +275,12 @@ export const ComputerRoom: React.FC = () => {
                     ))}
                   </select>
                 </label>
+
+                {!selected.isTagged && (
+                  <p className="text-[10px] text-amber-200/90">
+                    Tag the remains in the Cooler before filing.
+                  </p>
+                )}
 
                 <button
                   type="button"
@@ -337,7 +315,7 @@ export const ComputerRoom: React.FC = () => {
                       key={s.id}
                       className="flex justify-between gap-2 border-b border-[#1a2e24] py-1"
                     >
-                      <span className="truncate">{s.decedentName}</span>
+                      <span className="truncate">#{s.caseId}</span>
                       <span
                         className={
                           s.status === 'APPROVED'
