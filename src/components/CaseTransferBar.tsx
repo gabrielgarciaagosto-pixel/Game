@@ -36,7 +36,7 @@ export const CaseTransferBar: React.FC<Props> = ({
   currentCase,
   showVault = false,
 }) => {
-  const moveActiveCaseTo = useGameStore((s) => s.moveActiveCaseTo);
+  const moveCaseTo = useGameStore((s) => s.moveCaseTo);
 
   return (
     <div className="flex flex-wrap items-center gap-2 mt-2">
@@ -73,7 +73,7 @@ export const CaseTransferBar: React.FC<Props> = ({
         <button
           key={d.location}
           type="button"
-          onPointerDown={() => moveActiveCaseTo(d.location)}
+          onPointerDown={() => moveCaseTo(currentCase.id, d.location)}
           className={`px-3 py-2 rounded text-xs font-bold ${d.className}`}
         >
           {d.label}

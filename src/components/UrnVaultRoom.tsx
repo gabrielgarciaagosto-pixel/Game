@@ -1,11 +1,18 @@
 import React from 'react';
+import { CaseTransferBar } from './CaseTransferBar';
 import { displayCaseName } from '../types/game';
 import { useGameStore } from '../store/useGameStore';
 
 export const UrnVaultRoom: React.FC = () => {
-  const { cases, selectActiveCase, activeCaseId, setActiveStation } =
-    useGameStore();
+  const {
+    cases,
+    selectActiveCase,
+    activeCaseId,
+    setActiveStation,
+    moveCaseTo,
+  } = useGameStore();
   const vault = cases.filter((c) => c.location === 'URN_VAULT');
+  const selected = vault.find((c) => c.id === activeCaseId) ?? null;
 
   return (
     <div className="fixed inset-0 z-40 bg-stone-950 text-stone-100 p-4 md:p-6 pb-24 flex flex-col select-none">
@@ -16,8 +23,20 @@ export const UrnVaultRoom: React.FC = () => {
           </h2>
           <p className="text-xs text-stone-400">
             Cremated remains sealed in urns await family pickup or chapel
-            service.
+            service. Select an urn, then Move to Chapel.
           </p>
+          {selected && (
+            <div className="mt-2">
+              <CaseTransferBar currentCase={selected} showVault />
+              <button
+                type="button"
+                onPointerDown={() => moveCaseTo(selected.id, 'CHAPEL')}
+                className="mt-2 px-4 py-2 bg-violet-700 active:bg-violet-600 rounded text-xs font-bold"
+              >
+                Move Selected Urn to Chapel
+              </button>
+            </div>
+          )}
         </div>
         <button
           type="button"

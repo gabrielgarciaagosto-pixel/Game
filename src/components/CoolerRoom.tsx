@@ -9,7 +9,7 @@ export const CoolerRoom: React.FC = () => {
     selectActiveCase,
     activeCaseId,
     setActiveStation,
-    takeActiveCaseToStation,
+    takeCaseToStation,
     expireUntaggedNames,
   } = useGameStore();
 
@@ -132,8 +132,7 @@ export const CoolerRoom: React.FC = () => {
                     type="button"
                     onPointerDown={(e) => {
                       e.stopPropagation();
-                      selectActiveCase(body.id);
-                      takeActiveCaseToStation('EMBALMING');
+                      takeCaseToStation(body.id, 'EMBALMING');
                     }}
                     className="flex-1 text-[10px] py-1.5 bg-emerald-700 rounded font-bold"
                   >
@@ -143,8 +142,7 @@ export const CoolerRoom: React.FC = () => {
                     type="button"
                     onPointerDown={(e) => {
                       e.stopPropagation();
-                      selectActiveCase(body.id);
-                      takeActiveCaseToStation('CREMATION');
+                      takeCaseToStation(body.id, 'CREMATION');
                     }}
                     className="flex-1 text-[10px] py-1.5 bg-orange-700 rounded font-bold"
                   >
@@ -154,8 +152,7 @@ export const CoolerRoom: React.FC = () => {
                     type="button"
                     onPointerDown={(e) => {
                       e.stopPropagation();
-                      selectActiveCase(body.id);
-                      takeActiveCaseToStation('SHOWROOM');
+                      takeCaseToStation(body.id, 'SHOWROOM');
                     }}
                     className="flex-1 text-[10px] py-1.5 bg-violet-700 rounded font-bold"
                   >

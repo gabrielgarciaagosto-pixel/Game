@@ -41,16 +41,46 @@ interface GameState {
   expireUntaggedNames: () => void;
   tickDecay: () => void;
   getActiveCase: () => DecedentCase | null;
-  moveActiveCaseTo: (location: CaseLocation) => void;
-  takeActiveCaseToStation: (station: StationId) => void;
-  completeEmbalming: (rank: Rank, tipMultiplier: number) => void;
-  completeCremation: (rank: Rank, boneAshGrams: number) => void;
-  completeUrnFilling: (bonusCash: number) => void;
-  storeUrnInVault: () => void;
+  moveCaseTo: (caseId: string, location: CaseLocation) => void;
+  /** @deprecated prefer moveCaseTo(caseId, location) */
+  moveActiveCaseTo: (location: CaseLocation, caseId?: string) => void;
+  takeCaseToStation: (caseId: string, station: StationId) => void;
+  takeActiveCaseToStation: (station: StationId, caseId?: string) => void;
+  completeEmbalming: (
+    rank: Rank,
+    tipMultiplier: number,
+    caseId: string
+  ) => void;
+  completeCremation: (
+    rank: Rank,
+    boneAshGrams: number,
+    caseId: string
+  ) => void;
+  completeUrnFilling: (bonusCash: number, caseId: string) => void;
+  storeUrnInVault: (caseId: string) => void;
   buyShowroomItem: (itemId: string) => void;
-  placeFloralSpray: (flower: 'LILIES' | 'ROSES' | 'WREATH') => void;
-  finalizeServiceAndNextCase: (chosenDisposition: 'BURIAL' | 'CREMATION') => void;
+  placeFloralSpray: (
+    flower: 'LILIES' | 'ROSES' | 'WREATH',
+    caseId: string
+  ) => void;
+  finalizeServiceAndNextCase: (
+    chosenDisposition: 'BURIAL' | 'CREMATION',
+    caseId: string
+  ) => void;
   clearLegalAlert: () => void;
+}
+
+/** Prefer the selected case when it is already at `location`, else any case there. */
+export function caseAtLocation(
+  cases: DecedentCase[],
+  location: CaseLocation,
+  activeCaseId: string | null
+): DecedentCase | null {
+  const selected = cases.find(
+    (c) => c.id === activeCaseId && c.location === location
+  );
+  if (selected) return selected;
+  return cases.find((c) => c.location === location) ?? null;
 }
 
 const FIRST_NAMES = [
@@ -191,6 +221,41 @@ function updateCaseById(
 function resolveActiveCase(state: GameState): DecedentCase | null {
   if (!state.activeCaseId) return null;
   return state.cases.find((c) => c.id === state.activeCaseId) ?? null;
+}
+
+function resolveCase(
+  state: GameState,
+  caseId?: string | null
+): DecedentCase | null {
+  if (caseId) return state.cases.find((c) => c.id === caseId) ?? null;
+  return resolveActiveCase(state);
+}
+
+function relocateCase(
+  c: DecedentCase,
+  location: CaseLocation,
+  now: number
+): DecedentCase {
+  return {
+    ...c,
+    location,
+    leftCoolerAt:
+      location === 'COOLER'
+        ? null
+        : c.location === 'COOLER'
+          ? now
+          : c.leftCoolerAt,
+  };
+}
+
+function stationForLocation(location: CaseLocation): StationId | null {
+  if (location === 'COOLER') return 'COOLER';
+  if (location === 'CHAPEL') return 'SHOWROOM';
+  if (location === 'URN_VAULT') return 'URN_VAULT';
+  if (location === 'EMBALMING') return 'EMBALMING';
+  if (location === 'CREMATION') return 'CREMATION';
+  if (location === 'URN_FILLING') return 'URN_FILLING';
+  return null;
 }
 
 function returnPlacedFlowers(state: GameState): ShowroomItem[] {
@@ -429,37 +494,31 @@ export const useGameStore = create<GameState>((set, get) => ({
       return changed ? { cases } : state;
     }),
 
-  moveActiveCaseTo: (location) =>
+  moveCaseTo: (caseId, location) =>
     set((state) => {
-      const active = resolveActiveCase(state);
-      if (!active) return state;
+      const target = resolveCase(state, caseId);
+      if (!target) return state;
       const now = Date.now();
+      const nextStation = stationForLocation(location);
       return {
-        cases: updateCaseById(state.cases, active.id, (c) => ({
-          ...c,
-          location,
-          leftCoolerAt:
-            location === 'COOLER'
-              ? null
-              : c.location === 'COOLER'
-                ? now
-                : c.leftCoolerAt,
-        })),
-        activeStation:
-          location === 'COOLER'
-            ? 'COOLER'
-            : location === 'CHAPEL'
-              ? 'SHOWROOM'
-              : location === 'URN_VAULT'
-                ? 'URN_VAULT'
-                : state.activeStation,
+        activeCaseId: caseId,
+        cases: updateCaseById(state.cases, caseId, (c) =>
+          relocateCase(c, location, now)
+        ),
+        activeStation: nextStation ?? state.activeStation,
       };
     }),
 
-  takeActiveCaseToStation: (station) =>
+  moveActiveCaseTo: (location, caseId) => {
+    const id = caseId ?? get().activeCaseId;
+    if (!id) return;
+    get().moveCaseTo(id, location);
+  },
+
+  takeCaseToStation: (caseId, station) =>
     set((state) => {
-      const active = resolveActiveCase(state);
-      if (!active) return { activeStation: station };
+      const target = resolveCase(state, caseId);
+      if (!target) return { activeStation: station, activeCaseId: caseId };
       const locationMap: Partial<Record<StationId, CaseLocation>> = {
         EMBALMING: 'EMBALMING',
         CREMATION: 'CREMATION',
@@ -469,28 +528,31 @@ export const useGameStore = create<GameState>((set, get) => ({
         URN_VAULT: 'URN_VAULT',
       };
       const location = locationMap[station];
-      if (!location) return { activeStation: station };
+      if (!location) return { activeStation: station, activeCaseId: caseId };
       const now = Date.now();
       return {
+        activeCaseId: caseId,
         activeStation: station,
-        cases: updateCaseById(state.cases, active.id, (c) => ({
-          ...c,
-          location,
-          leftCoolerAt:
-            location === 'COOLER'
-              ? null
-              : c.location === 'COOLER'
-                ? now
-                : c.leftCoolerAt,
-        })),
+        cases: updateCaseById(state.cases, caseId, (c) =>
+          relocateCase(c, location, now)
+        ),
       };
     }),
 
-  completeEmbalming: (rank, tipMultiplier) =>
+  takeActiveCaseToStation: (station, caseId) => {
+    const id = caseId ?? get().activeCaseId;
+    if (!id) {
+      set({ activeStation: station });
+      return;
+    }
+    get().takeCaseToStation(id, station);
+  },
+
+  completeEmbalming: (rank, tipMultiplier, caseId) =>
     set((state) => {
-      const active = resolveActiveCase(state);
+      const active = resolveCase(state, caseId);
       if (!active || active.isEmbalmed) {
-        return { activeStation: 'EMBALMING' };
+        return { activeStation: 'EMBALMING', activeCaseId: caseId };
       }
       // Heavy decay on the table tanks the saved embalm result
       let savedRank = rank;
@@ -508,7 +570,8 @@ export const useGameStore = create<GameState>((set, get) => ({
         tip = tip * 0.9;
       }
       return {
-        cases: updateCaseById(state.cases, active.id, (c) => ({
+        activeCaseId: caseId,
+        cases: updateCaseById(state.cases, caseId, (c) => ({
           ...c,
           isEmbalmed: true,
           embalmRank: savedRank,
@@ -530,15 +593,15 @@ export const useGameStore = create<GameState>((set, get) => ({
       };
     }),
 
-  completeCremation: (rank, boneAshGrams) => {
+  completeCremation: (rank, boneAshGrams, caseId) => {
     const state = get();
-    const active = resolveActiveCase(state);
+    const active = resolveCase(state, caseId);
     if (!active) {
       set({ activeStation: 'OVERVIEW' });
       return;
     }
     if (active.isCremated) {
-      set({ activeStation: 'URN_FILLING' });
+      set({ activeStation: 'URN_FILLING', activeCaseId: caseId });
       return;
     }
     if (active.directive === 'BURIAL_VIEWING') {
@@ -558,7 +621,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
 
     set({
-      cases: updateCaseById(state.cases, active.id, (c) => ({
+      activeCaseId: caseId,
+      cases: updateCaseById(state.cases, caseId, (c) => ({
         ...c,
         isCremated: true,
         cremationRank: rank,
@@ -570,14 +634,15 @@ export const useGameStore = create<GameState>((set, get) => ({
     });
   },
 
-  completeUrnFilling: (bonusCash) =>
+  completeUrnFilling: (bonusCash, caseId) =>
     set((state) => {
-      const active = resolveActiveCase(state);
+      const active = resolveCase(state, caseId);
       if (!active || active.isUrnFilled) {
-        return { activeStation: 'URN_FILLING' };
+        return { activeStation: 'URN_FILLING', activeCaseId: caseId };
       }
       return {
-        cases: updateCaseById(state.cases, active.id, (c) => ({
+        activeCaseId: caseId,
+        cases: updateCaseById(state.cases, caseId, (c) => ({
           ...c,
           isUrnFilled: true,
           location: 'URN_FILLING',
@@ -587,12 +652,13 @@ export const useGameStore = create<GameState>((set, get) => ({
       };
     }),
 
-  storeUrnInVault: () =>
+  storeUrnInVault: (caseId) =>
     set((state) => {
-      const active = resolveActiveCase(state);
+      const active = resolveCase(state, caseId);
       if (!active || !active.isUrnFilled) return state;
       return {
-        cases: updateCaseById(state.cases, active.id, (c) => ({
+        activeCaseId: caseId,
+        cases: updateCaseById(state.cases, caseId, (c) => ({
           ...c,
           location: 'URN_VAULT',
         })),
@@ -613,9 +679,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       };
     }),
 
-  placeFloralSpray: (flower) =>
+  placeFloralSpray: (flower, caseId) =>
     set((state) => {
-      const active = resolveActiveCase(state);
+      const active = resolveCase(state, caseId);
       if (!active) return state;
       const itemId = flowerItemId[flower];
       const item = state.showroomInventory.find((i) => i.id === itemId);
@@ -624,6 +690,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
       const preferredMatch = flower === active.preferredFlowers ? 15 : 5;
       return {
+        activeCaseId: caseId,
         placedFlowers: [...state.placedFlowers, flower],
         serviceRatingBonus: state.serviceRatingBonus + preferredMatch,
         showroomInventory: state.showroomInventory.map((i) =>
@@ -632,9 +699,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       };
     }),
 
-  finalizeServiceAndNextCase: (chosenDisposition) =>
+  finalizeServiceAndNextCase: (chosenDisposition, caseId) =>
     set((state) => {
-      const c = resolveActiveCase(state);
+      const c = resolveCase(state, caseId);
       if (!c) return { activeStation: 'OVERVIEW' };
 
       let fine = 0;

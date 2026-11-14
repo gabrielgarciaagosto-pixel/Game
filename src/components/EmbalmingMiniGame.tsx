@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CaseTransferBar } from './CaseTransferBar';
 import { displayCaseName, decayLabel } from '../types/game';
-import { useGameStore } from '../store/useGameStore';
+import { caseAtLocation, useGameStore } from '../store/useGameStore';
 import { hapticGlug } from '../utils/haptics';
 import {
   calculateEmbalmingTargets,
@@ -32,16 +32,16 @@ export const EmbalmingMiniGame: React.FC = () => {
     activeCaseId,
     completeEmbalming,
     setActiveStation,
-    takeActiveCaseToStation,
+    takeCaseToStation,
+    selectActiveCase,
   } = useGameStore();
-  const currentCase =
-    cases.find(
-      (c) =>
-        c.location === 'EMBALMING' &&
-        (c.id === activeCaseId || activeCaseId == null)
-    ) ??
-    cases.find((c) => c.location === 'EMBALMING') ??
-    null;
+  const currentCase = caseAtLocation(cases, 'EMBALMING', activeCaseId);
+
+  useEffect(() => {
+    if (currentCase && currentCase.id !== activeCaseId) {
+      selectActiveCase(currentCase.id);
+    }
+  }, [currentCase, activeCaseId, selectActiveCase]);
 
   const [selectedFluid, setSelectedFluid] = useState<FluidType>('FORMALDEHYDE');
   const [poured, setPoured] = useState({
@@ -199,7 +199,9 @@ export const EmbalmingMiniGame: React.FC = () => {
         <div className="flex gap-2">
           <button
             type="button"
-            onPointerDown={() => takeActiveCaseToStation('COOLER')}
+            onPointerDown={() =>
+              currentCase && takeCaseToStation(currentCase.id, 'COOLER')
+            }
             className="px-3 py-2 bg-cyan-800 rounded text-sm active:bg-cyan-700"
           >
             Return Cooler
@@ -315,7 +317,11 @@ export const EmbalmingMiniGame: React.FC = () => {
         <button
           type="button"
           onPointerDown={() =>
-            completeEmbalming(evaluation.rank, evaluation.tipMultiplier)
+            completeEmbalming(
+              evaluation.rank,
+              evaluation.tipMultiplier,
+              currentCase.id
+            )
           }
           className="px-6 py-2 bg-amber-500 active:bg-amber-400 text-slate-950 font-bold rounded"
         >

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { CaseTransferBar } from './CaseTransferBar';
 import { displayCaseName, decayLabel } from '../types/game';
-import { useGameStore } from '../store/useGameStore';
+import { caseAtLocation, useGameStore } from '../store/useGameStore';
 
 const FLOWER_TYPES = ['LILIES', 'ROSES', 'WREATH'] as const;
 
@@ -17,18 +17,18 @@ export const ShowroomAndChapelModal: React.FC = () => {
     placeFloralSpray,
     finalizeServiceAndNextCase,
     setActiveStation,
-    takeActiveCaseToStation,
+    takeCaseToStation,
+    selectActiveCase,
   } = useGameStore();
 
   const [tab, setTab] = useState<'BUY' | 'CHAPEL'>('BUY');
-  const currentCase =
-    cases.find(
-      (c) =>
-        c.location === 'CHAPEL' &&
-        (c.id === activeCaseId || activeCaseId == null)
-    ) ??
-    cases.find((c) => c.location === 'CHAPEL') ??
-    null;
+  const currentCase = caseAtLocation(cases, 'CHAPEL', activeCaseId);
+
+  useEffect(() => {
+    if (currentCase && currentCase.id !== activeCaseId) {
+      selectActiveCase(currentCase.id);
+    }
+  }, [currentCase, activeCaseId, selectActiveCase]);
 
   if (!currentCase) {
     return (
@@ -79,7 +79,9 @@ export const ShowroomAndChapelModal: React.FC = () => {
         <div className="flex gap-2">
           <button
             type="button"
-            onPointerDown={() => takeActiveCaseToStation('COOLER')}
+            onPointerDown={() =>
+              currentCase && takeCaseToStation(currentCase.id, 'COOLER')
+            }
             className="px-3 py-2 bg-cyan-800 rounded text-sm"
           >
             Cooler
@@ -180,7 +182,9 @@ export const ShowroomAndChapelModal: React.FC = () => {
                   key={flower}
                   type="button"
                   disabled={placed || !inv || inv.ownedCount <= 0}
-                  onPointerDown={() => placeFloralSpray(flower)}
+                  onPointerDown={() =>
+                    placeFloralSpray(flower, currentCase.id)
+                  }
                   className={`py-3 rounded font-semibold text-sm ${
                     placed
                       ? 'bg-emerald-700'
@@ -202,14 +206,18 @@ export const ShowroomAndChapelModal: React.FC = () => {
           <div className="mt-auto grid grid-cols-2 gap-3">
             <button
               type="button"
-              onPointerDown={() => finalizeServiceAndNextCase('BURIAL')}
+              onPointerDown={() =>
+                finalizeServiceAndNextCase('BURIAL', currentCase.id)
+              }
               className="py-3 bg-sky-600 active:bg-sky-500 rounded font-bold"
             >
               Finalize Burial Service
             </button>
             <button
               type="button"
-              onPointerDown={() => finalizeServiceAndNextCase('CREMATION')}
+              onPointerDown={() =>
+                finalizeServiceAndNextCase('CREMATION', currentCase.id)
+              }
               className="py-3 bg-orange-600 active:bg-orange-500 rounded font-bold"
             >
               Finalize Cremation Service

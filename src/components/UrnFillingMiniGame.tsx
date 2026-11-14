@@ -1,7 +1,7 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CaseTransferBar } from './CaseTransferBar';
 import { displayCaseName } from '../types/game';
-import { useGameStore } from '../store/useGameStore';
+import { caseAtLocation, useGameStore } from '../store/useGameStore';
 
 type Phase = 'MAGNET' | 'CREMULATOR' | 'POUR' | 'DONE';
 
@@ -19,16 +19,17 @@ export const UrnFillingMiniGame: React.FC = () => {
     activeCaseId,
     completeUrnFilling,
     storeUrnInVault,
+    moveCaseTo,
     setActiveStation,
+    selectActiveCase,
   } = useGameStore();
-  const currentCase =
-    cases.find(
-      (c) =>
-        c.location === 'URN_FILLING' &&
-        (c.id === activeCaseId || activeCaseId == null)
-    ) ??
-    cases.find((c) => c.location === 'URN_FILLING') ??
-    null;
+  const currentCase = caseAtLocation(cases, 'URN_FILLING', activeCaseId);
+
+  useEffect(() => {
+    if (currentCase && currentCase.id !== activeCaseId) {
+      selectActiveCase(currentCase.id);
+    }
+  }, [currentCase, activeCaseId, selectActiveCase]);
 
   const [phase, setPhase] = useState<Phase>('MAGNET');
   const [fragments, setFragments] = useState<MetalFragment[]>(() =>
@@ -113,8 +114,9 @@ export const UrnFillingMiniGame: React.FC = () => {
   };
 
   const finish = () => {
+    if (!currentCase) return;
     const pourBonus = urnFill >= 95 ? 120 : urnFill >= 70 ? 60 : 20;
-    completeUrnFilling(collectedBonus + pourBonus);
+    completeUrnFilling(collectedBonus + pourBonus, currentCase.id);
     setPhase('DONE');
   };
 
@@ -156,14 +158,14 @@ export const UrnFillingMiniGame: React.FC = () => {
           <div className="flex flex-wrap gap-2 justify-center">
             <button
               type="button"
-              onPointerDown={() => storeUrnInVault()}
+              onPointerDown={() => storeUrnInVault(currentCase.id)}
               className="px-5 py-3 bg-amber-500 text-zinc-950 font-bold rounded active:bg-amber-400"
             >
               Store in Urn Vault
             </button>
             <button
               type="button"
-              onPointerDown={() => setActiveStation('SHOWROOM')}
+              onPointerDown={() => moveCaseTo(currentCase.id, 'CHAPEL')}
               className="px-5 py-3 bg-violet-700 font-bold rounded active:bg-violet-600"
             >
               Move to Chapel

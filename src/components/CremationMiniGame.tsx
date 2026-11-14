@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { CaseTransferBar } from './CaseTransferBar';
 import type { Rank, SweepTool } from '../types/game';
 import { displayCaseName } from '../types/game';
-import { useGameStore } from '../store/useGameStore';
+import { caseAtLocation, useGameStore } from '../store/useGameStore';
 import { hapticIronRake } from '../utils/haptics';
 import { getCremationTargets } from '../utils/mortuaryMath';
 
@@ -118,17 +118,17 @@ export const CremationMiniGame: React.FC = () => {
     activeCaseId,
     completeCremation,
     setActiveStation,
-    takeActiveCaseToStation,
+    takeCaseToStation,
+    selectActiveCase,
   } = useGameStore();
 
-  const currentCase =
-    cases.find(
-      (c) =>
-        c.location === 'CREMATION' &&
-        (c.id === activeCaseId || activeCaseId == null)
-    ) ??
-    cases.find((c) => c.location === 'CREMATION') ??
-    null;
+  const currentCase = caseAtLocation(cases, 'CREMATION', activeCaseId);
+
+  useEffect(() => {
+    if (currentCase && currentCase.id !== activeCaseId) {
+      selectActiveCase(currentCase.id);
+    }
+  }, [currentCase, activeCaseId, selectActiveCase]);
 
   const targets = currentCase
     ? getCremationTargets(currentCase.weightLbs)
@@ -349,7 +349,7 @@ export const CremationMiniGame: React.FC = () => {
     if (earlyPrimaryStarts > 1) {
       rank = rank === 'S+' || rank === 'S' ? 'B' : rank === 'A' ? 'C' : 'F';
     }
-    completeCremation(rank, currentCase.weightLbs * 15);
+    completeCremation(rank, currentCase.weightLbs * 15, currentCase.id);
     setPhase('DONE');
   };
 
@@ -395,7 +395,9 @@ export const CremationMiniGame: React.FC = () => {
           </p>
           <button
             type="button"
-            onPointerDown={() => takeActiveCaseToStation('URN_FILLING')}
+            onPointerDown={() =>
+              takeCaseToStation(currentCase.id, 'URN_FILLING')
+            }
             className="px-6 py-3 bg-amber-500 text-stone-950 font-bold rounded"
           >
             Open Urn Processor →
@@ -433,7 +435,7 @@ export const CremationMiniGame: React.FC = () => {
         </div>
         <button
           type="button"
-          onPointerDown={() => takeActiveCaseToStation('COOLER')}
+          onPointerDown={() => takeCaseToStation(currentCase.id, 'COOLER')}
           className="px-3 py-2 bg-stone-800 rounded text-xs"
         >
           Abort → Cooler
