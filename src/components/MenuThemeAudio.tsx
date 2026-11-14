@@ -32,6 +32,8 @@ export const MenuThemeAudio: React.FC = () => {
   const playingRef = useRef(false);
   /** Bumps on leave / remount so in-flight crossfades abort. */
   const genRef = useRef(0);
+  /** Monotonic token so a stale playTrack never fades a newer menu start. */
+  const playTokenRef = useRef(0);
 
   const menuActive =
     (!hasStartedGame || activeStation === 'OVERVIEW') &&
@@ -50,17 +52,21 @@ export const MenuThemeAudio: React.FC = () => {
     const track = manifest.tracks.find((t) => t.id === trackId);
     if (!track) return;
 
+    const bedId = menuBedId(trackId);
+    const token = ++playTokenRef.current;
     currentTrackRef.current = trackId;
     playingRef.current = true;
-    await audioManager.crossfadeTo(menuBedId(trackId), {
+    await audioManager.crossfadeTo(bedId, {
       url: track.file,
       loop: false,
       volume: manifest.volume,
       durationMs: fadeMs,
     });
 
-    // Leave / Reset raced the crossfade — pull menu back off the bus.
-    if (isStale(gen) && isMenuBedId(audioManager.getCurrentId())) {
+    // Leave / Reset raced this crossfade — only tear down if we still own
+    // the latest play token (a newer start must not be silenced).
+    if (token !== playTokenRef.current) return;
+    if (isStale(gen) && audioManager.getCurrentId() === bedId) {
       playingRef.current = false;
       void audioManager.fadeOut(fadeMs);
     }
