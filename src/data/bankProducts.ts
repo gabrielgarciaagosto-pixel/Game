@@ -123,7 +123,8 @@ function listingForCity(
   const h = hashStr(key);
   const tier = (h % 5) + 1; // 1..5
   const price = 18_000 + tier * 12_000 + (h % 7) * 1500 + indexInState * 400;
-  const space = 16 + tier * 10 + (h % 5) * 2;
+  // Max upgrades use ~76 space; keep top listings ≥ that so maxed saves can relocate.
+  const space = 22 + tier * 12 + (h % 5) * 2;
   const clientFlow = +(0.85 + tier * 0.08 + ((h >> 3) % 5) * 0.02).toFixed(2);
   const salesMult = +(0.9 + tier * 0.07 + ((h >> 5) % 4) * 0.03).toFixed(2);
   const repBonus = 2 + tier;

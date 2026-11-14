@@ -499,8 +499,9 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                 </p>
                 <TapButton
                   onTap={() => {
+                    // Switch computer app only — do not call onClose/goDesktop
+                    // (that would clear computerOpenApp and dump to wallpaper).
                     setComputerOpenApp('REALTY');
-                    onClose?.();
                   }}
                   className="w-full py-2 rounded-lg bg-emerald-800 text-[11px] font-black text-emerald-50"
                 >

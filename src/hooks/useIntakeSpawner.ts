@@ -14,6 +14,7 @@ export function useIntakeSpawner() {
   const tickPermitEvaluations = useGameStore((s) => s.tickPermitEvaluations);
   const tickBankForeclosure = useGameStore((s) => s.tickBankForeclosure);
   const tickBankLoans = useGameStore((s) => s.tickBankLoans);
+  const clientFlow = useGameStore((s) => s.ownedProperty.clientFlow);
 
   useEffect(() => {
     if (!hasStartedGame) return;
@@ -22,7 +23,7 @@ export function useIntakeSpawner() {
     let cancelled = false;
 
     const scheduleNext = () => {
-      const delay = nextIntakeDelayMs();
+      const delay = nextIntakeDelayMs(clientFlow);
       timeoutId = setTimeout(() => {
         if (cancelled) return;
         receiveNewIntake();
@@ -55,5 +56,6 @@ export function useIntakeSpawner() {
     tickPermitEvaluations,
     tickBankLoans,
     tickBankForeclosure,
+    clientFlow,
   ]);
 }

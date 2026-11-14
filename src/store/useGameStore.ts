@@ -605,12 +605,16 @@ function flowersFromLayout(
     );
 }
 
-/** Random delay between 3–5 minutes for the next intake */
-export function nextIntakeDelayMs(): number {
-  return (
+/**
+ * Random delay between 3–5 minutes for the next intake.
+ * Higher `clientFlow` (property stat) shortens the wait.
+ */
+export function nextIntakeDelayMs(clientFlow = 1): number {
+  const base =
     INTAKE_MIN_MS +
-    Math.floor(Math.random() * (INTAKE_MAX_MS - INTAKE_MIN_MS + 1))
-  );
+    Math.floor(Math.random() * (INTAKE_MAX_MS - INTAKE_MIN_MS + 1));
+  const flow = Math.max(0.5, Number.isFinite(clientFlow) ? clientFlow : 1);
+  return Math.max(20_000, Math.round(base / flow));
 }
 
 const defaultShowroomInventory: ShowroomItem[] = [
@@ -1854,11 +1858,12 @@ export const useGameStore = create<GameState>()(
     const state = get();
     const loan = state.activeLoans.find((l) => l.id === loanId);
     if (!loan) return { ok: false, message: 'Loan not found' };
-    if (state.cash < loan.paymentAmount) {
+    const principalPay = Math.min(loan.principalRemaining, loan.paymentAmount);
+    if (principalPay <= 0) return { ok: false, message: 'Loan already paid' };
+    if (state.cash < principalPay) {
       return { ok: false, message: 'Insufficient cash for installment' };
     }
     const now = gameNow();
-    const principalPay = Math.min(loan.principalRemaining, loan.paymentAmount);
     const remaining = loan.principalRemaining - principalPay;
     let activeLoans = state.activeLoans;
     if (remaining <= 0) {
@@ -1876,14 +1881,14 @@ export const useGameStore = create<GameState>()(
       );
     }
     set({
-      cash: state.cash - loan.paymentAmount,
+      cash: state.cash - principalPay,
       activeLoans,
       financeLedger: [
         {
           id: `led_pay_${now}`,
           at: now,
           label: `Loan payment — ${loan.label}`,
-          amount: -loan.paymentAmount,
+          amount: -principalPay,
           kind: 'OTHER' as const,
         },
         ...state.financeLedger,
@@ -1891,7 +1896,7 @@ export const useGameStore = create<GameState>()(
       intakeToast:
         remaining <= 0
           ? `Paid off: ${loan.label}`
-          : `Payment $${loan.paymentAmount} on ${loan.label}`,
+          : `Payment $${principalPay} on ${loan.label}`,
     });
     get().tickBankForeclosure();
     return { ok: true, message: 'Payment posted' };
@@ -1940,24 +1945,54 @@ export const useGameStore = create<GameState>()(
       };
     }
     const now = gameNow();
-    const equity = Math.round(state.ownedProperty.purchasedFor * 0.4);
+    const saleProceeds = Math.round(state.ownedProperty.purchasedFor * 0.4);
+    const mortgageDue = state.activeLoans
+      .filter((l) => l.kind === 'MORTGAGE')
+      .reduce((sum, l) => sum + l.principalRemaining, 0);
+    // Net equity after settling the note — never forgive remaining principal.
+    const equity = saleProceeds - mortgageDue;
     let cash = state.cash + equity;
     let activeLoans = state.activeLoans.filter((l) => l.kind !== 'MORTGAGE');
     if (method === 'CASH') {
       if (cash < listing.price) {
-        return { ok: false, message: `Need $${listing.price.toLocaleString()} cash (have $${cash.toLocaleString()} incl. equity)` };
+        return {
+          ok: false,
+          message: `Need $${listing.price.toLocaleString()} cash (have $${cash.toLocaleString()} after sale/mortgage settle)`,
+        };
       }
       cash -= listing.price;
     } else {
       const down = Math.ceil(listing.price * 0.2);
       if (cash < down) {
-        return { ok: false, message: `Need $${down.toLocaleString()} down payment (20%)` };
+        return {
+          ok: false,
+          message: `Need $${down.toLocaleString()} down payment (20%) after settling prior mortgage`,
+        };
       }
       cash -= down;
       const financed = listing.price - down;
       activeLoans = [...activeLoans, makeMortgageLoan(listing, financed, now)];
     }
     const owned = ownedFromListing(listing, listing.price);
+    const ledgerExtra: GameState['financeLedger'] = [];
+    if (saleProceeds > 0) {
+      ledgerExtra.push({
+        id: `led_sale_${now}`,
+        at: now,
+        label: 'Prior property sale (40%)',
+        amount: saleProceeds,
+        kind: 'OTHER',
+      });
+    }
+    if (mortgageDue > 0) {
+      ledgerExtra.push({
+        id: `led_mtg_settle_${now}`,
+        at: now,
+        label: 'Prior mortgage payoff on relocate',
+        amount: -mortgageDue,
+        kind: 'OTHER',
+      });
+    }
     set({
       cash,
       ownedProperty: owned,
@@ -1968,20 +2003,13 @@ export const useGameStore = create<GameState>()(
           id: `led_prop_${now}`,
           at: now,
           label: `${method === 'CASH' ? 'Cash buy' : 'Mortgage'} — ${listing.label}`,
-          amount: method === 'CASH' ? -listing.price : -Math.ceil(listing.price * 0.2),
+          amount:
+            method === 'CASH'
+              ? -listing.price
+              : -Math.ceil(listing.price * 0.2),
           kind: 'OTHER' as const,
         },
-        ...(equity > 0
-          ? [
-              {
-                id: `led_equity_${now}`,
-                at: now,
-                label: 'Prior property equity',
-                amount: equity,
-                kind: 'OTHER' as const,
-              },
-            ]
-          : []),
+        ...ledgerExtra,
         ...state.financeLedger,
       ].slice(0, 80),
       intakeToast: `Relocated to ${listing.city}, ${listing.stateCode} · space ${used}/${listing.space}`,
@@ -2002,9 +2030,9 @@ export const useGameStore = create<GameState>()(
       while (now >= next.nextPaymentDueAt && next.principalRemaining > 0) {
         changed = true;
         const pay = Math.min(next.paymentAmount, next.principalRemaining);
-        cash -= next.paymentAmount; // may overdraft → foreclosure timer
+        cash -= pay; // may overdraft → foreclosure timer
         next.principalRemaining = Math.max(0, next.principalRemaining - pay);
-        if (cash < 0 || state.cash < next.paymentAmount) {
+        if (cash < 0) {
           next.missedPayments += 1;
         } else {
           next.missedPayments = 0;
@@ -2014,7 +2042,7 @@ export const useGameStore = create<GameState>()(
           id: `led_auto_${next.id}_${next.nextPaymentDueAt}`,
           at: now,
           label: `Auto draft — ${next.label}`,
-          amount: -next.paymentAmount,
+          amount: -pay,
           kind: 'OTHER' as const,
         });
         if (next.principalRemaining <= 0) break;
@@ -2376,20 +2404,27 @@ export const useGameStore = create<GameState>()(
         ? 0
         : Math.round((c.urnPourQuality ?? 0) * 1.1);
       const tipCash = serviceFailed ? 0 : chapelRewards.tipCash + pourTip;
+      const salesMult = Math.max(
+        0.5,
+        state.ownedProperty.salesMult ?? 1
+      );
 
       const netPayout = serviceFailed
         ? -(fine + lateFine)
         : Math.max(
             0,
-            c.basePayout +
-              flowerBonus +
-              urnSale +
-              urnTasteBonus +
-              casketSale +
-              casketTasteBonus +
-              tipCash +
-              (c.isUrnFilled ? 150 : 0) -
-              decayPenalty
+            Math.round(
+              (c.basePayout +
+                flowerBonus +
+                urnSale +
+                urnTasteBonus +
+                casketSale +
+                casketTasteBonus +
+                tipCash +
+                (c.isUrnFilled ? 150 : 0) -
+                decayPenalty) *
+                salesMult
+            )
           );
 
       const remaining = state.cases.filter((x) => x.id !== c.id);
