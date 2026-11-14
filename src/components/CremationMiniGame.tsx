@@ -185,6 +185,7 @@ export const CremationMiniGame: React.FC = () => {
     takeCaseToStation,
     focusCase,
     syncCremationDecayState,
+    clearCremationDecayState,
   } = useGameStore();
 
   const currentCase = caseAtLocation(cases, 'CREMATION', activeCaseId);
@@ -244,6 +245,36 @@ export const CremationMiniGame: React.FC = () => {
   const canStartPrimary =
     secondaryOn && secondaryTemp >= 800 && !purging;
 
+  // Live values for the burn interval — avoid restarting ticks while jogging the door
+  const burnRefs = useRef({
+    doorOpen,
+    secondaryOn,
+    primaryOn,
+    blowerOn,
+    heated,
+    phase,
+    primaryTemp,
+    secondaryTemp,
+    earlyPrimaryStarts,
+    maxSafeTemp,
+    secondarySp,
+    primarySp,
+  });
+  burnRefs.current = {
+    doorOpen,
+    secondaryOn,
+    primaryOn,
+    blowerOn,
+    heated,
+    phase,
+    primaryTemp,
+    secondaryTemp,
+    earlyPrimaryStarts,
+    maxSafeTemp,
+    secondarySp,
+    primarySp,
+  };
+
   useEffect(() => {
     if (!purging || purgeEndsAt == null) return;
     const id = setInterval(() => {
@@ -295,9 +326,11 @@ export const CremationMiniGame: React.FC = () => {
 
   useEffect(() => {
     return () => {
+      // Keep progress / arrest latch; only mark burners inactive on leave
+      const s = burnRefs.current;
       syncCremationDecayState({
         active: false,
-        progress: 0,
+        progress: s.phase === 'SWEEP' || s.phase === 'DONE' ? 1 : 0,
         heatNormalized: 0,
       });
     };
@@ -306,71 +339,60 @@ export const CremationMiniGame: React.FC = () => {
   useEffect(() => {
     if (!currentCase || !targets) return;
     const id = setInterval(() => {
+      const s = burnRefs.current;
       // Door openness vents chamber heat (quadratic — cracked door bleeds less)
-      const doorLoss = Math.pow(doorOpen, 1.35) * 28;
+      const doorLoss = Math.pow(s.doorOpen, 1.35) * 28;
 
       setSecondaryTemp((t) => {
-        if (secondaryOn) {
+        if (s.secondaryOn) {
           return Math.min(
-            secondarySp + 40,
+            s.secondarySp + 40,
             Math.max(72, t + 18 + Math.random() * 10 - doorLoss * 0.15)
           );
         }
-        if (blowerOn && heated) return Math.min(820, t + 6);
-        if (blowerOn) return Math.min(200, t + 2);
+        if (s.blowerOn && s.heated) return Math.min(820, t + 6);
+        if (s.blowerOn) return Math.min(200, t + 2);
         return Math.max(72, t - 4 - doorLoss * 0.1);
       });
 
       setPrimaryTemp((t) => {
-        if (primaryOn) {
+        if (s.primaryOn) {
           const slow =
-            secondaryTemp < 850 || earlyPrimaryStarts > 0 ? 0.55 : 1;
+            s.secondaryTemp < 850 || s.earlyPrimaryStarts > 0 ? 0.55 : 1;
           const gain = (10 + Math.random() * 8) * slow;
           return Math.min(
-            primarySp + 60,
+            s.primarySp + 60,
             Math.max(72, t + gain - doorLoss)
           );
         }
-        if (secondaryOn) {
+        if (s.secondaryOn) {
           return Math.max(72, Math.min(400, t + 1 - doorLoss * 0.4));
         }
         return Math.max(72, t - 5 - doorLoss * 0.5);
       });
 
-      if (phase === 'BURN' && primaryOn) {
-        const heatFactor = Math.min(1.15, Math.max(0.15, primaryTemp / 1400));
-        const doorEfficiency = Math.max(0.2, 1 - doorOpen * 0.7);
+      if (s.phase === 'BURN' && s.primaryOn) {
+        const heatFactor = Math.min(
+          1.15,
+          Math.max(0.15, s.primaryTemp / 1400)
+        );
+        const doorEfficiency = Math.max(0.2, 1 - s.doorOpen * 0.7);
         const burnRate =
           heatFactor *
           doorEfficiency *
-          (secondaryTemp >= 850 ? 1 : 0.65) *
-          (earlyPrimaryStarts > 0 ? 0.85 : 1);
+          (s.secondaryTemp >= 850 ? 1 : 0.65) *
+          (s.earlyPrimaryStarts > 0 ? 0.85 : 1);
         // Near real-time: ~5 minutes wall-clock when heat is held
         setElapsedSec(
           (prev) => prev + (BURN_TICK_MS / 1000) * burnRate
         );
-        if (primaryTemp > maxSafeTemp) {
+        if (s.primaryTemp > s.maxSafeTemp) {
           setThermalWarnings((w) => w + 1);
         }
       }
     }, BURN_TICK_MS);
     return () => clearInterval(id);
-  }, [
-    currentCase,
-    targets,
-    secondaryOn,
-    primaryOn,
-    blowerOn,
-    heated,
-    phase,
-    doorOpen,
-    primaryTemp,
-    secondaryTemp,
-    earlyPrimaryStarts,
-    maxSafeTemp,
-    secondarySp,
-    primarySp,
-  ]);
+  }, [currentCase, targets]);
 
   const startBlower = () => {
     if (blowerOn) return;
@@ -473,6 +495,7 @@ export const CremationMiniGame: React.FC = () => {
       rank = rank === 'S+' || rank === 'S' ? 'B' : rank === 'A' ? 'C' : 'F';
     }
     completeCremation(rank, currentCase.weightLbs * 15, currentCase.id);
+    clearCremationDecayState();
     setPhase('DONE');
   };
 

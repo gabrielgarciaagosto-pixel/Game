@@ -16,10 +16,14 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
   const [isRattling, setIsRattling] = useState(false);
   const [statusText, setStatusText] = useState('Awaiting Mortician...');
   const timersRef = useRef<number[]>([]);
+  const rattleTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
       timersRef.current.forEach((id) => window.clearTimeout(id));
+      if (rattleTimerRef.current != null) {
+        window.clearTimeout(rattleTimerRef.current);
+      }
     };
   }, []);
 
@@ -27,15 +31,24 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
     if (isAnimating || isRattling) return;
     setIsRattling(true);
     setStatusText('Ash stirs...');
-    const id = window.setTimeout(() => {
+    if (rattleTimerRef.current != null) {
+      window.clearTimeout(rattleTimerRef.current);
+    }
+    rattleTimerRef.current = window.setTimeout(() => {
+      rattleTimerRef.current = null;
       setIsRattling(false);
-      setStatusText('Awaiting Mortician...');
+      setStatusText((prev) =>
+        prev === 'Ash stirs...' ? 'Awaiting Mortician...' : prev
+      );
     }, 2400);
-    timersRef.current.push(id);
   };
 
   const handleStartClick = () => {
     if (isAnimating) return;
+    if (rattleTimerRef.current != null) {
+      window.clearTimeout(rattleTimerRef.current);
+      rattleTimerRef.current = null;
+    }
     setIsAnimating(true);
     setIsRattling(false);
     setStatusText('Loading...');

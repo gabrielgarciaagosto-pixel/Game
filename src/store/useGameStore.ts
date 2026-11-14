@@ -37,6 +37,8 @@ interface GameState {
   cremationBurnActive: boolean;
   cremationBurnProgress: number;
   cremationHeatNormalized: number;
+  /** Latches once burn reaches 15% — stays frozen through sweep / burner stops */
+  cremationDecayArrested: boolean;
   startGame: () => void;
   setActiveStation: (station: StationId) => void;
   syncCremationDecayState: (state: {
@@ -44,6 +46,7 @@ interface GameState {
     progress: number;
     heatNormalized: number;
   }) => void;
+  clearCremationDecayState: () => void;
   selectActiveCase: (caseId: string) => void;
   /** Sync selection to the case currently on a station without clearing chapel décor */
   focusCase: (caseId: string) => void;
@@ -316,6 +319,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   cremationBurnActive: false,
   cremationBurnProgress: 0,
   cremationHeatNormalized: 0,
+  cremationDecayArrested: false,
   placedFlowers: [],
   serviceRatingBonus: 0,
   showroomInventory: [
@@ -508,10 +512,23 @@ export const useGameStore = create<GameState>((set, get) => ({
     }),
 
   syncCremationDecayState: ({ active, progress, heatNormalized }) =>
+    set((state) => {
+      const p = Math.max(0, Math.min(1, progress));
+      return {
+        cremationBurnActive: active,
+        cremationBurnProgress: Math.max(state.cremationBurnProgress, p),
+        cremationHeatNormalized: Math.max(0, Math.min(1, heatNormalized)),
+        cremationDecayArrested:
+          state.cremationDecayArrested || p >= 0.15,
+      };
+    }),
+
+  clearCremationDecayState: () =>
     set({
-      cremationBurnActive: active,
-      cremationBurnProgress: Math.max(0, Math.min(1, progress)),
-      cremationHeatNormalized: Math.max(0, Math.min(1, heatNormalized)),
+      cremationBurnActive: false,
+      cremationBurnProgress: 0,
+      cremationHeatNormalized: 0,
+      cremationDecayArrested: false,
     }),
 
   tickDecay: () =>
@@ -524,12 +541,16 @@ export const useGameStore = create<GameState>((set, get) => ({
           return c;
         }
 
+        if (
+          c.location === 'CREMATION' &&
+          (state.cremationDecayArrested ||
+            state.cremationBurnProgress >= 0.15)
+        ) {
+          return c;
+        }
+
         let rate = DECAY_PER_SEC;
         if (c.location === 'CREMATION' && state.cremationBurnActive) {
-          // Heat arrests putrefaction; fully stopped once burn reaches 15%
-          if (state.cremationBurnProgress >= 0.15) {
-            return c;
-          }
           rate =
             DECAY_PER_SEC *
             Math.max(0.08, 1 - state.cremationHeatNormalized * 0.92);
@@ -665,6 +686,10 @@ export const useGameStore = create<GameState>((set, get) => ({
         placedFlowers: [],
         serviceRatingBonus: 0,
         activeStation: 'OVERVIEW',
+        cremationBurnActive: false,
+        cremationBurnProgress: 0,
+        cremationHeatNormalized: 0,
+        cremationDecayArrested: false,
       });
       return;
     }
@@ -680,6 +705,10 @@ export const useGameStore = create<GameState>((set, get) => ({
       ossilegiumCommuneGrams:
         state.ossilegiumCommuneGrams + Math.round(boneAshGrams * 0.02),
       activeStation: 'URN_FILLING',
+      cremationBurnActive: false,
+      cremationBurnProgress: 0,
+      cremationHeatNormalized: 0,
+      cremationDecayArrested: false,
     });
   },
 
