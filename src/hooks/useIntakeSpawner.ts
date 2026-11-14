@@ -11,6 +11,7 @@ export function useIntakeSpawner() {
   const expireUntaggedNames = useGameStore((s) => s.expireUntaggedNames);
   const tickDecay = useGameStore((s) => s.tickDecay);
   const tickFamilyUrnChoices = useGameStore((s) => s.tickFamilyUrnChoices);
+  const tickPermitEvaluations = useGameStore((s) => s.tickPermitEvaluations);
 
   useEffect(() => {
     if (!hasStartedGame) return;
@@ -33,6 +34,7 @@ export function useIntakeSpawner() {
       expireUntaggedNames();
       tickDecay();
       tickFamilyUrnChoices();
+      tickPermitEvaluations();
     }, 1000);
 
     return () => {
@@ -46,5 +48,6 @@ export function useIntakeSpawner() {
     expireUntaggedNames,
     tickDecay,
     tickFamilyUrnChoices,
+    tickPermitEvaluations,
   ]);
 }

@@ -21,8 +21,10 @@ import {
   generateRandomCase,
   pauseGamePersistWrites,
   resumeGamePersistWrites,
+  toInboxFile,
   useGameStore,
 } from '../store/useGameStore';
+import { initialPermitStatus } from '../data/cremationPermits';
 import type { DispositionDirective } from '../types/game';
 import { audioManager } from '../utils/audioManager';
 import {
@@ -86,24 +88,15 @@ export function spawnDirective(directive: DispositionDirective) {
           : directive === 'CREMATION_THEN_VIEWING'
             ? 1550
             : 1650,
+    cremationPermitStatus: initialPermitStatus(directive),
+    cremationPermitSubmittedAt: null,
+    cremationPermitEvaluatesAt: null,
+    cremationPermitRejectReason: null,
+    unpermittedCremation: false,
   };
   useGameStore.setState({
     cases: [...state.cases, next],
-    inboxFiles: [
-      {
-        id: next.id,
-        decedentName: next.name,
-        intakeTimestamp: next.arrivedAt,
-        weightLbs: next.weightLbs,
-        tissueCondition: next.tissueCondition,
-        directive: next.directive,
-        preferredFlowers: next.preferredFlowers,
-        isRead: false,
-        serviceDateMs: next.serviceDateMs,
-        familyRequestedUrnId: null,
-      },
-      ...state.inboxFiles,
-    ],
+    inboxFiles: [toInboxFile(next), ...state.inboxFiles],
     intakeToast: `[DEV] Spawned ${directive}`,
     activeCaseId: state.activeCaseId ?? next.id,
   });

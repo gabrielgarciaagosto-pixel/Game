@@ -92,6 +92,12 @@ export const MainHubMenu: React.FC = () => {
       subtitle: `${vaultCount} sealed · collection display`,
       color: 'from-stone-900 via-slate-950 to-slate-950 border-stone-500/45',
     },
+    {
+      id: 'COMPUTER' as const,
+      title: 'COMPUTER',
+      subtitle: 'State Vital Records · cremation permits',
+      color: 'from-teal-950 via-slate-950 to-slate-950 border-teal-500/45',
+    },
   ];
 
   return (

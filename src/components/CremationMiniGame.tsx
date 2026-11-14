@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CaseTransferBar } from './CaseTransferBar';
+import { directiveNeedsCremationPermit } from '../data/cremationPermits';
+import { permitStatusLabel } from '../data/decedentVitals';
 import type { Rank, SweepTool } from '../types/game';
 import { displayCaseName } from '../types/game';
 import { caseAtLocation, useGameStore } from '../store/useGameStore';
@@ -944,6 +946,15 @@ export const CremationMiniGame: React.FC = () => {
             Back
           </button>
         </div>
+        {directiveNeedsCremationPermit(currentCase.directive) &&
+          currentCase.cremationPermitStatus !== 'APPROVED' && (
+            <div className="mt-2 px-2 py-1.5 rounded border border-amber-700/70 bg-amber-950/50 text-[10px] text-amber-100 leading-snug">
+              Cremation permit:{' '}
+              <strong>{permitStatusLabel(currentCase.cremationPermitStatus)}</strong>
+              . You can fire the retort now, but the State Board will fine an
+              unpermitted cremation. File VR-441 on the Computer.
+            </div>
+          )}
       </div>
 
       {panelZoomed ? (

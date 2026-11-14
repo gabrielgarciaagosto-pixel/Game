@@ -1,6 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { directiveBlurb, directiveLabel } from '../types/game';
+import {
+  formatTod,
+  formatVitalsDob,
+  formatVitalsDod,
+  permitStatusLabel,
+} from '../data/decedentVitals';
 import { getUrnById } from '../data/urnCatalog';
 import { gameNow } from '../utils/gameNow';
 import { UrnVessel } from './urns/UrnVessel';
@@ -132,6 +138,76 @@ export const CaseInboxWidget: React.FC = () => {
                 </div>
 
                 <div className="mt-3 space-y-2">
+                  <div className="p-2.5 rounded-lg border border-slate-700 bg-slate-950/80 space-y-1.5">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500">
+                      Vital records
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px]">
+                      <div>
+                        <span className="text-slate-500">DOB</span>
+                        <div className="font-mono text-slate-100">
+                          {activeFile.dateOfBirthMs
+                            ? formatVitalsDob(activeFile)
+                            : '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">DOD</span>
+                        <div className="font-mono text-slate-100">
+                          {activeFile.dateOfDeathMs
+                            ? formatVitalsDod(activeFile)
+                            : '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">TOD</span>
+                        <div className="font-mono text-amber-200">
+                          {activeFile.dateOfDeathMs != null
+                            ? formatTod(
+                                activeFile.timeOfDeathHour ?? 0,
+                                activeFile.timeOfDeathMinute ?? 0
+                              )
+                            : '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Place of birth</span>
+                        <div className="text-emerald-200 leading-snug">
+                          {activeFile.placeOfBirth || '—'}
+                        </div>
+                      </div>
+                    </div>
+                    {activeFile.cremationPermitStatus &&
+                      activeFile.cremationPermitStatus !== 'NOT_REQUIRED' && (
+                        <div className="pt-1 border-t border-slate-800 text-[11px]">
+                          <span className="text-slate-500">Cremation permit: </span>
+                          <strong
+                            className={
+                              activeFile.cremationPermitStatus === 'APPROVED'
+                                ? 'text-emerald-300'
+                                : activeFile.cremationPermitStatus === 'REJECTED'
+                                  ? 'text-red-300'
+                                  : activeFile.cremationPermitStatus === 'PENDING'
+                                    ? 'text-amber-300'
+                                    : 'text-slate-200'
+                            }
+                          >
+                            {permitStatusLabel(activeFile.cremationPermitStatus)}
+                          </strong>
+                          {activeFile.cremationPermitRejectReason && (
+                            <p className="text-[10px] text-red-300/90 mt-0.5 leading-snug">
+                              {activeFile.cremationPermitRejectReason}
+                            </p>
+                          )}
+                          {activeFile.cremationPermitStatus !== 'APPROVED' && (
+                            <p className="text-[10px] text-slate-500 mt-0.5">
+                              File / correct on the Computer (VR-441). Cremating
+                              without approval risks a state fine.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                  </div>
                   <p>
                     <span className="text-slate-400">Weight & Tissue:</span>{' '}
                     <strong className="text-white">

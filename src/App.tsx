@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CaseInboxWidget } from './components/CaseInboxWidget';
+import { ComputerRoom } from './components/ComputerRoom';
 import { CoolerRoom } from './components/CoolerRoom';
 import { CremationMiniGame } from './components/CremationMiniGame';
 import { CrematoryAudio } from './components/CrematoryAudio';
@@ -133,6 +134,7 @@ function App() {
       {activeStation === 'SHOWROOM' && <ShowroomAndChapelModal />}
       {activeStation === 'EMPORIUM' && <FuneraryEmporium />}
       {activeStation === 'URN_VAULT' && <UrnVaultRoom />}
+      {activeStation === 'COMPUTER' && <ComputerRoom />}
 
       <CaseInboxWidget />
 

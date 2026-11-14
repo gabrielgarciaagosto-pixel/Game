@@ -42,6 +42,23 @@ import {
   vaultSlotCapacity,
 } from '../data/facilityUpgrades';
 import {
+  directiveNeedsCremationPermit,
+  findPermitMismatches,
+  initialPermitStatus,
+  PERMIT_ERROR_STREAK_FINE,
+  PERMIT_ERROR_STREAK_LIMIT,
+  PERMIT_ERROR_STREAK_REP_HIT,
+  rollPermitEvaluationDueAt,
+  UNPERMITTED_CREMATION_FINE,
+  UNPERMITTED_CREMATION_REP_HIT,
+  type PermitFormDraft,
+  type PermitSubmissionRecord,
+} from '../data/cremationPermits';
+import {
+  generateDecedentVitals,
+  type CremationPermitStatus,
+} from '../data/decedentVitals';
+import {
   consumeRareStock,
   createShopRotation,
   isHourGatedCasket,
@@ -93,6 +110,10 @@ interface GameState {
   placedFlowers: Array<'LILIES' | 'ROSES' | 'WREATH'>;
   serviceRatingBonus: number;
   legalAlert: string | null;
+  /** Computer portal — cremation permit filing history (wiped on Reset Game) */
+  permitSubmissions: PermitSubmissionRecord[];
+  /** Consecutive rejected permit filings → streak fine */
+  permitWrongStreak: number;
   /** Working cremulator available for urn processing */
   cremulatorOwned: boolean;
   cremulatorDamaged: boolean;
@@ -134,6 +155,13 @@ interface GameState {
   tickDecay: () => void;
   /** Fire due family urn requests → toast + case file update */
   tickFamilyUrnChoices: () => void;
+  /** Resolve pending cremation permit evaluations that are due */
+  tickPermitEvaluations: () => void;
+  /** File a cremation permit from the Computer portal */
+  submitCremationPermit: (
+    caseId: string,
+    form: PermitFormDraft
+  ) => { ok: boolean; message: string };
   getActiveCase: () => DecedentCase | null;
   moveCaseTo: (caseId: string, location: CaseLocation) => void;
   /** @deprecated prefer moveCaseTo(caseId, location) */
@@ -302,6 +330,7 @@ export function generateRandomCase(now = gameNow()): DecedentCase {
     // Cremate → urn → chapel gathering: between burial viewing and dual-path
     CREMATION_THEN_VIEWING: 1550,
   };
+  const vitals = generateDecedentVitals(now);
   return {
     id: Math.random().toString(36).substring(2, 8).toUpperCase(),
     name: randomDecedentName(),
@@ -333,10 +362,16 @@ export function generateRandomCase(now = gameNow()): DecedentCase {
     decayLevel: 0,
     leftCoolerAt: null,
     serviceDateMs: null,
+    ...vitals,
+    cremationPermitStatus: initialPermitStatus(directive),
+    cremationPermitSubmittedAt: null,
+    cremationPermitEvaluatesAt: null,
+    cremationPermitRejectReason: null,
+    unpermittedCremation: false,
   };
 }
 
-function toInboxFile(c: DecedentCase): CaseInboxFile {
+export function toInboxFile(c: DecedentCase): CaseInboxFile {
   return {
     id: c.id,
     decedentName: c.name,
@@ -348,10 +383,42 @@ function toInboxFile(c: DecedentCase): CaseInboxFile {
     isRead: false,
     serviceDateMs: c.serviceDateMs,
     familyRequestedUrnId: c.familyRequestedUrnId,
+    dateOfBirthMs: c.dateOfBirthMs,
+    dateOfDeathMs: c.dateOfDeathMs,
+    timeOfDeathHour: c.timeOfDeathHour,
+    timeOfDeathMinute: c.timeOfDeathMinute,
+    placeOfBirth: c.placeOfBirth,
+    cremationPermitStatus: c.cremationPermitStatus,
+    cremationPermitRejectReason: c.cremationPermitRejectReason,
   };
 }
 
+function syncInboxPermit(
+  files: CaseInboxFile[],
+  caseId: string,
+  patch: Partial<CaseInboxFile>
+): CaseInboxFile[] {
+  return files.map((f) => (f.id === caseId ? { ...f, ...patch } : f));
+}
+
 function normalizeCase(c: DecedentCase): DecedentCase {
+  const arrivedAt = c.arrivedAt ?? gameNow();
+  const vitals =
+    c.dateOfBirthMs != null &&
+    c.dateOfDeathMs != null &&
+    c.placeOfBirth != null &&
+    c.timeOfDeathHour != null &&
+    c.timeOfDeathMinute != null
+      ? {
+          dateOfBirthMs: c.dateOfBirthMs,
+          dateOfDeathMs: c.dateOfDeathMs,
+          timeOfDeathHour: c.timeOfDeathHour,
+          timeOfDeathMinute: c.timeOfDeathMinute,
+          placeOfBirth: c.placeOfBirth,
+        }
+      : generateDecedentVitals(arrivedAt);
+  const permitStatus: CremationPermitStatus =
+    c.cremationPermitStatus ?? initialPermitStatus(c.directive);
   return {
     ...c,
     preferredUrnMaterial: c.preferredUrnMaterial ?? URN_MATERIALS[0],
@@ -362,10 +429,16 @@ function normalizeCase(c: DecedentCase): DecedentCase {
     familyUrnDueAt:
       c.familyUrnDueAt ??
       (directiveNeedsUrn(c.directive) && !c.familyRequestedUrnId
-        ? rollFamilyUrnDueAt(c.arrivedAt ?? gameNow())
+        ? rollFamilyUrnDueAt(arrivedAt)
         : null),
     urnPourQuality: c.urnPourQuality ?? 0,
     urnAshReady: c.urnAshReady ?? false,
+    ...vitals,
+    cremationPermitStatus: permitStatus,
+    cremationPermitSubmittedAt: c.cremationPermitSubmittedAt ?? null,
+    cremationPermitEvaluatesAt: c.cremationPermitEvaluatesAt ?? null,
+    cremationPermitRejectReason: c.cremationPermitRejectReason ?? null,
+    unpermittedCremation: c.unpermittedCremation ?? false,
   };
 }
 
@@ -544,6 +617,8 @@ export function freshPersistedGameFields() {
     cremationHeatNormalized: 0,
     cremationDecayArrested: false,
     retort: { ...IDLE_RETORT },
+    permitSubmissions: [] as PermitSubmissionRecord[],
+    permitWrongStreak: 0,
   };
 }
 
@@ -930,6 +1005,159 @@ export const useGameStore = create<GameState>()(
       };
     }),
 
+  tickPermitEvaluations: () =>
+    set((state) => {
+      const now = gameNow();
+      let toast: string | null = null;
+      let legalAlert: string | null = null;
+      let wrongStreak = state.permitWrongStreak;
+      let cash = state.cash;
+      let reputation = state.reputation;
+      let any = false;
+
+      const submissions = state.permitSubmissions.map((sub) => {
+        if (sub.status !== 'PENDING' || now < sub.evaluatesAt) return sub;
+        any = true;
+        const approved = sub.mismatchLabels.length === 0;
+        if (approved) {
+          wrongStreak = 0;
+          toast = `Cremation permit APPROVED — ${sub.decedentName}`;
+          return {
+            ...sub,
+            status: 'APPROVED' as const,
+            evaluatedAt: now,
+          };
+        }
+        wrongStreak += 1;
+        toast = `Cremation permit REJECTED — ${sub.decedentName} (needs correction)`;
+        if (wrongStreak >= PERMIT_ERROR_STREAK_LIMIT) {
+          cash = Math.max(0, cash - PERMIT_ERROR_STREAK_FINE);
+          reputation = Math.max(0, reputation - PERMIT_ERROR_STREAK_REP_HIT);
+          legalAlert = `STATE VITAL RECORDS FINE: ${PERMIT_ERROR_STREAK_LIMIT}+ incorrect cremation permit filings. $${PERMIT_ERROR_STREAK_FINE} levied and reputation docked. Review Case Files carefully before resubmitting.`;
+          wrongStreak = 0;
+        }
+        return {
+          ...sub,
+          status: 'REJECTED' as const,
+          evaluatedAt: now,
+        };
+      });
+
+      if (!any) return state;
+
+      let inboxFiles = state.inboxFiles;
+      const cases = state.cases.map((c) => {
+        const due = submissions.find(
+          (s) =>
+            s.caseId === c.id &&
+            s.evaluatedAt === now &&
+            (s.status === 'APPROVED' || s.status === 'REJECTED')
+        );
+        if (!due) return c;
+        if (due.status === 'APPROVED') {
+          inboxFiles = syncInboxPermit(inboxFiles, c.id, {
+            cremationPermitStatus: 'APPROVED',
+            cremationPermitRejectReason: null,
+            isRead: false,
+          });
+          return {
+            ...c,
+            cremationPermitStatus: 'APPROVED' as const,
+            cremationPermitEvaluatesAt: null,
+            cremationPermitRejectReason: null,
+          };
+        }
+        const reason = `Mismatch: ${due.mismatchLabels.join(', ')}`;
+        inboxFiles = syncInboxPermit(inboxFiles, c.id, {
+          cremationPermitStatus: 'REJECTED',
+          cremationPermitRejectReason: reason,
+          isRead: false,
+        });
+        return {
+          ...c,
+          cremationPermitStatus: 'REJECTED' as const,
+          cremationPermitEvaluatesAt: null,
+          cremationPermitRejectReason: reason,
+        };
+      });
+
+      return {
+        cases,
+        inboxFiles,
+        permitSubmissions: submissions,
+        permitWrongStreak: wrongStreak,
+        cash,
+        reputation,
+        intakeToast: toast ?? state.intakeToast,
+        legalAlert: legalAlert ?? state.legalAlert,
+      };
+    }),
+
+  submitCremationPermit: (caseId, form) => {
+    const state = get();
+    const c = resolveCase(state, caseId);
+    if (!c) return { ok: false, message: 'Case not found.' };
+    if (!directiveNeedsCremationPermit(c.directive)) {
+      return { ok: false, message: 'This directive does not require a cremation permit.' };
+    }
+    if (c.cremationPermitStatus === 'APPROVED') {
+      return { ok: false, message: 'Permit already approved.' };
+    }
+    if (c.cremationPermitStatus === 'PENDING') {
+      return { ok: false, message: 'Permit already pending evaluation.' };
+    }
+    if (!c.isTagged) {
+      return {
+        ok: false,
+        message: 'Tag the remains in the Cooler before filing a permit.',
+      };
+    }
+
+    const mismatches = findPermitMismatches(form, c.name, {
+      dateOfBirthMs: c.dateOfBirthMs,
+      dateOfDeathMs: c.dateOfDeathMs,
+      timeOfDeathHour: c.timeOfDeathHour,
+      timeOfDeathMinute: c.timeOfDeathMinute,
+      placeOfBirth: c.placeOfBirth,
+    });
+    const now = gameNow();
+    const evaluatesAt = rollPermitEvaluationDueAt(now);
+    const submission: PermitSubmissionRecord = {
+      id: `${c.id}-${now.toString(36)}`,
+      caseId: c.id,
+      decedentName: c.name,
+      submittedAt: now,
+      evaluatesAt,
+      evaluatedAt: null,
+      status: 'PENDING',
+      mismatchLabels: mismatches.map((m) => m.label),
+      form: { ...form },
+    };
+
+    set({
+      permitSubmissions: [submission, ...state.permitSubmissions].slice(0, 40),
+      cases: updateCaseById(state.cases, c.id, (row) => ({
+        ...row,
+        cremationPermitStatus: 'PENDING',
+        cremationPermitSubmittedAt: now,
+        cremationPermitEvaluatesAt: evaluatesAt,
+        cremationPermitRejectReason: null,
+      })),
+      inboxFiles: syncInboxPermit(state.inboxFiles, c.id, {
+        cremationPermitStatus: 'PENDING',
+        cremationPermitRejectReason: null,
+        isRead: false,
+      }),
+      intakeToast: `Permit filed for ${c.name} — pending state evaluation.`,
+    });
+
+    return {
+      ok: true,
+      message:
+        'Submission received. Vital Records will evaluate shortly. Status: PENDING.',
+    };
+  },
+
   moveCaseTo: (caseId, location) =>
     set((state) => {
       const target = resolveCase(state, caseId);
@@ -1157,6 +1385,10 @@ export const useGameStore = create<GameState>()(
       return;
     }
 
+    const needsPermit = directiveNeedsCremationPermit(active.directive);
+    const unpermitted =
+      needsPermit && active.cremationPermitStatus !== 'APPROVED';
+
     set({
       activeCaseId: caseId,
       cases: updateCaseById(state.cases, caseId, (c) => ({
@@ -1164,7 +1396,20 @@ export const useGameStore = create<GameState>()(
         isCremated: true,
         cremationRank: rank,
         location: 'URN_FILLING',
+        unpermittedCremation: unpermitted || c.unpermittedCremation,
       })),
+      inboxFiles: unpermitted
+        ? syncInboxPermit(state.inboxFiles, caseId, { isRead: false })
+        : state.inboxFiles,
+      cash: unpermitted
+        ? Math.max(0, state.cash - UNPERMITTED_CREMATION_FINE)
+        : state.cash,
+      reputation: unpermitted
+        ? Math.max(0, state.reputation - UNPERMITTED_CREMATION_REP_HIT)
+        : state.reputation,
+      legalAlert: unpermitted
+        ? `STATE BOARD INSPECTION: ${active.name} was cremated without an approved cremation permit (status: ${active.cremationPermitStatus}). Fine $${UNPERMITTED_CREMATION_FINE.toLocaleString()} and reputation −${UNPERMITTED_CREMATION_REP_HIT}. File permits on the Computer before firing the retort.`
+        : state.legalAlert,
       ossilegiumCommuneGrams:
         state.ossilegiumCommuneGrams + Math.round(boneAshGrams * 0.02),
       activeStation: 'URN_FILLING',
@@ -1734,10 +1979,9 @@ export const useGameStore = create<GameState>()(
 }),
     {
       name: 'ossuarian-first-urn-v1',
-      version: 2,
+      version: 3,
       migrate: (persisted, version) => {
         const p = (persisted ?? {}) as Record<string, unknown>;
-        if (version >= 2) return p as never;
         const rawCases = (p.cases as DecedentCase[] | undefined) ?? [];
         const cases = rawCases.map((c) => normalizeCase(c));
         const chapelLayouts = {
@@ -1755,14 +1999,47 @@ export const useGameStore = create<GameState>()(
           };
         }
         const rawInbox = (p.inboxFiles as CaseInboxFile[] | undefined) ?? [];
-        const inboxFiles = rawInbox.map((f) => ({
-          ...f,
-          familyRequestedUrnId:
-            f.familyRequestedUrnId ??
-            cases.find((c) => c.id === f.id)?.familyRequestedUrnId ??
-            null,
-        }));
-        return { ...p, cases, chapelLayouts, inboxFiles } as never;
+        const inboxFiles = rawInbox.map((f) => {
+          const match = cases.find((c) => c.id === f.id);
+          return {
+            ...f,
+            familyRequestedUrnId:
+              f.familyRequestedUrnId ?? match?.familyRequestedUrnId ?? null,
+            dateOfBirthMs: f.dateOfBirthMs ?? match?.dateOfBirthMs ?? 0,
+            dateOfDeathMs: f.dateOfDeathMs ?? match?.dateOfDeathMs ?? 0,
+            timeOfDeathHour:
+              f.timeOfDeathHour ?? match?.timeOfDeathHour ?? 0,
+            timeOfDeathMinute:
+              f.timeOfDeathMinute ?? match?.timeOfDeathMinute ?? 0,
+            placeOfBirth: f.placeOfBirth ?? match?.placeOfBirth ?? '',
+            cremationPermitStatus:
+              f.cremationPermitStatus ??
+              match?.cremationPermitStatus ??
+              'NOT_REQUIRED',
+            cremationPermitRejectReason:
+              f.cremationPermitRejectReason ??
+              match?.cremationPermitRejectReason ??
+              null,
+          };
+        });
+        if (version >= 3) {
+          return {
+            ...p,
+            cases,
+            chapelLayouts,
+            inboxFiles,
+            permitSubmissions: p.permitSubmissions ?? [],
+            permitWrongStreak: p.permitWrongStreak ?? 0,
+          } as never;
+        }
+        return {
+          ...p,
+          cases,
+          chapelLayouts,
+          inboxFiles,
+          permitSubmissions: [],
+          permitWrongStreak: 0,
+        } as never;
       },
       partialize: (state) => ({
         hasStartedGame: state.hasStartedGame,
@@ -1789,6 +2066,8 @@ export const useGameStore = create<GameState>()(
         cremationHeatNormalized: state.cremationHeatNormalized,
         cremationDecayArrested: state.cremationDecayArrested,
         retort: state.retort,
+        permitSubmissions: state.permitSubmissions,
+        permitWrongStreak: state.permitWrongStreak,
       }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<GameState>;
@@ -1807,13 +2086,29 @@ export const useGameStore = create<GameState>()(
             },
           };
         }
-        const inboxFiles = (p.inboxFiles ?? current.inboxFiles).map((f) => ({
-          ...f,
-          familyRequestedUrnId:
-            f.familyRequestedUrnId ??
-            cases.find((c) => c.id === f.id)?.familyRequestedUrnId ??
-            null,
-        }));
+        const inboxFiles = (p.inboxFiles ?? current.inboxFiles).map((f) => {
+          const match = cases.find((c) => c.id === f.id);
+          return {
+            ...f,
+            familyRequestedUrnId:
+              f.familyRequestedUrnId ?? match?.familyRequestedUrnId ?? null,
+            dateOfBirthMs: f.dateOfBirthMs ?? match?.dateOfBirthMs ?? 0,
+            dateOfDeathMs: f.dateOfDeathMs ?? match?.dateOfDeathMs ?? 0,
+            timeOfDeathHour:
+              f.timeOfDeathHour ?? match?.timeOfDeathHour ?? 0,
+            timeOfDeathMinute:
+              f.timeOfDeathMinute ?? match?.timeOfDeathMinute ?? 0,
+            placeOfBirth: f.placeOfBirth ?? match?.placeOfBirth ?? '',
+            cremationPermitStatus:
+              f.cremationPermitStatus ??
+              match?.cremationPermitStatus ??
+              'NOT_REQUIRED',
+            cremationPermitRejectReason:
+              f.cremationPermitRejectReason ??
+              match?.cremationPermitRejectReason ??
+              null,
+          };
+        });
         return {
           ...current,
           ...p,
@@ -1829,6 +2124,8 @@ export const useGameStore = create<GameState>()(
           },
           shopRotation: p.shopRotation ?? current.shopRotation,
           showroomInventory: p.showroomInventory ?? current.showroomInventory,
+          permitSubmissions: p.permitSubmissions ?? current.permitSubmissions,
+          permitWrongStreak: p.permitWrongStreak ?? current.permitWrongStreak,
           intakeToast: null,
           legalAlert: null,
         };

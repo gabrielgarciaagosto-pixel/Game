@@ -62,7 +62,8 @@ export type StationId =
   | 'URN_FILLING'
   | 'SHOWROOM'
   | 'URN_VAULT'
-  | 'EMPORIUM';
+  | 'EMPORIUM'
+  | 'COMPUTER';
 
 export type PreferredUrnMaterial =
   | 'MARBLE'
@@ -130,6 +131,27 @@ export interface DecedentCase {
   decayLevel: number;
   leftCoolerAt: number | null;
   serviceDateMs: number | null;
+  /** Vital records — every decedent */
+  dateOfBirthMs: number;
+  dateOfDeathMs: number;
+  timeOfDeathHour: number;
+  timeOfDeathMinute: number;
+  placeOfBirth: string;
+  /**
+   * State cremation permit. Burial-only = NOT_REQUIRED.
+   * Cremation paths start at NONE until filed on the Computer.
+   */
+  cremationPermitStatus:
+    | 'NOT_REQUIRED'
+    | 'NONE'
+    | 'PENDING'
+    | 'APPROVED'
+    | 'REJECTED';
+  cremationPermitSubmittedAt: number | null;
+  cremationPermitEvaluatesAt: number | null;
+  cremationPermitRejectReason: string | null;
+  /** True if this case was cremated without an approved permit */
+  unpermittedCremation: boolean;
 }
 
 export interface CaseInboxFile {
@@ -144,6 +166,18 @@ export interface CaseInboxFile {
   serviceDateMs: number | null;
   /** Mirrors case.familyRequestedUrnId for the case file UI */
   familyRequestedUrnId: string | null;
+  dateOfBirthMs: number;
+  dateOfDeathMs: number;
+  timeOfDeathHour: number;
+  timeOfDeathMinute: number;
+  placeOfBirth: string;
+  cremationPermitStatus:
+    | 'NOT_REQUIRED'
+    | 'NONE'
+    | 'PENDING'
+    | 'APPROVED'
+    | 'REJECTED';
+  cremationPermitRejectReason: string | null;
 }
 
 export interface ShowroomItem {
