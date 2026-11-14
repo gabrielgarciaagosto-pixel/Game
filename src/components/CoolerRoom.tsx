@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { displayCaseName, decayLabel } from '../types/game';
 import { useGameStore } from '../store/useGameStore';
+import { gameNow } from '../utils/gameNow';
 
 export const CoolerRoom: React.FC = () => {
   const {
@@ -16,11 +17,11 @@ export const CoolerRoom: React.FC = () => {
 
   const coolerCases = cases.filter((c) => c.location === 'COOLER');
   const bayCount = coolerCapacity();
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(gameNow());
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setNow(Date.now());
+      setNow(gameNow());
       expireUntaggedNames();
     }, 250);
     return () => clearInterval(interval);

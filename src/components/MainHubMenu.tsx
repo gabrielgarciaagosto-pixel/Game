@@ -1,6 +1,7 @@
 import React from 'react';
 import { displayCaseName } from '../types/game';
 import { useGameStore } from '../store/useGameStore';
+import { gameNow } from '../utils/gameNow';
 import { getCremationTargets } from '../utils/mortuaryMath';
 import { retortProgress } from '../retort/retortTypes';
 import { URN_CATALOG } from '../data/urnCatalog';
@@ -27,7 +28,7 @@ export const MainHubMenu: React.FC = () => {
   ).length;
 
   const untaggedUrgentCount = coolerCases.filter(
-    (c) => !c.isTagged && Date.now() < c.tagExpiresAt
+    (c) => !c.isTagged && gameNow() < c.tagExpiresAt
   ).length;
 
   const burnPct =

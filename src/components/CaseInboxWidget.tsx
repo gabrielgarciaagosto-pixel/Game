@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { directiveBlurb, directiveLabel } from '../types/game';
 import { getUrnById } from '../data/urnCatalog';
+import { gameNow } from '../utils/gameNow';
 import { UrnVessel } from './urns/UrnVessel';
 
 function startOfDay(ms: number): number {
@@ -28,7 +29,7 @@ export const CaseInboxWidget: React.FC = () => {
   const linkedCase = cases.find((c) => c.id === activeFile?.id);
 
   const calendarDays = useMemo(() => {
-    const today = startOfDay(Date.now());
+    const today = startOfDay(gameNow());
     return Array.from({ length: 14 }, (_, i) => addDays(today, i));
   }, [isOpen, calendarOpen]);
 
@@ -208,7 +209,7 @@ export const CaseInboxWidget: React.FC = () => {
                       <strong>
                         {new Date(activeFile.serviceDateMs).toLocaleString()}
                       </strong>
-                      {Date.now() > activeFile.serviceDateMs ? (
+                      {gameNow() > activeFile.serviceDateMs ? (
                         <span className="text-red-400 font-bold"> — OVERDUE</span>
                       ) : (
                         <span className="text-amber-300">
@@ -217,7 +218,7 @@ export const CaseInboxWidget: React.FC = () => {
                           {Math.max(
                             0,
                             Math.ceil(
-                              (activeFile.serviceDateMs - Date.now()) / 60_000
+                              (activeFile.serviceDateMs - gameNow()) / 60_000
                             )
                           )}{' '}
                           min remaining
@@ -268,7 +269,7 @@ export const CaseInboxWidget: React.FC = () => {
                             undefined,
                             { weekday: 'short', month: 'numeric', day: 'numeric' }
                           );
-                          const isToday = day === startOfDay(Date.now());
+                          const isToday = day === startOfDay(gameNow());
                           return (
                             <button
                               key={day}

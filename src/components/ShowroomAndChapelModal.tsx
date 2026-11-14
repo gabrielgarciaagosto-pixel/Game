@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { CaseTransferBar } from './CaseTransferBar';
 import { displayCaseName, decayLabel } from '../types/game';
 import { caseAtLocation, useGameStore } from '../store/useGameStore';
+import { gameNow } from '../utils/gameNow';
 import { getUrnById, URN_CATALOG } from '../data/urnCatalog';
 import { CASKET_CATALOG, getCasketById } from '../data/casketCatalog';
 import {
@@ -144,7 +145,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
 
   const lateService =
     currentCase.serviceDateMs != null &&
-    Date.now() > currentCase.serviceDateMs;
+    gameNow() > currentCase.serviceDateMs;
   const offered = getUrnById(currentCase.offeredUrnId);
   const offeredCasket = getCasketById(currentCase.offeredCasketId);
   const urnStandService = caseUsesUrnStand(currentCase);

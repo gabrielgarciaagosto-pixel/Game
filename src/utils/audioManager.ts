@@ -55,9 +55,21 @@ class AudioManager {
   private generation = 0;
   private handoffTimer: number | null = null;
   private oneShotHandlers = new Set<(id: MusicBedId) => void>();
+  private muted = false;
 
   /** Tunable crossfade length in milliseconds. */
   crossfadeMs = CROSSFADE_MS;
+
+  isMuted(): boolean {
+    return this.muted;
+  }
+
+  setMuted(muted: boolean) {
+    this.muted = muted;
+    if (muted) {
+      this.stopImmediate();
+    }
+  }
 
   /** @deprecated prefer add/removeOneShotNearEndHandler for multi-listeners */
   setOneShotNearEndHandler(handler: ((id: MusicBedId) => void) | null) {
@@ -299,6 +311,10 @@ class AudioManager {
       url?: string;
     }
   ): Promise<void> {
+    if (this.muted) {
+      this.currentId = null;
+      return;
+    }
     if (options?.url) {
       this.registerUrl(id, options.url);
     }

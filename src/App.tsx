@@ -12,6 +12,7 @@ import { ShowroomAndChapelModal } from './components/ShowroomAndChapelModal';
 import { UrnFillingMiniGame } from './components/UrnFillingMiniGame';
 import { UrnStartScreen } from './components/UrnStartScreen';
 import { UrnVaultRoom } from './components/UrnVaultRoom';
+import { DevToolsOverlay, DEV_TOOLS } from './dev';
 import { useIntakeSpawner } from './hooks/useIntakeSpawner';
 import { useRetortEngine } from './hooks/useRetortEngine';
 import { directiveLabel, displayCaseName } from './types/game';
@@ -71,6 +72,7 @@ function App() {
         />
       ) : (
     <div className="relative flex flex-col w-full h-full overflow-hidden bg-slate-950 text-slate-100">
+      {DEV_TOOLS ? <DevToolsOverlay /> : null}
       {activeStation === 'OVERVIEW' ? (
         <MainHubMenu />
       ) : (

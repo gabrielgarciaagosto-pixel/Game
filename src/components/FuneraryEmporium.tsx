@@ -26,6 +26,7 @@ import {
   type UrnCatalogEntry,
 } from '../data/urnCatalog';
 import { useGameStore } from '../store/useGameStore';
+import { gameDate, subscribeClock } from '../utils/gameNow';
 import { CasketVessel } from './caskets/CasketVessel';
 import { UrnVessel } from './urns/UrnVessel';
 
@@ -98,11 +99,15 @@ export const FuneraryEmporium: React.FC = () => {
 
   const [tab, setTab] = useState<ShopTab>('URNS');
   const [inspect, setInspect] = useState<InspectTarget>(null);
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState(() => gameDate());
 
   useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 15_000);
-    return () => window.clearInterval(id);
+    const id = window.setInterval(() => setNow(gameDate()), 15_000);
+    const unsub = subscribeClock(() => setNow(gameDate()));
+    return () => {
+      window.clearInterval(id);
+      unsub();
+    };
   }, []);
 
   const live = useMemo(() => liveRares(now), [now]);

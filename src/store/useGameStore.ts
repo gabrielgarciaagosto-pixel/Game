@@ -59,6 +59,7 @@ import {
   directiveNeedsUrn,
   pickFamilyUrnRequest,
 } from '../data/familyUrnPick';
+import { gameNow } from '../utils/gameNow';
 
 const TAG_WINDOW_MS = 60_000;
 const INTAKE_MIN_MS = 180_000;
@@ -263,7 +264,7 @@ function randomDecedentName(): string {
   return `${first} ${last}`;
 }
 
-export function generateRandomCase(now = Date.now()): DecedentCase {
+export function generateRandomCase(now = gameNow()): DecedentCase {
   const weights = [135, 165, 190, 245, 285];
   const conditions: Array<{
     cond: DecedentCase['tissueCondition'];
@@ -356,7 +357,7 @@ function normalizeCase(c: DecedentCase): DecedentCase {
     familyUrnDueAt:
       c.familyUrnDueAt ??
       (directiveNeedsUrn(c.directive) && !c.familyRequestedUrnId
-        ? rollFamilyUrnDueAt(c.arrivedAt ?? Date.now())
+        ? rollFamilyUrnDueAt(c.arrivedAt ?? gameNow())
         : null),
     urnPourQuality: c.urnPourQuality ?? 0,
     urnAshReady: c.urnAshReady ?? false,
@@ -547,7 +548,7 @@ export const useGameStore = create<GameState>()(
 
   startGame: () =>
     set((state) => {
-      const now = Date.now();
+      const now = gameNow();
       const cases = state.cases.map((c, index) => {
         if (index !== 0 || c.isTagged || c.nameExpired) return c;
         return {
@@ -592,7 +593,7 @@ export const useGameStore = create<GameState>()(
 
   tagBodyInCooler: (caseId) =>
     set((state) => {
-      const now = Date.now();
+      const now = gameNow();
       const cases = state.cases.map((c) => {
         if (c.id !== caseId) return c;
         if (c.isTagged || now >= c.tagExpiresAt) return c;
@@ -652,7 +653,7 @@ export const useGameStore = create<GameState>()(
 
   expireUntaggedNames: () =>
     set((state) => {
-      const now = Date.now();
+      const now = gameNow();
       let changed = false;
       const cases = state.cases.map((c) => {
         if (!c.isTagged && !c.nameExpired && now >= c.tagExpiresAt) {
@@ -856,7 +857,7 @@ export const useGameStore = create<GameState>()(
 
   tickFamilyUrnChoices: () =>
     set((state) => {
-      const now = Date.now();
+      const now = gameNow();
       let toast: string | null = null;
       let any = false;
       const cases = state.cases.map((c) => {
@@ -926,7 +927,7 @@ export const useGameStore = create<GameState>()(
           activeCaseId: r.caseId,
         };
       }
-      const now = Date.now();
+      const now = gameNow();
       const nextStation = stationForLocation(location);
       const leavingRetort =
         state.retort.caseId === caseId && location !== 'CREMATION';
@@ -1001,7 +1002,7 @@ export const useGameStore = create<GameState>()(
         };
       }
 
-      const now = Date.now();
+      const now = gameNow();
       const leavingRetort =
         state.retort.caseId === caseId && location !== 'CREMATION';
       return {
@@ -1540,7 +1541,7 @@ export const useGameStore = create<GameState>()(
       const offeredCasket = getCasketById(c.offeredCasketId);
       const failedService = fine > 0;
       const lateService =
-        c.serviceDateMs != null && Date.now() > c.serviceDateMs;
+        c.serviceDateMs != null && gameNow() > c.serviceDateMs;
       const lateFine = lateService ? 900 : 0;
       const serviceFailed = failedService || lateFine > 0;
 
