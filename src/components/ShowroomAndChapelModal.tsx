@@ -634,20 +634,40 @@ function DraggablePiece({
     }
   }, [piece.x, piece.y]);
 
+  const applyPointer = (clientX: number, clientY: number) => {
+    const floor = ref.current?.parentElement;
+    if (!floor) return;
+    const rect = floor.getBoundingClientRect();
+    const x = Math.max(
+      0.05,
+      Math.min(0.95, (clientX - rect.left) / rect.width)
+    );
+    const y = Math.max(
+      0.08,
+      Math.min(0.92, (clientY - rect.top) / rect.height)
+    );
+    live.current = { x, y };
+    onPreviewRef.current(x, y);
+  };
+
   React.useEffect(() => {
+    const samePointer = (e: PointerEvent) =>
+      pointerIdRef.current == null || e.pointerId === pointerIdRef.current;
+
+    const onWinMove = (e: PointerEvent) => {
+      if (!dragging.current || !samePointer(e)) return;
+      applyPointer(e.clientX, e.clientY);
+    };
     const onWinUp = (e: PointerEvent) => {
-      if (!dragging.current) return;
-      if (
-        pointerIdRef.current != null &&
-        e.pointerId !== pointerIdRef.current
-      ) {
-        return;
-      }
+      if (!dragging.current || !samePointer(e)) return;
       finishDrag();
     };
+    // Window move/up so drag tracks even when setPointerCapture is rejected
+    window.addEventListener('pointermove', onWinMove);
     window.addEventListener('pointerup', onWinUp);
     window.addEventListener('pointercancel', onWinUp);
     return () => {
+      window.removeEventListener('pointermove', onWinMove);
       window.removeEventListener('pointerup', onWinUp);
       window.removeEventListener('pointercancel', onWinUp);
     };
@@ -661,25 +681,8 @@ function DraggablePiece({
     try {
       ref.current?.setPointerCapture(e.pointerId);
     } catch {
-      /* window listeners still commit on release */
+      /* window pointermove/up still drive the drag */
     }
-  };
-
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!dragging.current) return;
-    const floor = ref.current?.parentElement;
-    if (!floor) return;
-    const rect = floor.getBoundingClientRect();
-    const x = Math.max(
-      0.05,
-      Math.min(0.95, (e.clientX - rect.left) / rect.width)
-    );
-    const y = Math.max(
-      0.08,
-      Math.min(0.92, (e.clientY - rect.top) / rect.height)
-    );
-    live.current = { x, y };
-    onPreviewRef.current(x, y);
   };
 
   const isFlower = ['LILIES', 'ROSES', 'WREATH'].includes(piece.kind);
@@ -688,7 +691,6 @@ function DraggablePiece({
     <div
       ref={ref}
       onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
       onPointerUp={finishDrag}
       onPointerCancel={finishDrag}
       className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing touch-none z-10"
