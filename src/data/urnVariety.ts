@@ -261,6 +261,34 @@ export const BEAUTIFY_COST: Record<BeautifyStep, number> = {
   engrave: 130,
 };
 
+/** A different finish for a vessel that has no hand-named swap. */
+const NEXT_FINISH: Record<UrnFinishId, UrnFinishId> = {
+  BRUSHED_BRASS: 'GOLD',
+  BRONZE: 'PEWTER',
+  PEWTER: 'SILVER',
+  SILVER: 'GOLD',
+  GOLD: 'BRONZE',
+  GUNMETAL: 'SILVER',
+  MATTE_BLACK: 'GLOSS_BLACK',
+  GLOSS_BLACK: 'GOLD',
+  MATTE_WHITE: 'MARBLE_WHITE',
+  MIDNIGHT_BLUE: 'SILVER',
+  MARBLE_WHITE: 'MARBLE_BLACK_GOLD',
+  MARBLE_BEIGE: 'MARBLE_WHITE',
+  MARBLE_BLACK_GOLD: 'MARBLE_WHITE',
+  GRANITE: 'MARBLE_BLACK_GOLD',
+  MAPLE: 'WALNUT',
+  WALNUT: 'CHERRY',
+  CHERRY: 'WALNUT',
+  BAMBOO: 'MAPLE',
+  SABLE: 'CHERRY',
+  CERAMIC: 'GLAZE',
+  GLASS: 'SILVER',
+  CORTEN: 'BRONZE',
+  BIO: 'CERAMIC',
+  GLAZE: 'MIDNIGHT_BLUE',
+};
+
 const RESALE_BONUS: Record<BeautifyStep, number> = {
   band: 200,
   finish: 380,
@@ -842,7 +870,14 @@ const FINISH_SWAP: Record<string, FinishSwap> = {
   },
 };
 
-const BEAUTIFY_BASES = Object.keys(FINISH_SWAP);
+function stepsFor(base: UrnCatalogEntry): BeautifyStep[] {
+  const accent = base.modular?.accent ?? 'NONE';
+  const steps: BeautifyStep[] = [];
+  if (accent !== 'BAND') steps.push('band');
+  steps.push('finish');
+  if (accent !== 'ENGRAVED') steps.push('engrave');
+  return steps;
+}
 
 function pal(
   body: string,
@@ -919,15 +954,15 @@ function workshopFrom(base: UrnCatalogEntry, step: BeautifyStep): UrnCatalogEntr
     palette = { ...base.palette, accent: base.palette.highlight };
     decoration = 'Engraved lines';
   } else if (step === 'finish') {
-    if (!swap) throw new Error(base.id);
-    const next = FINISH[swap.finishId];
-    id = swap.id;
-    name = swap.name;
-    finishId = swap.finishId;
+    const finishKey = swap?.finishId ?? NEXT_FINISH[modular.finishId];
+    const next = FINISH[finishKey];
+    id = swap?.id ?? `${base.id}_refinished`;
+    name = swap?.name ?? `${base.name}, ${next.label}`;
+    finishId = finishKey;
     accent = modular.accent;
-    palette = { ...next.palette, ...swap.palette };
-    material = swap.material ?? next.material;
-    finish = swap.finishLabel ?? next.label;
+    palette = { ...next.palette, ...swap?.palette };
+    material = swap?.material ?? next.material;
+    finish = swap?.finishLabel ?? next.label;
     decoration = ACCENT_LABEL[accent];
   }
   return {
@@ -957,15 +992,13 @@ const SHOP_ENTRIES = SHOP.map(shopEntry);
 
 const RECIPES: Record<string, Partial<Record<BeautifyStep, string>>> = {};
 
-const WORKSHOP_ENTRIES: UrnCatalogEntry[] = BEAUTIFY_BASES.flatMap((id) => {
-  const base = SHOP_ENTRIES.find((entry) => entry.id === id);
-  if (!base) throw new Error(id);
-  return (['band', 'finish', 'engrave'] as const).map((step) => {
+const WORKSHOP_ENTRIES: UrnCatalogEntry[] = SHOP_ENTRIES.flatMap((base) =>
+  stepsFor(base).map((step) => {
     const made = workshopFrom(base, step);
-    RECIPES[id] = { ...RECIPES[id], [step]: made.id };
+    RECIPES[base.id] = { ...RECIPES[base.id], [step]: made.id };
     return made;
-  });
-});
+  })
+);
 
 export const MODERN_URNS: UrnCatalogEntry[] = [...SHOP_ENTRIES, ...WORKSHOP_ENTRIES];
 

@@ -64,7 +64,9 @@ export const UrnVaultRoom: React.FC = () => {
   const vault = cases.filter((c) => c.location === 'URN_VAULT');
   const selected = vault.find((c) => c.id === activeCaseId) ?? null;
   const collection = URN_CATALOG.filter((u) => (urnInventory[u.id] ?? 0) > 0);
-  const craftable = collection.filter((u) => beautifyTarget(u.id, 'band'));
+  const craftable = collection.filter((u) =>
+    BENCH.some(({ step }) => beautifyTarget(u.id, step))
+  );
   const [benchId, setBenchId] = useState<string | null>(null);
   const bench = craftable.find((u) => u.id === benchId) ?? craftable[0] ?? null;
   const niches = vaultCapacity();
@@ -144,12 +146,13 @@ export const UrnVaultRoom: React.FC = () => {
                   </div>
                   {BENCH.map(({ step, label }) => {
                     const recipe = beautifyTarget(bench.id, step);
-                    const result = recipe ? getUrnById(recipe.resultId) : null;
-                    const can = !!recipe && cash >= (recipe?.cost ?? 0);
+                    if (!recipe) return null;
+                    const result = getUrnById(recipe.resultId);
+                    const can = cash >= recipe.cost;
                     return (
                       <BeautifyButton
                         key={step}
-                        label={`${label} · $${recipe?.cost ?? 0}`}
+                        label={`${label} · $${recipe.cost}`}
                         detail={result?.name ?? ''}
                         can={can}
                         onPress={() => beautifyUrn(bench.id, step)}
