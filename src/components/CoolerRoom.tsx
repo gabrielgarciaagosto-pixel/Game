@@ -4,6 +4,14 @@ import { TAG_WINDOW_MS, useGameStore } from '../store/useGameStore';
 import { tagWindowIsHeld } from '../tutorial/steps';
 import { gameNow } from '../utils/gameNow';
 
+/** Front face for each capacity. Doors match bays. */
+function coolerFace(bayCount: number): { cols: number; rows: number } {
+  if (bayCount <= 6) return { cols: 2, rows: 3 };
+  if (bayCount <= 8) return { cols: 2, rows: 4 };
+  if (bayCount <= 10) return { cols: 2, rows: 5 };
+  return { cols: 3, rows: 4 };
+}
+
 export const CoolerRoom: React.FC = () => {
   const {
     cases,
@@ -18,6 +26,7 @@ export const CoolerRoom: React.FC = () => {
 
   const coolerCases = cases.filter((c) => c.location === 'COOLER');
   const bayCount = coolerCapacity();
+  const face = coolerFace(bayCount);
   const [now, setNow] = useState(gameNow());
 
   useEffect(() => {
@@ -49,16 +58,32 @@ export const CoolerRoom: React.FC = () => {
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 grid grid-cols-2 gap-2.5 content-start py-3 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto py-3">
+        <div
+          className="cooler-shell"
+          data-cooler-bays={bayCount}
+          data-cooler-cols={face.cols}
+          data-cooler-rows={face.rows}
+        >
+          <div className="cooler-crown">
+            <span className="cooler-lamp is-power" aria-hidden />
+            <span className="cooler-readout">38°F</span>
+            <span className="cooler-crown-label">HOLD</span>
+          </div>
+          <div
+            className="cooler-grid"
+            style={{ gridTemplateColumns: `repeat(${face.cols}, minmax(0, 1fr))` }}
+          >
         {Array.from({ length: bayCount }).map((_, index) => {
           const body = coolerCases[index];
           if (!body) {
             return (
-              <div
-                key={index}
-                className="min-h-[8.5rem] rounded-xl bg-gradient-to-b from-slate-900/30 to-cyan-950/20 border border-dashed border-cyan-900/50 flex items-center justify-center text-[10px] text-cyan-900 font-mono shadow-[inset_0_0_24px_rgba(34,211,238,0.05)]"
-              >
-                BAY #{index + 1} — EMPTY
+              <div key={index} className="cooler-door is-empty">
+                <DoorHardware lamp="is-off" />
+                <div className="cooler-etch">
+                  BAY #{index + 1}
+                  <span>EMPTY</span>
+                </div>
               </div>
             );
           }
@@ -72,16 +97,19 @@ export const CoolerRoom: React.FC = () => {
           const canStillTag = !body.isTagged && (tagHeld || secondsLeft > 0);
           const isSelected = activeCaseId === body.id;
 
+          const lamp = body.isTagged
+            ? 'is-tagged'
+            : !tagHeld && secondsLeft === 0
+              ? 'is-expired'
+              : 'is-waiting';
+
           return (
             <div
               key={body.id}
               onPointerDown={() => selectActiveCase(body.id)}
-              className={`min-h-[8.5rem] rounded-xl p-3 flex flex-col justify-between relative border-2 transition-all ${
-                isSelected
-                  ? 'bg-cyan-950/60 border-amber-400'
-                  : 'bg-slate-900 border-cyan-800/50'
-              }`}
+              className={`cooler-door is-occupied ${isSelected ? 'is-selected' : ''}`}
             >
+              <DoorHardware lamp={lamp} />
               {canStillTag && (
                 <button
                   type="button"
@@ -97,6 +125,7 @@ export const CoolerRoom: React.FC = () => {
                 </button>
               )}
 
+              <div className="cooler-plate">
               <div className="flex justify-between items-center text-xs font-mono text-slate-400">
                 <span>BAY #{index + 1}</span>
                 {body.isTagged ? (
@@ -166,10 +195,25 @@ export const CoolerRoom: React.FC = () => {
                   </button>
                 </div>
               )}
+              </div>
             </div>
           );
         })}
+          </div>
+          <div className="cooler-kick" aria-hidden />
+        </div>
       </div>
     </div>
   );
 };
+
+function DoorHardware({ lamp }: { lamp: string }) {
+  return (
+    <>
+      <span className="cooler-hinge" aria-hidden />
+      <span className="cooler-hinge is-lower" aria-hidden />
+      <span className={`cooler-lamp ${lamp}`} aria-hidden />
+      <span className="cooler-latch" aria-hidden />
+    </>
+  );
+}
