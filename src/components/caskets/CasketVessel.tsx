@@ -1,5 +1,15 @@
 import { useId } from 'react';
-import type { CasketCatalogEntry, CasketMaterial, CasketSilhouette } from '../../data/casketCatalog';
+import type {
+  CasketCarving,
+  CasketCatalogEntry,
+  CasketEmbroidery,
+  CasketHardwareKind,
+  CasketMaterial,
+  CasketMolding,
+  CasketPlateShape,
+  CasketSilhouette,
+  CasketTexture,
+} from '../../data/casketCatalog';
 
 /**
  * One oblique camera for every casket and coffin.
@@ -28,6 +38,17 @@ type Look = {
   gloss: number;
   bar: [string, string, string];
   lug: [string, string, string];
+  lining: string;
+  thread: string;
+  embroidery: CasketEmbroidery;
+  hardware: CasketHardwareKind;
+  plates: 2 | 3 | 4;
+  plate: CasketPlateShape;
+  texture: CasketTexture;
+  molding: CasketMolding;
+  carving: CasketCarving;
+  /** True only when the catalog entry supplies its own cloth. */
+  customCloth: boolean;
 };
 
 const LEN = 460;
@@ -55,7 +76,56 @@ function P(u: number, v: number, w: number): Pt {
   return [O.x + u * LEN + w * DEPTH.x, O.y - v + w * DEPTH.y];
 }
 
-function lookFor(material: CasketMaterial, silhouette: CasketSilhouette): Look {
+function finishLook(base: Omit<Look, 'lining' | 'thread' | 'embroidery' | 'hardware' | 'plates' | 'plate' | 'texture' | 'molding' | 'carving' | 'customCloth'>): Look {
+  return {
+    ...base,
+    lining: '#f7f4f1',
+    thread: '#6d8a48',
+    embroidery: 'roses',
+    hardware: 'swing',
+    plates: 3,
+    plate: 'arch',
+    texture: base.metal ? 'brushed' : 'grain',
+    molding: 'stepped',
+    carving: base.metal ? 'none' : 'wheat',
+    customCloth: false,
+  };
+}
+
+function lookFor(casket: CasketCatalogEntry): Look {
+  const base = finishLook(materialLook(casket.material, casket.silhouette));
+  const dress = casket.dress;
+  if (!dress) return base;
+  return {
+    ...base,
+    top: dress.top,
+    topHi: dress.topHi,
+    topMid: dress.topMid,
+    front: dress.front,
+    frontHi: dress.frontHi,
+    frontDeep: dress.frontDeep,
+    end: dress.end,
+    endDeep: dress.endDeep,
+    grain: dress.grain,
+    gap: dress.gap,
+    metal: dress.metal,
+    gloss: dress.gloss,
+    bar: dress.bar,
+    lug: dress.lug,
+    lining: dress.lining,
+    thread: dress.thread,
+    embroidery: dress.embroidery,
+    hardware: dress.hardware,
+    plates: dress.plates,
+    plate: dress.plate,
+    texture: dress.texture,
+    molding: dress.molding,
+    carving: dress.carving,
+    customCloth: true,
+  };
+}
+
+function materialLook(material: CasketMaterial, silhouette: CasketSilhouette): Omit<Look, 'lining' | 'thread' | 'embroidery' | 'hardware' | 'plates' | 'plate' | 'texture' | 'molding' | 'carving' | 'customCloth'> {
   const brass: Look['lug'] = ['#f4e2a8', '#c6a15a', '#6e5420'];
   const woodBar: Look['bar'] = ['#f0d7a6', '#c4924c', '#6a4520'];
   if (material === 'PINE') {
@@ -310,7 +380,7 @@ type LidMode = 'head' | 'both' | 'none';
 function resolveLid(casket: CasketCatalogEntry, lid?: 'open' | 'closed'): LidMode {
   if (isCoffin(casket.silhouette)) return 'none';
   if (lid === 'closed') return 'none';
-  if (lid === 'open') return casket.silhouette === 'FULL_COUCH' ? 'both' : 'head';
+  if (lid === 'open') return casket.silhouette === 'HALF_COUCH' ? 'head' : 'both';
   if (casket.silhouette === 'FULL_COUCH') return 'both';
   if (casket.silhouette === 'HALF_COUCH') return 'head';
   return 'none';
@@ -415,7 +485,7 @@ function OpenLid({
     <g>
       <path d={dPts(outerPts)} fill={look.frontDeep} />
       <path d={dPts(framePts)} fill={`url(#${uid}-lidface)`} stroke={look.frontDeep} strokeWidth="2.4" />
-      <path d={dPts(satinPts)} fill="#f7f4f1" />
+      <path d={dPts(satinPts)} fill={look.lining} />
       {pleats.map((ln, i) => (
         <path
           key={i}
@@ -425,7 +495,15 @@ function OpenLid({
           fill="none"
         />
       ))}
-      <path d={dPts(centerPts)} fill="#fbf9f7" stroke="#f3eeea" strokeWidth="1" />
+      <path d={dPts(centerPts)} fill={look.customCloth ? look.lining : '#fbf9f7'} stroke="#f3eeea" strokeWidth="1" />
+      {look.embroidery === 'roses' ? <RosePanel mid={mid} /> : <Motif mid={mid} look={look} />}
+    </g>
+  );
+}
+
+function RosePanel({ mid }: { mid: Pt }) {
+  return (
+    <g>
       <path
         d={`M${fmt(mid[0] - 18)} ${fmt(mid[1] + 16)} C ${fmt(mid[0] - 4)} ${fmt(mid[1] - 8)}, ${fmt(mid[0] + 8)} ${fmt(mid[1] + 6)}, ${fmt(mid[0] + 16)} ${fmt(mid[1] - 14)}`}
         stroke="#6d8a48"
@@ -443,6 +521,49 @@ function OpenLid({
       <Rose x={mid[0] - 8} y={mid[1] - 6} r={7.5} fill="#e48aa2" />
       <Rose x={mid[0] + 9} y={mid[1] - 2} r={6.5} fill="#d47090" />
       <Rose x={mid[0] + 1} y={mid[1] + 8} r={6.2} fill="#ee9aaf" />
+    </g>
+  );
+}
+
+function Motif({ mid, look }: { mid: Pt; look: Look }) {
+  const x = mid[0];
+  const y = mid[1];
+  if (look.embroidery === 'plain') return null;
+  if (look.embroidery === 'cross') {
+    return (
+      <g>
+        <rect x={x - 3.2} y={y - 16} width="6.4" height="32" rx="1.2" fill={look.thread} />
+        <rect x={x - 13} y={y - 6} width="26" height="6.2" rx="1.2" fill={look.thread} />
+      </g>
+    );
+  }
+  if (look.embroidery === 'hands') {
+    return (
+      <g fill={look.thread}>
+        <ellipse cx={x - 5} cy={y + 3} rx="4.2" ry="11" transform={`rotate(-14 ${x - 5} ${y + 3})`} />
+        <ellipse cx={x + 5} cy={y + 3} rx="4.2" ry="11" transform={`rotate(14 ${x + 5} ${y + 3})`} />
+        <path d={`M${fmt(x - 3)} ${fmt(y - 6)} Q ${fmt(x)} ${fmt(y - 14)} ${fmt(x + 3)} ${fmt(y - 6)}`} fill={look.thread} />
+      </g>
+    );
+  }
+  if (look.embroidery === 'doves') {
+    return (
+      <g fill={look.thread}>
+        <ellipse cx={x - 7} cy={y + 1} rx="9" ry="3.4" transform={`rotate(-18 ${x - 7} ${y + 1})`} />
+        <ellipse cx={x + 7} cy={y + 1} rx="9" ry="3.4" transform={`rotate(18 ${x + 7} ${y + 1})`} />
+        <circle cx={x} cy={y + 1} r="2.4" />
+        <circle cx={x - 12} cy={y - 1} r="1.3" />
+        <circle cx={x + 12} cy={y - 1} r="1.3" />
+      </g>
+    );
+  }
+  return (
+    <g>
+      <rect x={x - 14} y={y - 9} width="28" height="18" rx="0.6" fill="#f7f7f7" />
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <rect key={i} x={x - 14} y={y - 9 + i * 3} width="28" height="1.6" fill={i % 2 ? '#f7f7f7' : '#b4232c'} />
+      ))}
+      <rect x={x - 14} y={y - 9} width="12" height="9" fill="#243e78" />
     </g>
   );
 }
@@ -485,6 +606,12 @@ function Walls({
   );
 }
 
+function plateUs(n: 2 | 3 | 4): number[] {
+  if (n === 2) return [0.32, 0.68];
+  if (n === 4) return [0.18, 0.39, 0.61, 0.82];
+  return [0.24, 0.5, 0.76];
+}
+
 function Hardware({
   look,
   uid,
@@ -497,43 +624,110 @@ function Hardware({
   const barY = P(0.5, 22, 0)[1];
   const x0 = P(0.1, 22, 0)[0];
   const x1 = P(0.9, 22, 0)[0];
-  const stations = [0.24, 0.5, 0.76];
+  const stations = plateUs(look.plates);
+  const swing = look.hardware === 'swing';
   return (
     <g>
-      {stations.map((u) => {
-        const cx = P(u, 44, 0)[0];
-        const cy = P(u, 44, 0)[1];
-        const hw = 34;
-        const hh = 14;
-        return (
-          <g key={u}>
-            <path
-              d={`M${fmt(cx - hw)} ${fmt(cy)} A ${hw} ${hh} 0 0 1 ${fmt(cx + hw)} ${fmt(cy)} Z`}
-              fill={look.metal ? look.frontHi : look.topMid}
-              stroke={look.gap}
-              strokeWidth="1"
-            />
-            <path
-              d={`M${fmt(cx - hw + 5)} ${fmt(cy - 1)} A ${hw - 7} ${hh - 5} 0 0 1 ${fmt(cx + hw - 5)} ${fmt(cy - 1)}`}
-              fill={look.metal ? look.end : look.frontDeep}
-              opacity="0.55"
-            />
-            {[-14, 14].map((dx) => (
-              <g key={dx}>
-                <rect x={cx + dx - 3} y={cy - 2} width="6" height={barY - cy + 6} rx="2" fill={`url(#${uid}-lug)`} />
-                <circle cx={cx + dx} cy={cy} r="3.1" fill={look.lug[0]} stroke={look.lug[2]} strokeWidth="0.6" />
-                <circle cx={cx + dx - 0.7} cy={cy - 0.6} r="0.9" fill="#fff" opacity="0.85" />
+      {look.hardware === 'bail'
+        ? stations.map((u) => {
+            const p = P(u, 30, 0);
+            return <Bail key={u} x={p[0]} y={p[1]} look={look} />;
+          })
+        : stations.map((u) => {
+            const cx = P(u, 44, 0)[0];
+            const cy = P(u, 44, 0)[1];
+            const hw = look.plates === 4 ? 22 : look.plates === 2 ? 40 : 34;
+            const hh = look.plates === 4 ? 11 : 14;
+            const plateFill = look.metal ? look.frontHi : look.topMid;
+            const plateShade = look.metal ? look.end : look.frontDeep;
+            return (
+              <g key={u}>
+                {look.plate === 'oval' ? (
+                  <ellipse cx={cx} cy={cy - hh * 0.35} rx={hw} ry={hh} fill={plateFill} stroke={look.gap} strokeWidth="1" />
+                ) : look.plate === 'rect' ? (
+                  <rect x={cx - hw} y={cy - hh} width={hw * 2} height={hh * 1.35} rx="3" fill={plateFill} stroke={look.gap} strokeWidth="1" />
+                ) : (
+                  <path
+                    d={`M${fmt(cx - hw)} ${fmt(cy)} A ${hw} ${hh} 0 0 1 ${fmt(cx + hw)} ${fmt(cy)} Z`}
+                    fill={plateFill}
+                    stroke={look.gap}
+                    strokeWidth="1"
+                  />
+                )}
+                {look.plate === 'arch' && (
+                  <path
+                    d={`M${fmt(cx - hw + 5)} ${fmt(cy - 1)} A ${hw - 7} ${hh - 5} 0 0 1 ${fmt(cx + hw - 5)} ${fmt(cy - 1)}`}
+                    fill={plateShade}
+                    opacity="0.55"
+                  />
+                )}
+                {[-14, 14].map((dx) => (
+                  <g key={dx}>
+                    <rect x={cx + dx - 3} y={cy - 2} width="6" height={barY - cy + 6} rx="2" fill={`url(#${uid}-lug)`} />
+                    <circle cx={cx + dx} cy={cy} r="3.1" fill={look.lug[0]} stroke={look.lug[2]} strokeWidth="0.6" />
+                    <circle cx={cx + dx - 0.7} cy={cy - 0.6} r="0.9" fill="#fff" opacity="0.85" />
+                  </g>
+                ))}
               </g>
-            ))}
-          </g>
-        );
-      })}
-      <rect x={x0} y={barY - 6} width={x1 - x0} height="12" rx="6" fill={barUrl} />
-      <rect x={x0 + 10} y={barY - 4} width={x1 - x0 - 26} height="2.4" rx="1" fill="#fff" opacity={look.metal ? 0.8 : 0.5} />
-      <circle cx={x0} cy={barY} r="7" fill={`url(#${uid}-lug)`} />
-      <circle cx={x1} cy={barY} r="7" fill={`url(#${uid}-lug)`} />
-      <circle cx={x0 - 1} cy={barY - 1.4} r="1.5" fill="#fff" opacity="0.85" />
-      <circle cx={x1 - 1} cy={barY - 1.4} r="1.5" fill="#fff" opacity="0.85" />
+            );
+          })}
+      {look.hardware !== 'bail' && (
+        <g>
+          <rect
+            x={x0}
+            y={barY - (swing ? 6 : 4)}
+            width={x1 - x0}
+            height={swing ? 12 : 8}
+            rx={swing ? 6 : 1.5}
+            fill={barUrl}
+          />
+          <rect x={x0 + 10} y={barY - 4} width={x1 - x0 - 26} height="2.4" rx="1" fill="#fff" opacity={look.metal ? 0.8 : 0.5} />
+          {swing && (
+            <g>
+              <circle cx={x0} cy={barY} r="7" fill={`url(#${uid}-lug)`} />
+              <circle cx={x1} cy={barY} r="7" fill={`url(#${uid}-lug)`} />
+              <circle cx={x0 - 1} cy={barY - 1.4} r="1.5" fill="#fff" opacity="0.85" />
+              <circle cx={x1 - 1} cy={barY - 1.4} r="1.5" fill="#fff" opacity="0.85" />
+            </g>
+          )}
+        </g>
+      )}
+    </g>
+  );
+}
+
+function CornerMark({ look }: { look: Look }) {
+  if (look.carving === 'none' || look.metal) return null;
+  if (look.carving === 'leaf') return <LeafMark look={look} />;
+  if (look.carving === 'cross') return <CrossMark look={look} />;
+  return <Wheat look={look} />;
+}
+
+function carvingAnchor(look: Look) {
+  const a = P(1, 28, CW + 0.08);
+  const b = P(1, 28, 1 - CW - 0.08);
+  const top = P(1, BODY - 16, (CW + (1 - CW)) / 2);
+  const cx = (a[0] + b[0]) / 2;
+  const cy = (top[1] + (a[1] + b[1]) / 2) / 2 + 4;
+  return { cx, cy, stroke: look.gap };
+}
+
+function LeafMark({ look }: { look: Look }) {
+  const { cx, cy, stroke } = carvingAnchor(look);
+  return (
+    <g stroke={stroke} strokeWidth="1.15" fill="none" strokeLinecap="round" opacity="0.8">
+      <path d={`M${fmt(cx)} ${fmt(cy - 12)} Q ${fmt(cx + 8)} ${fmt(cy)} ${fmt(cx)} ${fmt(cy + 12)}`} />
+      <path d={`M${fmt(cx)} ${fmt(cy - 4)} Q ${fmt(cx - 8)} ${fmt(cy + 2)} ${fmt(cx)} ${fmt(cy + 6)}`} />
+    </g>
+  );
+}
+
+function CrossMark({ look }: { look: Look }) {
+  const { cx, cy, stroke } = carvingAnchor(look);
+  return (
+    <g stroke={stroke} strokeWidth="1.4" fill="none" strokeLinecap="round" opacity="0.85">
+      <path d={`M${fmt(cx)} ${fmt(cy - 12)} L${fmt(cx)} ${fmt(cy + 12)}`} />
+      <path d={`M${fmt(cx - 7)} ${fmt(cy - 3)} L${fmt(cx + 7)} ${fmt(cy - 3)}`} />
     </g>
   );
 }
@@ -626,9 +820,22 @@ function CoffinBody({
           <Knot x={P(0.78, BODY * 0.4, 0.16)} small />
         </g>
       )}
-      {pine && <CoffinCross />}
+      {pine && !casket.dress && <CoffinCross />}
+      {casket.dress && look.embroidery !== 'plain' && <CoffinEmblem look={look} />}
+      {look.texture === 'hammered' && (
+        <g fill={look.topHi} opacity="0.4">
+          {[0.32, 0.48, 0.64, 0.78].map((u) => {
+            const p = P(u, lidH, 0.46);
+            return <ellipse key={u} cx={p[0]} cy={p[1]} rx="4" ry="1.8" />;
+          })}
+        </g>
+      )}
       <Screws hex={lidHex} v={lidH} metal={look.metal} />
-      <CoffinBails look={look} />
+      {casket.dress && look.hardware !== 'bail' ? (
+        <CoffinRail look={look} uid={uid} />
+      ) : (
+        <CoffinBails look={look} plates={casket.dress ? look.plates : undefined} />
+      )}
     </g>
   );
 }
@@ -718,17 +925,52 @@ function Bail({ x, y, look, rot = 0 }: { x: number; y: number; look: Look; rot?:
   );
 }
 
-function CoffinBails({ look }: { look: Look }) {
+function CoffinEmblem({ look }: { look: Look }) {
+  const p = P(0.22, BODY + 11.2, 0.5);
+  return <Motif mid={p} look={look} />;
+}
+
+function CoffinRail({ look, uid }: { look: Look; uid: string }) {
+  const onEdge = (i: number, t: number, v: number) => {
+    const a = HEX[i];
+    const b = HEX[i + 1];
+    return P(a.u + (b.u - a.u) * t, v, a.w + (b.w - a.w) * t);
+  };
+  const a = onEdge(1, 0.16, 26);
+  const b = onEdge(1, 0.84, 26);
+  const swing = look.hardware === 'swing';
+  return (
+    <g>
+      {plateUs(look.plates).map((t, i, arr) => {
+        const along = arr.length === 1 ? 0.5 : 0.2 + (i / (arr.length - 1)) * 0.6;
+        const p = onEdge(1, along, 38);
+        return <ellipse key={t} cx={p[0]} cy={p[1]} rx="11" ry="5" fill={look.metal ? look.frontHi : look.topMid} stroke={look.gap} strokeWidth="0.7" />;
+      })}
+      <line
+        x1={a[0]}
+        y1={a[1]}
+        x2={b[0]}
+        y2={b[1]}
+        stroke={`url(#${uid}-bar)`}
+        strokeWidth={swing ? 8 : 6}
+        strokeLinecap={swing ? 'round' : 'butt'}
+      />
+    </g>
+  );
+}
+
+function CoffinBails({ look, plates }: { look: Look; plates?: 2 | 3 | 4 }) {
   const onEdge = (i: number, t: number, v: number) => {
     const a = HEX[i];
     const b = HEX[i + 1];
     return P(a.u + (b.u - a.u) * t, v, a.w + (b.w - a.w) * t);
   };
   const spots = [onEdge(0, 0.55, BODY * 0.48), onEdge(1, 0.38, BODY * 0.48), onEdge(1, 0.72, BODY * 0.48)];
+  const side = plates === 2 ? [spots[1]] : plates === 3 ? [spots[0], spots[2]] : spots;
   const end = onEdge(2, 0.5, BODY * 0.5);
   return (
     <g>
-      {spots.map((p, i) => (
+      {side.map((p, i) => (
         <Bail key={i} x={p[0]} y={p[1]} look={look} />
       ))}
       <Bail x={end[0]} y={end[1]} look={look} rot={-18} />
@@ -821,7 +1063,8 @@ function American({
   const topUrl = `url(#${uid}-top)`;
   const barUrl = `url(#${uid}-bar)`;
   const amp = casket.silhouette === 'DOME' ? 34 : 26;
-  const mold = 18;
+  const moldSteps = look.molding === 'simple' ? 1 : look.molding === 'bead' ? 2 : 3;
+  const mold = look.molding === 'simple' ? 10 : 18;
   const headOpen = mode === 'head' || mode === 'both';
   const footOpen = mode === 'both';
   const closedRanges: [number, number][] = [];
@@ -870,7 +1113,7 @@ function American({
       <Walls a={-0.02} b={1.02} v0={0} v1={BODY} su={1} sw={1} look={look} frontUrl={frontUrl} />
 
       <g clipPath={`url(#${uid}-frontclip)`}>
-        {look.metal ? (
+        {look.texture === 'brushed' ? (
           Array.from({ length: 10 }, (_, i) => (
             <line
               key={i}
@@ -883,7 +1126,26 @@ function American({
               strokeWidth="0.8"
             />
           ))
-        ) : (
+        ) : look.texture === 'hammered' ? (
+          <g fill={look.topHi} opacity="0.28">
+            {[0.2, 0.35, 0.5, 0.65, 0.8].map((u) =>
+              [22, 40, 56].map((v) => {
+                const p = P(u, v, 0);
+                return <ellipse key={`${u}-${v}`} cx={p[0]} cy={p[1]} rx="5" ry="2" />;
+              }),
+            )}
+          </g>
+        ) : look.texture === 'lacquer' ? (
+          <line
+            x1={O.x + 24}
+            x2={O.x + LEN - 24}
+            y1={O.y - 28}
+            y2={O.y - 28}
+            stroke="#fff"
+            strokeOpacity={0.28 + look.gloss * 0.25}
+            strokeWidth="3"
+          />
+        ) : look.texture === 'matte' ? null : (
           <g stroke={look.grain} strokeWidth="0.9" fill="none" opacity="0.28">
             {[18, 32, 46, 58].map((v) => (
               <path key={v} d={dPts([P(0.06, v, 0), P(0.94, v, 0)], false)} />
@@ -901,15 +1163,15 @@ function American({
       {bedding && well.length > 2 && (
         <g>
           <path d={dPts(projectPoly(well, BODY))} fill={look.topMid} />
-          <path d={dPts(projectPoly(insetUV(well, 0.9), BODY - 3))} fill="#e7e1db" />
-          <path d={dPts(projectPoly(insetUV(well, 0.84), BODY - 2))} fill="#f7f5f3" />
+          <path d={dPts(projectPoly(insetUV(well, 0.9), BODY - 3))} fill={look.customCloth ? look.lining : '#e7e1db'} />
+          <path d={dPts(projectPoly(insetUV(well, 0.84), BODY - 2))} fill={look.customCloth ? look.lining : '#f7f5f3'} />
           <g stroke="#e4ddd6" strokeWidth="1.15" fill="none">
             {[0.22, 0.4, 0.58, 0.74].map((tw) => (
               <path key={tw} d={dPts(bedFold(insetUV(well, 0.84), BODY - 2, tw), false)} />
             ))}
           </g>
           <Pillow />
-          <path d={dPts(drape)} fill="#fbfaf8" />
+          <path d={dPts(drape)} fill={look.customCloth ? look.lining : '#fbfaf8'} />
           <g stroke="#e7e0da" strokeWidth="1" fill="none">
             {[8, 16, 23].map((drop) => (
               <path
@@ -929,11 +1191,11 @@ function American({
 
       {showMold && (
         <g>
-          {[0, 1, 2].map((step) => {
+          {Array.from({ length: moldSteps }, (_, step) => {
             const su = 1.018 - step * 0.01;
             const sw = 1.03 - step * 0.028;
-            const v0 = BODY + step * (mold / 3);
-            const v1 = BODY + (step + 1) * (mold / 3);
+            const v0 = BODY + step * (mold / moldSteps);
+            const v1 = BODY + (step + 1) * (mold / moldSteps);
             const flat = () => 0;
             return (
               <g key={step}>
@@ -953,6 +1215,15 @@ function American({
                   strokeWidth="1.05"
                   fill="none"
                 />
+                {look.molding === 'bead' && step === moldSteps - 1 && (
+                  <path
+                    d={dPts(chainLine(moldA, moldB, v1, flat, 0, su, sw), false)}
+                    stroke="#fff"
+                    strokeWidth="1.6"
+                    fill="none"
+                    opacity="0.45"
+                  />
+                )}
               </g>
             );
           })}
@@ -982,8 +1253,8 @@ function American({
       {headOpen && <LidHinge u0={0.05} u1={SPLIT - 0.02} look={look} />}
       {footOpen && <LidHinge u0={SPLIT + 0.02} u1={0.95} look={look} />}
       <Hardware look={look} uid={uid} barUrl={barUrl} />
-      <Wheat look={look} />
-      {look.metal && casket.silhouette === 'FULL_COUCH' && (
+      <CornerMark look={look} />
+      {look.metal && !look.customCloth && casket.silhouette === 'FULL_COUCH' && (
         <path
           d={dPts([P(0.08, BODY - 2, 0), P(0.92, BODY - 2, 0)], false)}
           stroke="#d4b15e"
@@ -1059,7 +1330,7 @@ export const CasketVessel: React.FC<{
   lid?: 'open' | 'closed';
 }> = ({ casket, className, showPlaque = false, size = 'md', chapel = false, lid }) => {
   const uid = useId().replace(/:/g, '');
-  const look = lookFor(casket.material, casket.silhouette);
+  const look = lookFor(casket);
   const coffin = isCoffin(casket.silhouette);
   const mode = resolveLid(casket, lid);
   const open = mode !== 'none';

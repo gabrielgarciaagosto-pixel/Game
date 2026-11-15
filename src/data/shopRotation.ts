@@ -19,6 +19,8 @@ export type RareTone = 'LIGHT' | 'DARK';
  * (Gabriel). `endHour` should be startHour+2 (wrapping midnight). A short
  * grace lets a purchase finish if the player is mid-checkout.
  */
+import { VARIETY_ALWAYS, VARIETY_RARES } from './casketVariety';
+
 export const RARE_DURATION_HOURS = 2;
 export const RARE_GRACE_MINUTES = 15;
 
@@ -178,6 +180,16 @@ export const RARE_SCHEDULE: RareScheduleEntry[] = [
     stock: 1,
     hint: 'Dark cast bronze — ~00:00–02:00.',
   },
+  ...VARIETY_RARES.map((rare) => ({
+    id: rare.id,
+    kind: 'casket' as const,
+    rarity: rare.rarity,
+    tone: rare.tone,
+    startHour: rare.startHour,
+    endHour: endHourAfter(rare.startHour),
+    stock: rare.stock,
+    hint: rare.hint,
+  })),
 ];
 
 /** Always-on floor stock (not hour-gated). */
@@ -194,13 +206,14 @@ export const ALWAYS_URN_IDS = [
   'urn_cobalt_art_deco',
 ] as const;
 
-export const ALWAYS_CASKET_IDS = [
+export const ALWAYS_CASKET_IDS: string[] = [
   'casket_pine_tapered',
   'casket_oak_half',
   'casket_cherry_panel',
   'casket_steel_silver',
   'casket_oak_octagon',
-] as const;
+  ...VARIETY_ALWAYS,
+];
 
 export interface ShopRotationState {
   /**

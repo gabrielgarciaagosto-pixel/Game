@@ -941,7 +941,7 @@ function CasketCard({
   });
 
   return (
-    <div className="rounded-2xl border border-amber-900/40 bg-gradient-to-b from-[#2a2118] to-[#120e0b] p-2 flex flex-col min-h-[15rem]">
+    <div className="rounded-2xl border border-amber-900/40 bg-gradient-to-b from-[#2a2118] to-[#120e0b] p-2 flex flex-col min-h-[17.5rem]">
       <button
         type="button"
         onClick={onInspect}
@@ -952,7 +952,7 @@ function CasketCard({
           {rare ? <RarityBadge rarity={rare.rarity} /> : <span />}
           {locked && <LockBadge required={casket.reputationRequired} />}
         </div>
-        <CasketVessel casket={casket} size="sm" />
+        <CasketVessel casket={casket} size="sm" className="scale-[1.16]" />
         <div className="mt-1 text-center px-1">
           <div className="text-[12px] font-bold text-amber-50 leading-tight">
             {casket.name}
@@ -1148,7 +1148,7 @@ function CasketInspectModal({
         <div className="my-4 flex justify-center">
           <div className="relative">
             <div className="absolute inset-0 blur-2xl bg-amber-600/20 rounded-full" />
-            <CasketVessel casket={casket} size="lg" className="relative" lid={lid ?? undefined} />
+            <CasketVessel casket={casket} size="lg" className="relative scale-110" lid={lid ?? undefined} />
           </div>
         </div>
 

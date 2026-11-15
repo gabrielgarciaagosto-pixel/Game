@@ -1,3 +1,5 @@
+import { VARIETY_CASKETS } from './casketVariety';
+
 export type CasketMaterial =
   | 'OAK'
   | 'CHERRY'
@@ -15,6 +17,40 @@ export type CasketSilhouette =
   | 'OCTAGON'
   | 'DOME'
   | 'PANEL';
+
+export type CasketEmbroidery = 'roses' | 'cross' | 'hands' | 'doves' | 'plain' | 'flag';
+export type CasketHardwareKind = 'swing' | 'stationary' | 'bail';
+export type CasketPlateShape = 'arch' | 'oval' | 'rect';
+export type CasketTexture = 'grain' | 'brushed' | 'hammered' | 'lacquer' | 'matte';
+export type CasketMolding = 'stepped' | 'simple' | 'bead';
+export type CasketCarving = 'wheat' | 'leaf' | 'cross' | 'none';
+
+/** Finish, hardware, and cloth. The box geometry does not change. */
+export interface CasketDress {
+  lining: string;
+  thread: string;
+  embroidery: CasketEmbroidery;
+  hardware: CasketHardwareKind;
+  plates: 2 | 3 | 4;
+  plate: CasketPlateShape;
+  texture: CasketTexture;
+  molding: CasketMolding;
+  carving: CasketCarving;
+  metal: boolean;
+  gloss: number;
+  top: string;
+  topHi: string;
+  topMid: string;
+  front: string;
+  frontHi: string;
+  frontDeep: string;
+  end: string;
+  endDeep: string;
+  grain: string;
+  gap: string;
+  bar: [string, string, string];
+  lug: [string, string, string];
+}
 
 export interface CasketCatalogEntry {
   id: string;
@@ -37,6 +73,8 @@ export interface CasketCatalogEntry {
     hardware: string;
     trim: string;
   };
+  /** Absent on the original ten, which keep the v0.9.23 look. */
+  dress?: CasketDress;
 }
 
 export const CASKET_MATERIALS: CasketMaterial[] = [
@@ -261,6 +299,7 @@ export const CASKET_CATALOG: CasketCatalogEntry[] = [
       trim: '#52525b',
     },
   },
+  ...VARIETY_CASKETS,
 ];
 
 export function getCasketById(id: string | null | undefined) {
