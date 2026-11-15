@@ -1,6 +1,6 @@
 /** Lampblack Coach & Motor — cortege catalog (fictional). */
 
-export type FleetClass = 'RECOVERY' | 'ESCORT' | 'COACH';
+export type FleetClass = 'RECOVERY' | 'ESCORT' | 'FLOWER' | 'COACH';
 
 export interface FleetVehicle {
   id: string;
@@ -12,7 +12,7 @@ export interface FleetVehicle {
   price: number;
   /** Recovery vans: reputation on a successful service */
   repBonus: number;
-  /** Escorts: extra cash on a successful service */
+  /** Escorts and flower cars: extra cash on a successful service */
   moneyBonus: number;
   /** Hearses: interment points this service (also added to the house total) */
   interment: number;
@@ -26,12 +26,14 @@ export interface FleetVehicle {
 export interface FleetAssignment {
   recovery: string | null;
   escort: string | null;
+  flower: string | null;
   coach: string | null;
 }
 
 export const EMPTY_FLEET_ASSIGNMENT: FleetAssignment = {
   recovery: null,
   escort: null,
+  flower: null,
   coach: null,
 };
 
@@ -96,16 +98,16 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     tier: 4,
     tierName: 'House',
     name: 'Silent Arrival',
-    era: '2024 formal',
+    era: '2019 removal',
     price: 24000,
     repBonus: 18,
     moneyBonus: 0,
     interment: 0,
-    length: "20'6\"",
-    power: '6.6L V8',
+    length: "18'6\"",
+    power: '3.5L V6',
     crew: '3 + cot',
-    finish: 'Lampblack, brass lamps',
-    blurb: 'Coachbuilt first-call with landau irons and oil lamps. The reputation piece.',
+    finish: 'Lampblack, chrome belt',
+    blurb: 'Long-wheelbase removal SUV. Chrome belt, a thin landau swoosh on the quarter glass, and a vertical tail lamp. The reputation piece.',
   },
   {
     id: 'esc_civic_lead',
@@ -123,23 +125,6 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     crew: 'Driver + clergy',
     finish: 'Plain black',
     blurb: 'A notchback that knows the cemetery gate. Modest, but it heads the line.',
-  },
-  {
-    id: 'esc_garden_deck',
-    fleetClass: 'ESCORT',
-    tier: 2,
-    tierName: 'Established',
-    name: 'Garden Deck',
-    era: '1978 flower car',
-    price: 6200,
-    repBonus: 0,
-    moneyBonus: 280,
-    interment: 0,
-    length: "18'1\"",
-    power: '6.6L V8',
-    crew: 'Driver',
-    finish: 'Black, teak rails',
-    blurb: 'Open deck for sprays. The flowers ride where the town can see them.',
   },
   {
     id: 'esc_procession_twin',
@@ -176,78 +161,113 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     blurb: 'Three-window stretch with a landau quarter. The family pays for the quiet mile.',
   },
   {
+    id: 'esc_garden_deck',
+    fleetClass: 'FLOWER',
+    tier: 2,
+    tierName: 'Established',
+    name: 'Ivory Deck',
+    era: '1991 flower car',
+    price: 6200,
+    repBonus: 0,
+    moneyBonus: 280,
+    interment: 0,
+    length: "18'4\"",
+    power: '4.5L V8',
+    crew: 'Driver',
+    finish: 'Ivory, chrome rails',
+    blurb: 'Sedan cab and an open bed. Twin chrome moldings, a bed rail, and multi-spoke wheels. Sprays ride in the open.',
+  },
+  {
+    id: 'flw_forty_one',
+    fleetClass: 'FLOWER',
+    tier: 4,
+    tierName: 'House',
+    name: 'Forty-One Bed',
+    era: '1941 flower car',
+    price: 16400,
+    repBonus: 0,
+    moneyBonus: 520,
+    interment: 0,
+    length: "18'8\"",
+    power: 'Straight-8',
+    crew: 'Driver',
+    finish: 'Ivory, chrome disc',
+    blurb: 'Rounded cab, pontoon fenders, a tall grille, and a long open bed with a low chrome rail. Whitewalls.',
+  },
+  {
     id: 'coa_parish_box',
     fleetClass: 'COACH',
     tier: 1,
     tierName: 'Budget',
-    name: 'Parish Box Coach',
-    era: '1972 square',
+    name: 'Pewter Parish',
+    era: '1994 square',
     price: 3200,
     repBonus: 0,
     moneyBonus: 0,
     interment: 6,
-    length: "19'4\"",
-    power: '7.0L V8',
+    length: "19'6\"",
+    power: '5.7L V8',
     crew: 'Casket + 2',
-    finish: 'Semigloss black',
-    blurb: 'High roof, three panes, a simple casket bay. Interment starts here.',
+    finish: 'Pewter, black roof',
+    blurb: 'Boxy landau. Rectangular lamps, a black padded roof, twin chrome irons, and wide whitewalls.',
   },
   {
     id: 'coa_iron_landau',
     fleetClass: 'COACH',
     tier: 2,
     tierName: 'Established',
-    name: 'Iron Landau',
-    era: '1934 formal',
+    name: 'Draper Eight',
+    era: '1938 formal',
     price: 8600,
     repBonus: 0,
     moneyBonus: 0,
     interment: 14,
-    length: "18'9\"",
+    length: "19'2\"",
     power: 'Straight-8',
     crew: 'Casket + attendant',
-    finish: 'Brewster green, brass',
-    blurb: 'Cycle fenders, artillery wheels, and S-irons over the casket deck.',
+    finish: 'Lampblack, chrome disc',
+    blurb: 'Pontoon fenders, a running board, and three carved drape panels on the casket compartment. Whitewalls.',
   },
   {
     id: 'coa_glass_formal',
     fleetClass: 'COACH',
     tier: 3,
     tierName: 'Formal',
-    name: 'Glass Formal',
-    era: '2012 side-loader look',
+    name: 'Silver Landau',
+    era: '2006 formal',
     price: 16800,
     repBonus: 0,
     moneyBonus: 0,
     interment: 24,
-    length: "21'2\"",
-    power: '6.0L V8',
+    length: "21'4\"",
+    power: '4.6L V8',
     crew: 'Full couch casket',
-    finish: 'Tuxedo black, chrome',
-    blurb: 'A glass house. The casket is the ornament. Interment climbs with the chrome.',
+    finish: 'Silver, black landau',
+    blurb: 'Long hood, three curtained panes, a black landau cap, and one arched chrome bar with a lantern at the break.',
   },
   {
     id: 'coa_state_landaulette',
     fleetClass: 'COACH',
     tier: 4,
     tierName: 'House',
-    name: 'State Landaulette',
-    era: '1914 motor hearse',
+    name: 'Crest Landau',
+    era: '2018 formal',
     price: 36000,
     repBonus: 0,
     moneyBonus: 0,
     interment: 38,
-    length: "22'8\"",
-    power: 'T-head six',
+    length: "21'8\"",
+    power: '3.6L V6',
     crew: 'State casket',
-    finish: 'Deep carriage green',
-    blurb: 'Six coach lamps, carved panels, full landau cage. The house coach.',
+    finish: 'Gloss lampblack',
+    blurb: 'Crossover hearse. Padded landau roof, an angular chrome sash, a rear swoosh, and multi-spoke wheels. The house coach.',
   },
 ];
 
 export const FLEET_CLASS_LABEL: Record<FleetClass, string> = {
   RECOVERY: 'Recovery',
   ESCORT: 'Escort',
+  FLOWER: 'Flower car',
   COACH: 'Coaches',
 };
 
@@ -272,13 +292,14 @@ export function normalizeFleetAssignment(raw: unknown): FleetAssignment {
   return {
     recovery: pick(r.recovery, 'RECOVERY'),
     escort: pick(r.escort, 'ESCORT'),
+    flower: pick(r.flower, 'FLOWER'),
     coach: pick(r.coach, 'COACH'),
   };
 }
 
 function classBonus(v: FleetVehicle): number {
   if (v.fleetClass === 'RECOVERY') return v.repBonus;
-  if (v.fleetClass === 'ESCORT') return v.moneyBonus;
+  if (v.fleetClass === 'ESCORT' || v.fleetClass === 'FLOWER') return v.moneyBonus;
   return v.interment;
 }
 
@@ -300,9 +321,15 @@ export function bestOwnedInClass(
 export interface CortegePick {
   recovery: FleetVehicle | null;
   escort: FleetVehicle | null;
+  flower: FleetVehicle | null;
   coach: FleetVehicle | null;
   /** True when that slot is an explicit assignment rather than auto-best */
-  assigned: { recovery: boolean; escort: boolean; coach: boolean };
+  assigned: {
+    recovery: boolean;
+    escort: boolean;
+    flower: boolean;
+    coach: boolean;
+  };
 }
 
 /** Explicit assignment if that vehicle is owned; otherwise the best in class. */
@@ -324,14 +351,17 @@ export function resolveCortege(
   };
   const recovery = slot('RECOVERY', a.recovery);
   const escort = slot('ESCORT', a.escort);
+  const flower = slot('FLOWER', a.flower);
   const coach = slot('COACH', a.coach);
   return {
     recovery: recovery.vehicle,
     escort: escort.vehicle,
+    flower: flower.vehicle,
     coach: coach.vehicle,
     assigned: {
       recovery: recovery.assigned,
       escort: escort.assigned,
+      flower: flower.assigned,
       coach: coach.assigned,
     },
   };
@@ -339,6 +369,8 @@ export function resolveCortege(
 
 export function fleetBonusLine(v: FleetVehicle): string {
   if (v.fleetClass === 'RECOVERY') return `+${v.repBonus} reputation`;
-  if (v.fleetClass === 'ESCORT') return `+$${v.moneyBonus.toLocaleString()} cortege`;
+  if (v.fleetClass === 'ESCORT' || v.fleetClass === 'FLOWER') {
+    return `+$${v.moneyBonus.toLocaleString()} cortege`;
+  }
   return `Interment +${v.interment}`;
 }

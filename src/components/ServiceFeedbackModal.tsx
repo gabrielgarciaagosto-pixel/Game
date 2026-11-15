@@ -30,7 +30,13 @@ export const ServiceFeedbackModal: React.FC = () => {
             <li>
               Escort:{' '}
               {feedback.fleetEscort
-                ? `${feedback.fleetEscort} · +$${feedback.fleetCash.toLocaleString()}`
+                ? `${feedback.fleetEscort} · +$${(feedback.fleetCash - feedback.fleetFlowerCash).toLocaleString()}`
+                : 'none'}
+            </li>
+            <li>
+              Flower car:{' '}
+              {feedback.fleetFlower
+                ? `${feedback.fleetFlower} · +$${feedback.fleetFlowerCash.toLocaleString()}`
                 : 'none'}
             </li>
             <li>

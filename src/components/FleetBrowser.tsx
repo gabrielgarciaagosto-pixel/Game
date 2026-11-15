@@ -18,6 +18,7 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'ALL', label: 'All' },
   { id: 'RECOVERY', label: 'Recovery' },
   { id: 'ESCORT', label: 'Escort' },
+  { id: 'FLOWER', label: 'Flower' },
   { id: 'COACH', label: 'Coaches' },
 ];
 
@@ -88,7 +89,7 @@ export const FleetBrowser: React.FC = () => {
           {FLEET_BRAND}
         </h2>
         <p className="text-[11px] text-[#d9cbb6] mt-0.5">
-          Recovery vans, escorts, and funeral coaches
+          Removal SUVs, flower cars, escorts, and funeral coaches
         </p>
         <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
           <span className="px-2 py-0.5 rounded border border-[#c4a574]/40 bg-black/30">
@@ -117,7 +118,7 @@ export const FleetBrowser: React.FC = () => {
                 <div className="h-36 bg-gradient-to-b from-[#3a342c] to-[#12100e]">
                   <FleetVehicleArt
                     vehicleId="coa_state_landaulette"
-                    title="State Landaulette"
+                    title="Crest Landau"
                   />
                 </div>
                 <div className="px-3 py-2">
@@ -128,10 +129,10 @@ export const FleetBrowser: React.FC = () => {
                     className="text-lg text-[#f6efe2]"
                     style={{ fontFamily: '"Libre Baskerville", Georgia, serif' }}
                   >
-                    State Landaulette
+                    Crest Landau
                   </p>
                   <p className="text-[11px] text-[#d9cbb6]">
-                    Six lamps, full landau cage · Interment +38
+                    Padded landau, angular sash · Interment +38
                   </p>
                 </div>
               </section>
@@ -154,6 +155,12 @@ export const FleetBrowser: React.FC = () => {
                   : 'none'}
               </div>
               <div>
+                Flower car:{' '}
+                {cortege.flower
+                  ? `${cortege.flower.name} (${cortege.assigned.flower ? 'assigned' : 'auto'})`
+                  : 'none'}
+              </div>
+              <div>
                 Coach:{' '}
                 {cortege.coach
                   ? `${cortege.coach.name} (${cortege.assigned.coach ? 'assigned' : 'auto'})`
@@ -161,14 +168,14 @@ export const FleetBrowser: React.FC = () => {
               </div>
             </section>
 
-            <div className="flex gap-1.5">
+            <div className="flex flex-wrap gap-1.5">
               {FILTERS.map((f) => (
                 <button
                   key={f.id}
                   type="button"
                   onClick={() => setFilter(f.id)}
                   style={{ touchAction: 'manipulation' }}
-                  className={`flex-1 py-1.5 rounded text-[11px] font-semibold border ${
+                  className={`flex-1 basis-[18%] py-1.5 rounded text-[10px] font-semibold border ${
                     filter === f.id
                       ? 'bg-[#c4a574] text-[#1a140c] border-[#c4a574]'
                       : 'bg-black/30 text-[#f3ead7] border-[#c4a574]/30'
@@ -259,9 +266,11 @@ export const FleetBrowser: React.FC = () => {
                 </div>
                 <p className="text-[11px] text-[#d9cbb6] leading-snug">
                   {detail.fleetClass === 'RECOVERY' &&
-                    'Recovery vans add reputation when a service succeeds.'}
+                    'Recovery vehicles add reputation when a service succeeds.'}
                   {detail.fleetClass === 'ESCORT' &&
                     'Escorts add cortege cash on a successful service.'}
+                  {detail.fleetClass === 'FLOWER' &&
+                    'Flower cars add cortege cash on a successful service.'}
                   {detail.fleetClass === 'COACH' &&
                     'Coaches add Interment for this service and the house total on the HUD.'}
                   {' '}

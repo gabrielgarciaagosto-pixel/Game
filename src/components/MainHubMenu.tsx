@@ -327,7 +327,7 @@ export const MainHubMenu: React.FC = () => {
     },
     int: {
       title: 'Interment',
-      body: 'House total from the funeral coach. Each successful service adds that coach’s interment. Recovery vans add reputation; escorts add cash.',
+      body: 'House total from the funeral coach. Each successful service adds that coach’s interment. Recovery vans add reputation; escorts and flower cars add cash.',
       detail: coach
         ? `House interment ${intermentScore}. Coach ${coach.name} adds ${coach.interment} per successful service.`
         : `House interment ${intermentScore}. No coach in the garage yet.`,

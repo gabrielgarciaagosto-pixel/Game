@@ -171,9 +171,11 @@ interface GameState {
     reputationDelta: number;
     fleetRecovery: string | null;
     fleetEscort: string | null;
+    fleetFlower: string | null;
     fleetCoach: string | null;
     fleetRep: number;
     fleetCash: number;
+    fleetFlowerCash: number;
     intermentThisService: number;
     intermentTotal: number;
   } | null;
@@ -2137,7 +2139,9 @@ export const useGameStore = create<GameState>()(
         ? 'recovery'
         : fleetClass === 'ESCORT'
           ? 'escort'
-          : 'coach';
+          : fleetClass === 'FLOWER'
+            ? 'flower'
+            : 'coach';
     set({
       fleetAssignment: {
         ...normalizeFleetAssignment(state.fleetAssignment),
@@ -2542,7 +2546,9 @@ export const useGameStore = create<GameState>()(
         state.fleetAssignment
       );
       const fleetRep = serviceFailed ? 0 : (cortege.recovery?.repBonus ?? 0);
-      const fleetCash = serviceFailed ? 0 : (cortege.escort?.moneyBonus ?? 0);
+      const escortCash = serviceFailed ? 0 : (cortege.escort?.moneyBonus ?? 0);
+      const flowerCash = serviceFailed ? 0 : (cortege.flower?.moneyBonus ?? 0);
+      const fleetCash = escortCash + flowerCash;
       const fleetInterment = serviceFailed
         ? 0
         : (cortege.coach?.interment ?? 0);
@@ -2643,9 +2649,11 @@ export const useGameStore = create<GameState>()(
                 chapelRewards.reputationDelta + urnRep + casketRep + fleetRep,
               fleetRecovery: cortege.recovery?.name ?? null,
               fleetEscort: cortege.escort?.name ?? null,
+              fleetFlower: cortege.flower?.name ?? null,
               fleetCoach: cortege.coach?.name ?? null,
               fleetRep,
               fleetCash,
+              fleetFlowerCash: flowerCash,
               intermentThisService: fleetInterment,
               intermentTotal,
             },

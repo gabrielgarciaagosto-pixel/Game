@@ -280,7 +280,12 @@ export function ownAllFleets() {
 export function clearFleets() {
   useGameStore.setState({
     ownedFleetIds: [],
-    fleetAssignment: { recovery: null, escort: null, coach: null },
+    fleetAssignment: {
+      recovery: null,
+      escort: null,
+      flower: null,
+      coach: null,
+    },
   });
   toast('Garage cleared (interment kept)');
 }

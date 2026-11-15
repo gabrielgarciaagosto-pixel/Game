@@ -1,4 +1,13 @@
 import React from 'react';
+import {
+  CrestLandau,
+  DraperEight,
+  FortyOneBed,
+  IvoryDeck,
+  PewterParish,
+  SilentArrival,
+  SilverLandau,
+} from './profiles';
 
 /**
  * Side-profile art for every Lampblack model.
@@ -105,43 +114,6 @@ function Glass({
   );
 }
 
-/** Side elevation of a half-couch casket in the coach bay. */
-function Casket({ x, y, w }: { x: number; y: number; w: number }) {
-  const h = 16;
-  const split = x + w * 0.46;
-  return (
-    <g>
-      <path d={`M${x} ${y + h} h${w} l-1 3 H${x + 1} Z`} fill="#2a160c" />
-      <path d={`M${x + 2} ${y + 7} H${x + w - 2} V${y + h} H${x + 2} Z`} fill="#7a4320" />
-      <path d={`M${x + 4} ${y + 7} H${split} L${split + 4} ${y - 1} H${x + 10} Z`} fill="#f4e4ea" />
-      <path d={`M${split} ${y + 7} H${x + w - 3} V${y + 2} H${split + 6} Z`} fill="#a86432" />
-      <path d={`M${x + 8} ${y + 2} H${split - 2}`} stroke="#fff" strokeOpacity="0.55" />
-      {[0.22, 0.55, 0.8].map((t) => (
-        <g key={t}>
-          <rect x={x + w * t} y={y + 9} width="8" height="2.2" rx="1" fill="#e6c878" />
-          <path d={`M${x + w * t + 1} ${y + 8} v2 M${x + w * t + 7} ${y + 8} v2`} stroke="#8a6a28" strokeWidth="0.7" />
-        </g>
-      ))}
-    </g>
-  );
-}
-
-function Spray({ x, y, hue }: { x: number; y: number; hue: string }) {
-  return (
-    <g>
-      <path
-        d={`M${x} ${y + 18} C${x - 6} ${y + 8}, ${x + 4} ${y + 6}, ${x} ${y}`}
-        fill="none"
-        stroke="#2f6b3a"
-        strokeWidth="1.6"
-      />
-      <circle cx={x - 5} cy={y + 2} r="4.2" fill={hue} />
-      <circle cx={x + 4} cy={y - 1} r="3.6" fill={hue} opacity="0.85" />
-      <circle cx={x} cy={y + 6} r="3.2" fill="#f4efe4" />
-    </g>
-  );
-}
-
 function Body({
   vehicleId,
   g,
@@ -223,34 +195,7 @@ function Body({
         </g>
       );
     case 'rec_silent_arrival':
-      return (
-        <g>
-          <path
-            d="M28 122 H70 L98 98 H140 L168 64 H250 Q270 60 286 72 L310 64 H360 Q392 64 398 90 V116 H408 V136 H22 V128 Q22 122 28 122 Z"
-            fill={`url(#${paint})`}
-          />
-          <path
-            d="M250 78 C270 96, 300 70, 332 108"
-            fill="none"
-            stroke="#e4c98a"
-            strokeWidth="2.3"
-          />
-          <path
-            d="M286 74 C304 96, 332 78, 352 112"
-            fill="none"
-            stroke="#e4c98a"
-            strokeWidth="2.3"
-          />
-          <Glass d="M178 70 H230 V104 H154 L170 70 Z" fillId={glass} />
-          <ellipse cx="340" cy="92" rx="14" ry="10" fill="#1a120c" stroke="#e4c98a" />
-          <path d="M330 90 H350 M332 94 H348" stroke="#d8c4a0" strokeWidth="0.7" />
-          <Lamp x={64} y={102} glowId={lamp} />
-          <Lamp x={386} y={96} glowId={lamp} s={0.9} />
-          <rect x="150" y="108" width="36" height="4" fill="#d4b56a" />
-          <Wheel cx={112} cy={134} r={23} whitewall />
-          <Wheel cx={318} cy={134} r={23} whitewall />
-        </g>
-      );
+      return <SilentArrival paint={paint} glass={glass} />;
     case 'esc_civic_lead':
       return (
         <g>
@@ -271,24 +216,9 @@ function Body({
         </g>
       );
     case 'esc_garden_deck':
-      return (
-        <g>
-          <path
-            d="M40 120 H86 L112 98 H150 L176 72 H230 V108 H300 V92 H372 V120 H390 V136 H32 V128 Q32 120 40 120 Z"
-            fill={`url(#${paint})`}
-          />
-          <path d="M230 92 H372 V108 H230 Z" fill="#6b4224" />
-          <path d="M230 92 H372" stroke="#e6c98a" strokeWidth="2" />
-          <path d="M230 108 H372" stroke="#e6c98a" strokeWidth="2" />
-          <Glass d="M168 78 H220 V108 H150 L166 78 Z" fillId={glass} />
-          <Spray x={258} y={62} hue="#f2f2f2" />
-          <Spray x={300} y={54} hue="#d4536a" />
-          <Spray x={342} y={64} hue="#f4e2a8" />
-          <rect x="78" y="108" width="16" height="8" fill="#d9dee4" />
-          <Wheel cx={108} cy={134} r={21} whitewall />
-          <Wheel cx={330} cy={134} r={21} whitewall />
-        </g>
-      );
+      return <IvoryDeck paint={paint} glass={glass} />;
+    case 'flw_forty_one':
+      return <FortyOneBed paint={paint} glass={glass} />;
     case 'esc_procession_twin':
       return (
         <g>
@@ -358,145 +288,32 @@ function Body({
         </g>
       );
     case 'coa_parish_box':
-      return (
-        <g>
-          <path
-            d="M40 124 H86 L108 100 H140 L156 62 H330 Q352 62 360 82 V112 H386 V136 H32 V128 Q32 124 40 124 Z"
-            fill={`url(#${paint})`}
-          />
-          <Glass d="M168 68 H214 V108 H168 Z" fillId={glass} />
-          <Glass d="M222 68 H268 V108 H222 Z" fillId={glass} />
-          <Glass d="M276 68 H322 V108 H276 Z" fillId={glass} />
-          <Casket x={184} y={86} w={120} />
-          <rect x="70" y="108" width="20" height="8" fill="#ddd" />
-          <circle cx="348" cy="100" r="4" fill="#f4e7b0" />
-          <Wheel cx={118} cy={134} r={21} hub="#cfd4da" />
-          <Wheel cx={310} cy={134} r={21} hub="#cfd4da" />
-        </g>
-      );
+      return <PewterParish paint={paint} glass={glass} />;
     case 'coa_iron_landau':
-      return (
-        <g>
-          <path
-            d="M78 124 Q108 124 118 108 L140 108 Q150 86 176 78 H250 Q286 78 300 100 L318 108 Q340 108 356 124"
-            fill="none"
-            stroke="#0c1410"
-            strokeWidth="10"
-          />
-          <path
-            d="M150 108 H300 V124 H150 Z"
-            fill={`url(#${paint})`}
-          />
-          <path
-            d="M168 80 H268 Q286 80 292 98 V112 H160 L168 80 Z"
-            fill={`url(#${paint})`}
-            stroke="#d4b56a"
-            strokeWidth="0.8"
-          />
-          <path
-            d="M188 84 C210 108, 236 82, 262 112"
-            fill="none"
-            stroke="#e6c98a"
-            strokeWidth="2.4"
-          />
-          <path
-            d="M206 84 C224 104, 246 86, 258 110"
-            fill="none"
-            stroke="#e6c98a"
-            strokeWidth="2"
-          />
-          <Glass d="M176 86 H214 V108 H168 L174 86 Z" fillId={glass} />
-          <ellipse cx="118" cy="116" rx="28" ry="12" fill="none" stroke="#0c1410" strokeWidth="6" />
-          <ellipse cx="336" cy="116" rx="30" ry="13" fill="none" stroke="#0c1410" strokeWidth="6" />
-          <Lamp x={132} y={92} glowId={lamp} />
-          <Lamp x={300} y={90} glowId={lamp} s={0.9} />
-          <rect x="188" y="70" width="8" height="10" fill="#8a6a32" />
-          <circle cx="192" cy="68" r="4" fill={`url(#${lamp})`} />
-          <Wheel cx={118} cy={128} r={26} spokes whitewall />
-          <Wheel cx={336} cy={128} r={26} spokes whitewall />
-        </g>
-      );
+      return <DraperEight paint={paint} glass={glass} />;
     case 'coa_glass_formal':
-      return (
-        <g>
-          <path
-            d="M24 118 H64 L92 96 H128 L154 70 H188 V112 H392 Q404 112 406 122 V132 H16 V124 Q16 118 24 118 Z"
-            fill={`url(#${paint})`}
-          />
-          <path d="M154 70 H392 V112 H154 Z" fill="#07080a" />
-          <Glass d="M162 74 H392 V108 H162 Z" fillId={glass} />
-          <path d="M162 74 H392" stroke="#f2f6f8" strokeWidth="1.4" />
-          <path d="M162 108 H392" stroke="#f2f6f8" strokeWidth="1.4" />
-          {[200, 250, 300, 350].map((x) => (
-            <path key={x} d={`M${x} 74 V108`} stroke="#e8eef2" strokeWidth="1.1" />
-          ))}
-          <Casket x={210} y={86} w={150} />
-          <path d="M40 112 H70" stroke="#e8eef2" strokeWidth="2" />
-          <rect x="48" y="100" width="22" height="12" rx="1" fill="#e7edf2" />
-          <Lamp x={36} y={98} glowId={lamp} s={0.8} />
-          <Wheel cx={108} cy={132} r={22} whitewall hub="#e8eef2" />
-          <Wheel cx={348} cy={132} r={22} whitewall hub="#e8eef2" />
-        </g>
-      );
+      return <SilverLandau paint={paint} glass={glass} />;
     case 'coa_state_landaulette':
-      return (
-        <g>
-          <path
-            d="M16 124 H48 L62 100 H92 L108 86 H132 L148 64 H210 Q230 58 248 70 L270 60 H360 Q400 60 408 92 V116 H418 V138 H8 V130 Q8 124 16 124 Z"
-            fill={`url(#${paint})`}
-          />
-          <path d="M148 64 H248 V78 H140 Z" fill="#163028" opacity="0.9" />
-          <path
-            d="M200 70 C230 108, 280 66, 330 116"
-            fill="none"
-            stroke="#e6c98a"
-            strokeWidth="2.5"
-          />
-          <path
-            d="M230 68 C258 104, 300 72, 348 116"
-            fill="none"
-            stroke="#e6c98a"
-            strokeWidth="2.2"
-          />
-          <path
-            d="M258 70 C286 100, 324 78, 362 114"
-            fill="none"
-            stroke="#e6c98a"
-            strokeWidth="2"
-          />
-          <Glass d="M156 72 H196 V108 H140 L152 72 Z" fillId={glass} />
-          <path d="M210 86 H340" stroke="#6b3e22" strokeWidth="8" />
-          <Casket x={214} y={78} w={120} />
-          <path d="M118 86 V78 H128 V70 H136 V86" fill="none" stroke="#d4b56a" strokeWidth="1.4" />
-          <circle cx="132" cy="68" r="3.5" fill={`url(#${lamp})`} />
-          <Lamp x={52} y={96} glowId={lamp} />
-          <Lamp x={168} y={96} glowId={lamp} s={0.8} />
-          <Lamp x={388} y={92} glowId={lamp} />
-          <rect x="70" y="96" width="14" height="22" rx="1" fill="#8a7040" />
-          <path d="M73 100 H81 M73 104 H81 M73 108 H81" stroke="#1a140c" strokeWidth="0.6" />
-          <path d="M20 128 H410" stroke="#d4b56a" strokeWidth="1.2" opacity="0.8" />
-          <Wheel cx={96} cy={132} r={27} spokes whitewall />
-          <Wheel cx={340} cy={132} r={27} spokes whitewall />
-        </g>
-      );
+      return <CrestLandau paint={paint} glass={glass} />;
     default:
       return null;
   }
 }
 
-const PAINT: Record<string, [string, string]> = {
+const PAINT: Record<string, [string, string, string?]> = {
   rec_parish_panel: ['#f4f1ea', '#c8c4b8'],
   rec_night_call: ['#24344a', '#101820'],
   rec_laurel: ['#2a241c', '#0c0c0e'],
-  rec_silent_arrival: ['#1a1c1e', '#050506'],
+  rec_silent_arrival: ['#2a2e32', '#121416', '#07080a'],
   esc_civic_lead: ['#2a2e33', '#101114'],
-  esc_garden_deck: ['#1c1c1e', '#070708'],
+  esc_garden_deck: ['#f7f1e4', '#e4d2ae', '#c4b08a'],
+  flw_forty_one: ['#f6f3ec', '#e4ddd0', '#b7b0a2'],
   esc_procession_twin: ['#161616', '#050505'],
   esc_family_landau: ['#1a1a1c', '#050505'],
-  coa_parish_box: ['#2c2c2e', '#0e0e10'],
-  coa_iron_landau: ['#1a332c', '#071410'],
-  coa_glass_formal: ['#121416', '#050607'],
-  coa_state_landaulette: ['#143028', '#061410'],
+  coa_parish_box: ['#d4c8b6', '#a89884', '#6e655c'],
+  coa_iron_landau: ['#2a2e32', '#121416', '#07080a'],
+  coa_glass_formal: ['#f4f6f8', '#c8ced4', '#8e969e'],
+  coa_state_landaulette: ['#2c3036', '#14161a', '#07080a'],
 };
 
 export const FleetVehicleArt: React.FC<{
@@ -507,7 +324,10 @@ export const FleetVehicleArt: React.FC<{
   // gradient ids make url(#…) resolve to the first <defs> (broken on WebView).
   const instance = React.useId().replace(/[^a-zA-Z0-9]/g, '');
   const g = `${gidOf(vehicleId)}${instance}`;
-  const [hi, lo] = PAINT[vehicleId] ?? ['#222', '#111'];
+  const spec = PAINT[vehicleId] ?? ['#222', '#111'];
+  const hi = spec[0];
+  const mid = spec[1];
+  const shade = spec[2] ?? '#050505';
   return (
     <svg
       viewBox="0 0 420 170"
@@ -518,8 +338,8 @@ export const FleetVehicleArt: React.FC<{
       <defs>
         <linearGradient id={`${g}-paint`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={hi} />
-          <stop offset="55%" stopColor={lo} />
-          <stop offset="100%" stopColor="#050505" />
+          <stop offset="48%" stopColor={mid} />
+          <stop offset="100%" stopColor={shade} />
         </linearGradient>
         <linearGradient id={`${g}-glass`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#e7f6ff" stopOpacity="0.72" />
