@@ -410,10 +410,70 @@ export function FortyOneBed({ paint, glass }: Ids) {
   );
 }
 
-/** Tall removal SUV. Chrome belt, quarter-glass swoosh, vertical tail lamp. */
+function PleatedDrape({
+  x,
+  y,
+  w,
+  h,
+  clipId,
+}: {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  clipId: string;
+}) {
+  const n = Math.max(6, Math.round(w / 6.2));
+  const folds = [];
+  for (let i = 0; i < n; i++) {
+    const x0 = x + (i * w) / n;
+    const x1 = x0 + w / n;
+    const mid = (x0 + x1) / 2;
+    const face = i % 2 === 0;
+    folds.push(
+      <path
+        key={i}
+        d={`M${x0} ${y + 8} Q${mid} ${y + 2} ${x1} ${y + 8} L${x1} ${y + h - 1} L${x0} ${y + h - 1} Z`}
+        fill={face ? '#f3f0e6' : '#8d8474'}
+      />
+    );
+    folds.push(
+      <path
+        key={`e${i}`}
+        d={`M${x1 - 0.55} ${y + 9} L${x1 - 0.55} ${y + h - 1.5}`}
+        stroke={face ? '#5c564c' : '#f7f4ea'}
+        strokeWidth="0.65"
+      />
+    );
+  }
+  return (
+    <g clipPath={`url(#${clipId})`}>
+      <rect x={x - 1} y={y} width={w + 2} height={h} fill="#2a261e" />
+      {folds}
+      <path
+        d={`M${x} ${y + 5} H${x + w}`}
+        stroke="#f6f1e4"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </g>
+  );
+}
+
+/** Tall removal SUV. Chrome belt, quarter-glass landau bar, curtained rear glass. */
 export function SilentArrival({ paint, glass }: Ids) {
+  const clipDoor = `${glass}-door`;
+  const clipQuarter = `${glass}-quarter`;
   return (
     <g>
+      <defs>
+        <clipPath id={clipDoor}>
+          <path d="M212 28 H284 V90 H212 Z" />
+        </clipPath>
+        <clipPath id={clipQuarter}>
+          <path d="M292 28 H348 V76 H292 Z" />
+        </clipPath>
+      </defs>
       <path
         d="M24 114 L38 100 L54 92 H86 L104 58 L122 22 H356 L380 30 L400 54 L408 86 L402 116 H32 Z"
         fill={`url(#${paint})`}
@@ -433,17 +493,19 @@ export function SilentArrival({ paint, glass }: Ids) {
         strokeLinecap="round"
       />
       <Pane d="M132 30 H204 V90 H118 L132 30 Z" glass={glass} />
-      <Pane d="M212 28 H284 V90 H212 Z" glass={glass} />
-      <Pane d="M292 28 H348 V76 H292 Z" glass={glass} />
+      <PleatedDrape x={212} y={28} w={72} h={62} clipId={clipDoor} />
+      <PleatedDrape x={292} y={28} w={56} h={48} clipId={clipQuarter} />
+      <path d="M212 28 H284 V90 H212 Z" fill="rgba(186,206,220,0.22)" stroke="#d7e0e8" strokeWidth="0.9" />
+      <path d="M292 28 H348 V76 H292 Z" fill="rgba(186,206,220,0.2)" stroke="#d7e0e8" strokeWidth="0.9" />
       <path
-        d="M298 38 C328 28 352 30 370 46"
+        d="M300 40 Q320 56 344 42"
         fill="none"
         stroke="#f7f8f8"
-        strokeWidth="1.8"
+        strokeWidth="2"
         strokeLinecap="round"
       />
-      <circle cx="298" cy="38" r="1.9" fill="#f7f8f8" />
-      <circle cx="372" cy="47" r="1.9" fill="#f7f8f8" />
+      <circle cx="300" cy="40" r="2.3" fill="#f7f8f8" stroke="#9aa3ad" strokeWidth="0.45" />
+      <circle cx="344" cy="42" r="2.3" fill="#f7f8f8" stroke="#9aa3ad" strokeWidth="0.45" />
       <path d="M64 96 H396" stroke="#e8eef3" strokeWidth="1.7" />
       <path d="M48 112 H398" stroke="#c5ced6" strokeWidth="2" />
       <path d="M208 46 V110 M288 44 V110" stroke="#121316" strokeWidth="0.8" />
