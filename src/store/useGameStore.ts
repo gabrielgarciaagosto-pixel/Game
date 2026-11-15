@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import {
   directiveLabel,
   displayCaseName,
+  type ArchivedCaseFile,
   type CaseInboxFile,
   type CaseLocation,
   type DecedentCase,
@@ -189,6 +190,8 @@ interface GameState {
   cases: DecedentCase[];
   activeCaseId: string | null;
   inboxFiles: CaseInboxFile[];
+  /** Finished case files. Newest first. Wiped on Reset Game. */
+  archivedCases: ArchivedCaseFile[];
   intakeToast: string | null;
   showroomInventory: ShowroomItem[];
   /** Owned counts keyed by urn catalog id */
@@ -634,6 +637,103 @@ export function toInboxFile(c: DecedentCase): CaseInboxFile {
   };
 }
 
+const ARCHIVE_LIMIT = 40;
+
+function toArchivedCase(
+  c: DecedentCase,
+  file: CaseInboxFile | undefined,
+  outcome: string,
+  payout: number,
+  closedAt = gameNow()
+): ArchivedCaseFile {
+  return {
+    id: c.id,
+    closedAt,
+    decedentName: file?.decedentName ?? displayCaseName(c),
+    weightLbs: c.weightLbs,
+    tissueCondition: c.tissueCondition,
+    directive: c.directive,
+    preferredFlowers: c.preferredFlowers ?? 'LILIES',
+    dateOfBirthMs: c.dateOfBirthMs ?? file?.dateOfBirthMs ?? 0,
+    dateOfDeathMs: c.dateOfDeathMs ?? file?.dateOfDeathMs ?? 0,
+    timeOfDeathHour: c.timeOfDeathHour ?? file?.timeOfDeathHour ?? 0,
+    timeOfDeathMinute: c.timeOfDeathMinute ?? file?.timeOfDeathMinute ?? 0,
+    placeOfBirth: c.placeOfBirth ?? file?.placeOfBirth ?? '',
+    cremationPermitStatus:
+      c.cremationPermitStatus ?? file?.cremationPermitStatus ?? 'NOT_REQUIRED',
+    outcome,
+    payout,
+  };
+}
+
+function rememberClosedCase(
+  archived: ArchivedCaseFile[],
+  record: ArchivedCaseFile
+): ArchivedCaseFile[] {
+  return [record, ...archived.filter((a) => a.id !== record.id)].slice(
+    0,
+    ARCHIVE_LIMIT
+  );
+}
+
+const PERMIT_STATUSES = [
+  'NOT_REQUIRED',
+  'NONE',
+  'PENDING',
+  'APPROVED',
+  'REJECTED',
+] as const;
+
+function normalizeArchives(raw: unknown): ArchivedCaseFile[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ArchivedCaseFile[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const a = item as Partial<ArchivedCaseFile>;
+    if (typeof a.id !== 'string' || typeof a.decedentName !== 'string') continue;
+    const directive = a.directive;
+    if (
+      directive !== 'BURIAL_VIEWING' &&
+      directive !== 'CREMATION_DIRECT' &&
+      directive !== 'VIEWING_THEN_CREMATION' &&
+      directive !== 'CREMATION_THEN_VIEWING'
+    ) {
+      continue;
+    }
+    const permit = PERMIT_STATUSES.includes(
+      a.cremationPermitStatus as (typeof PERMIT_STATUSES)[number]
+    )
+      ? a.cremationPermitStatus!
+      : 'NOT_REQUIRED';
+    out.push({
+      id: a.id,
+      closedAt: typeof a.closedAt === 'number' ? a.closedAt : 0,
+      decedentName: a.decedentName,
+      weightLbs: typeof a.weightLbs === 'number' ? a.weightLbs : 0,
+      tissueCondition:
+        a.tissueCondition === 'DEHYDRATED' || a.tissueCondition === 'EDEMATOUS'
+          ? a.tissueCondition
+          : 'NORMAL',
+      directive,
+      preferredFlowers:
+        a.preferredFlowers === 'ROSES' || a.preferredFlowers === 'WREATH'
+          ? a.preferredFlowers
+          : 'LILIES',
+      dateOfBirthMs: typeof a.dateOfBirthMs === 'number' ? a.dateOfBirthMs : 0,
+      dateOfDeathMs: typeof a.dateOfDeathMs === 'number' ? a.dateOfDeathMs : 0,
+      timeOfDeathHour:
+        typeof a.timeOfDeathHour === 'number' ? a.timeOfDeathHour : 0,
+      timeOfDeathMinute:
+        typeof a.timeOfDeathMinute === 'number' ? a.timeOfDeathMinute : 0,
+      placeOfBirth: typeof a.placeOfBirth === 'string' ? a.placeOfBirth : '',
+      cremationPermitStatus: permit,
+      outcome: typeof a.outcome === 'string' && a.outcome ? a.outcome : 'Closed',
+      payout: typeof a.payout === 'number' ? a.payout : 0,
+    });
+  }
+  return out.slice(0, ARCHIVE_LIMIT);
+}
+
 function syncInboxPermit(
   files: CaseInboxFile[],
   caseId: string,
@@ -850,6 +950,7 @@ export function freshPersistedGameFields() {
     cases: [] as DecedentCase[],
     activeCaseId: null as string | null,
     inboxFiles: [] as CaseInboxFile[],
+    archivedCases: [] as ArchivedCaseFile[],
     showroomInventory: defaultShowroomInventory.map((i) => ({ ...i })),
     urnInventory: {
       urn_carrara_classic: 1,
@@ -2248,12 +2349,17 @@ export const useGameStore = create<GameState>()(
       const settled = settleFinishedChamber(state, active.id);
       const remaining = state.cases.filter((c) => c.id !== active.id);
       const admitted = admitQueuedCase(remaining, settled, gameNow());
+      const file = state.inboxFiles.find((f) => f.id === active.id);
       set({
         cash: state.cash - 2500,
         reputation: Math.max(0, state.reputation - 40),
         legalAlert: `LAWSUIT FILED! ${active.name}'s contract specified Traditional Burial & Viewing Only. You were fined $2,500 for Wrongful Cremation!`,
         cases: admitted.cases,
         inboxFiles: state.inboxFiles.filter((f) => f.id !== active.id),
+        archivedCases: rememberClosedCase(
+          state.archivedCases,
+          toArchivedCase(active, file, 'Wrongful cremation', -2500)
+        ),
         urnInventory: inventory,
         casketInventory: casketInv,
         activeCaseId: admitted.queued?.id ?? remaining[0]?.id ?? null,
@@ -3386,6 +3492,19 @@ export const useGameStore = create<GameState>()(
 
       const { [c.id]: _removedLayout, ...restLayouts } = state.chapelLayouts;
 
+      const serviceLabel =
+        chosenDisposition === 'BURIAL' ? 'Burial service' : 'Cremation service';
+      const file = state.inboxFiles.find((f) => f.id === c.id);
+      const archivedCases = rememberClosedCase(
+        state.archivedCases,
+        toArchivedCase(
+          c,
+          file,
+          serviceFailed ? `Failed — ${serviceLabel}` : serviceLabel,
+          netPayout
+        )
+      );
+
       const honored = prefMatches
         .filter((m) => m.matched)
         .map((m) => `${m.label}: ${m.preferredName}`);
@@ -3449,6 +3568,7 @@ export const useGameStore = create<GameState>()(
           : `Service complete — $${netPayout.toLocaleString()}`,
         cases: remaining,
         inboxFiles: state.inboxFiles.filter((f) => f.id !== c.id),
+        archivedCases,
         urnInventory: inventory,
         casketInventory: casketInv,
         chapelLayouts: restLayouts,
@@ -3577,6 +3697,7 @@ export const useGameStore = create<GameState>()(
         cases: state.cases,
         activeCaseId: state.activeCaseId,
         inboxFiles: state.inboxFiles,
+        archivedCases: state.archivedCases,
         showroomInventory: state.showroomInventory,
         urnInventory: state.urnInventory,
         casketInventory: state.casketInventory,
@@ -3756,6 +3877,7 @@ export const useGameStore = create<GameState>()(
               ? p.intermentScore
               : current.intermentScore ?? 0,
           lastCase: normalizeLastCase(p.lastCase) ?? current.lastCase ?? null,
+          archivedCases: normalizeArchives(p.archivedCases),
           intakeToast:
             fleetRefund > 0
               ? `Silent Arrival left the line. $${fleetRefund.toLocaleString()} returned.`

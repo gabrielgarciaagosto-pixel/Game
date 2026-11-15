@@ -278,6 +278,27 @@ export interface CaseInboxFile {
   headlineNote?: string | null;
 }
 
+/** A case file that has left the active inbox because the case was closed. */
+export interface ArchivedCaseFile {
+  id: string;
+  closedAt: number;
+  decedentName: string;
+  weightLbs: number;
+  tissueCondition: TissueCondition;
+  directive: DispositionDirective;
+  preferredFlowers: 'LILIES' | 'ROSES' | 'WREATH';
+  dateOfBirthMs: number;
+  dateOfDeathMs: number;
+  timeOfDeathHour: number;
+  timeOfDeathMinute: number;
+  placeOfBirth: string;
+  cremationPermitStatus: CaseInboxFile['cremationPermitStatus'];
+  /** Plain outcome, such as Cremation service or Wrongful cremation. */
+  outcome: string;
+  /** Net cash posted when the case closed. Negative when the house was fined. */
+  payout: number;
+}
+
 export interface ShowroomItem {
   id: string;
   name: string;

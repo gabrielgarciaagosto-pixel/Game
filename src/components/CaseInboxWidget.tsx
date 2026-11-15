@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import {
   caseStatusLabel,
   directiveBlurb,
   directiveLabel,
   friendlyToken,
+  type ArchivedCaseFile,
 } from '../types/game';
 import {
   formatTod,
@@ -22,6 +23,14 @@ import { audioManager } from '../utils/audioManager';
 import { DEV_TOOLS } from '../dev';
 import { UrnVessel } from './urns/UrnVessel';
 
+const FILE_FAB_CLASS =
+  'bg-amber-500 active:bg-amber-400 text-slate-950 font-extrabold px-3.5 py-3 rounded-xl shadow-2xl flex items-center gap-2 border-2 border-amber-200 text-sm min-h-12';
+
+function moneyLabel(amount: number): string {
+  const abs = Math.abs(Math.round(amount)).toLocaleString();
+  return amount < 0 ? `−$${abs}` : `$${abs}`;
+}
+
 function startOfDay(ms: number): number {
   const d = new Date(ms);
   d.setHours(0, 0, 0, 0);
@@ -35,20 +44,34 @@ function addDays(ms: number, days: number): number {
 export const CaseInboxWidget: React.FC = () => {
   const {
     inboxFiles,
+    archivedCases,
     markFileRead,
     setServiceDate,
     cases,
     finalizeServiceAndNextCase,
   } = useGameStore();
   const [isOpen, setIsOpen] = useState(false);
+  const [archivesOpen, setArchivesOpen] = useState(false);
+  const [selectedArchiveId, setSelectedArchiveId] = useState<string | null>(
+    null
+  );
+  const archivesOpenRef = useRef(false);
+  archivesOpenRef.current = archivesOpen;
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [pickupOpen, setPickupOpen] = useState(false);
   const [pickHour, setPickHour] = useState(14);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      setArchivesOpen(false);
+      return;
+    }
     const close = () => {
+      if (archivesOpenRef.current) {
+        setArchivesOpen(false);
+        return;
+      }
       setIsOpen(false);
       setPickupOpen(false);
       setCalendarOpen(false);
@@ -105,26 +128,47 @@ export const CaseInboxWidget: React.FC = () => {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => {
-          audioManager.playUiClick('tick');
-          setIsOpen(!isOpen);
-        }}
+      <div
+        className="fixed z-[52] flex items-end gap-2"
         style={{
           bottom: 'var(--files-fab-bottom)',
           right: 'var(--safe-right)',
-          touchAction: 'manipulation',
         }}
-        className="fixed z-50 bg-amber-500 active:bg-amber-400 text-slate-950 font-extrabold px-3.5 py-3 rounded-xl shadow-2xl flex items-center gap-2 border-2 border-amber-200 text-sm min-h-12"
       >
-        <span>FILES</span>
-        {unreadCount > 0 && (
-          <span className="bg-red-600 text-white text-xs px-2 py-0.5 rounded-full animate-pulse">
-            {unreadCount} NEW
-          </span>
+        {isOpen && (
+          <button
+            type="button"
+            aria-label="Archives"
+            onClick={() => {
+              audioManager.playUiClick('tick');
+              setArchivesOpen((open) => !open);
+            }}
+            style={{ touchAction: 'manipulation' }}
+            className={FILE_FAB_CLASS}
+          >
+            ARCHIVES
+          </button>
         )}
-      </button>
+        <button
+          type="button"
+          onClick={() => {
+            audioManager.playUiClick('tick');
+            setIsOpen((open) => {
+              if (open) setArchivesOpen(false);
+              return !open;
+            });
+          }}
+          style={{ touchAction: 'manipulation' }}
+          className={FILE_FAB_CLASS}
+        >
+          <span>FILES</span>
+          {unreadCount > 0 && (
+            <span className="bg-red-600 text-white text-xs px-2 py-0.5 rounded-full animate-pulse">
+              {unreadCount} NEW
+            </span>
+          )}
+        </button>
+      </div>
 
       {isOpen && (
         <div
@@ -543,6 +587,172 @@ export const CaseInboxWidget: React.FC = () => {
           </div>
         </div>
       )}
+
+      {isOpen && archivesOpen && (
+        <ArchivesPanel
+          records={archivedCases}
+          selectedId={selectedArchiveId}
+          onSelect={setSelectedArchiveId}
+          onClose={() => setArchivesOpen(false)}
+        />
+      )}
     </>
   );
 };
+
+function ArchivesPanel({
+  records,
+  selectedId,
+  onSelect,
+  onClose,
+}: {
+  records: ArchivedCaseFile[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onClose: () => void;
+}) {
+  const active = records.find((r) => r.id === selectedId) || records[0];
+  return (
+    <div
+      style={{
+        bottom: 'var(--files-panel-bottom)',
+        left: 'var(--safe-left)',
+        right: 'var(--safe-right)',
+      }}
+      className="fixed z-[51] h-[min(62vh,26rem)] bg-slate-900 border-2 border-amber-500/60 rounded-2xl shadow-2xl flex overflow-hidden text-slate-100 select-none"
+    >
+      <div className="w-[38%] max-w-[9.5rem] border-r border-slate-800 overflow-y-auto bg-slate-950/60">
+        <div className="p-2 border-b border-slate-800 text-xs font-bold uppercase tracking-wider text-slate-400">
+          Closed cases
+        </div>
+        {records.length === 0 && (
+          <p className="p-3 text-xs text-slate-500">No closed cases yet</p>
+        )}
+        {records.map((file) => (
+          <button
+            key={file.id}
+            type="button"
+            onClick={() => onSelect(file.id)}
+            style={{ touchAction: 'manipulation' }}
+            className={`w-full text-left p-2.5 border-b border-slate-800/80 text-xs ${
+              active?.id === file.id ? 'bg-slate-800' : ''
+            }`}
+          >
+            <div className="font-bold text-amber-300 truncate">
+              {file.decedentName}
+            </div>
+            <div className="text-[10px] text-slate-400 truncate">
+              {moneyLabel(file.payout)}
+            </div>
+          </button>
+        ))}
+      </div>
+      <div className="flex-1 p-4 flex flex-col text-xs overflow-y-auto">
+        <div className="flex justify-between items-start border-b border-slate-800 pb-2">
+          <h3 className="text-sm font-bold text-white">ARCHIVES</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ touchAction: 'manipulation' }}
+            className="text-slate-400 active:text-white font-bold px-2"
+          >
+            ✕
+          </button>
+        </div>
+        {active ? (
+          <div className="mt-3 space-y-2">
+            <div>
+              <div className="text-sm font-bold text-white">
+                CASE FILE: {active.decedentName}
+              </div>
+              <div className="text-[11px] text-slate-400">
+                Case ID #{active.id} · closed{' '}
+                {new Date(active.closedAt).toLocaleString()}
+              </div>
+            </div>
+            <p>
+              <span className="text-slate-400">Directive:</span>{' '}
+              <strong className="text-amber-300">
+                {directiveLabel(active.directive)}
+              </strong>
+              <span className="block text-[10px] text-slate-500 mt-0.5 leading-snug">
+                {directiveBlurb(active.directive)}
+              </span>
+            </p>
+            <p>
+              <span className="text-slate-400">Outcome:</span>{' '}
+              <strong className="text-white">{active.outcome}</strong>
+            </p>
+            <p>
+              <span className="text-slate-400">Payout:</span>{' '}
+              <strong className="text-white">{moneyLabel(active.payout)}</strong>
+            </p>
+            <p>
+              <span className="text-slate-400">Weight & Tissue:</span>{' '}
+              <strong className="text-white">
+                {active.weightLbs} lbs ({friendlyToken(active.tissueCondition)})
+              </strong>
+            </p>
+            <p>
+              <span className="text-slate-400">Flower Arrangement:</span>{' '}
+              <strong className="text-white">
+                {friendlyToken(active.preferredFlowers)}
+              </strong>
+            </p>
+            <div className="paper-sheet p-2.5 rounded-lg border border-stone-400 space-y-1.5">
+              <div className="text-[10px] uppercase tracking-wider">
+                Vital records
+              </div>
+              <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px]">
+                <div>
+                  <span>DOB</span>
+                  <div className="font-mono">
+                    {active.dateOfBirthMs
+                      ? formatVitalsDob(active)
+                      : '—'}
+                  </div>
+                </div>
+                <div>
+                  <span>DOD</span>
+                  <div className="font-mono">
+                    {active.dateOfDeathMs
+                      ? formatVitalsDod(active)
+                      : '—'}
+                  </div>
+                </div>
+                <div>
+                  <span>TOD</span>
+                  <div className="font-mono">
+                    {(() => {
+                      const colon = formatTod(
+                        active.timeOfDeathHour,
+                        active.timeOfDeathMinute
+                      );
+                      return `${colon.replace(':', '')} · ${colon}`;
+                    })()}
+                  </div>
+                </div>
+                <div>
+                  <span>Place of birth</span>
+                  <div className="leading-snug">{active.placeOfBirth || '—'}</div>
+                </div>
+              </div>
+              {active.cremationPermitStatus !== 'NOT_REQUIRED' && (
+                <div className="pt-1 border-t border-stone-400/70 text-[11px]">
+                  <span>Cremation permit: </span>
+                  <strong className="case-permit-ink">
+                    {permitStatusLabel(active.cremationPermitStatus)}
+                  </strong>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <p className="text-slate-500 m-auto">
+            Finished case files land here.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
