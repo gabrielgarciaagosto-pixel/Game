@@ -102,8 +102,10 @@ function fireBurst(root: HTMLElement, x: number, y: number, color: string, now: 
 
 /**
  * Hub wash behind the room buttons. Reads live case, retort, inbox, and debt
- * state. Spirits and room glows wander the screen. A clash tints both for a
- * moment, then they keep moving in their own colors. Nothing here receives taps.
+ * state. Room glows, fumes, and dust stay in their pre-v0.9.24 places.
+ * Only spirits roam, and only once three cases are in the house. A clash
+ * tints those spirits for a moment, then they keep moving. Nothing here
+ * receives taps.
  */
 export const HubAtmosphere: React.FC = () => {
   const cases = useGameStore((s) => s.cases);
@@ -148,7 +150,7 @@ export const HubAtmosphere: React.FC = () => {
       const dt = Math.min(0.034, (now - last) / 1000);
       last = now;
 
-      const els = [...root.querySelectorAll<HTMLElement>('[data-roam]')];
+      const els = [...root.querySelectorAll<HTMLElement>('.hub-spirit[data-roam]')];
       const seen = new Set<string>();
       for (const el of els) {
         const id = el.dataset.roam;
@@ -319,94 +321,43 @@ export const HubAtmosphere: React.FC = () => {
       aria-hidden
     >
       {crematoryOn && (
-        <div
-          className="hub-atmo-flame hub-roam"
-          data-roam="flame"
-          data-r="62"
-          data-hue="28"
-          data-w="200"
-          data-h="148"
-        >
+        <div className="hub-atmo-flame">
           <span />
           <span />
           <span />
-          <span className="hub-clash-tint" />
         </div>
       )}
       {fumes && (
-        <div
-          className="hub-atmo-fume hub-roam"
-          data-roam="fume"
-          data-r="64"
-          data-hue="158"
-          data-w="210"
-          data-h="150"
-        >
+        <div className="hub-atmo-fume">
           <span />
           <span />
           <span />
-          <span className="hub-clash-tint" />
         </div>
       )}
       {coolerOn && (
-        <div
-          className="hub-atmo-frost hub-roam"
-          data-roam="frost"
-          data-r="52"
-          data-hue="198"
-          data-w="168"
-          data-h="124"
-        >
+        <div className="hub-atmo-frost">
           <span />
           <span />
           <span />
           <span />
-          <span className="hub-clash-tint" />
         </div>
       )}
-      {urnOn &&
-        [0, 1, 2].map((i) => (
-          <div
-            key={i}
-            className="hub-dust-mote hub-roam"
-            data-roam={`dust-${i}`}
-            data-r="18"
-            data-hue={36 + i * 8}
-            data-w="22"
-            data-h="22"
-          >
-            <span className="hub-clash-tint" />
-          </div>
-        ))}
+      {urnOn && (
+        <div className="hub-atmo-dust">
+          {Array.from({ length: 6 }, (_, i) => (
+            <span key={i} style={{ ['--i' as string]: i }} />
+          ))}
+        </div>
+      )}
       {chapelOn && (
-        <div
-          className="hub-atmo-chapel hub-roam"
-          data-roam="chapel"
-          data-r="54"
-          data-hue="44"
-          data-w="176"
-          data-h="132"
-        >
+        <div className="hub-atmo-chapel">
           <span className="hub-candle" />
           <span className="hub-candle hub-candle-b" />
           <span className="hub-petal" />
           <span className="hub-petal hub-petal-b" />
-          <span className="hub-clash-tint" />
         </div>
       )}
       {computerUnread && <div className="hub-atmo-crt" />}
-      {computerUnread && (
-        <div
-          className="hub-crt-mote hub-roam"
-          data-roam="crt"
-          data-r="34"
-          data-hue="152"
-          data-w="86"
-          data-h="86"
-        >
-          <span className="hub-clash-tint" />
-        </div>
-      )}
       {debtWarn && <div className="hub-atmo-debt" />}
       {spirits.map((s) => (
         <div

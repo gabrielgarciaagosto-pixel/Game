@@ -683,7 +683,7 @@ canvas {
   animation: hub-flicker 3.4s ease-in-out infinite;
 }
 
-.hub-roam {
+.hub-spirit.hub-roam {
   position: absolute;
   left: 0;
   top: 0;
@@ -691,44 +691,7 @@ canvas {
   pointer-events: none;
   will-change: transform;
 }
-.hub-atmo .hub-roam.hub-atmo-flame {
-  left: 0;
-  top: 0;
-  width: 200px;
-  height: 148px;
-}
-.hub-atmo .hub-roam.hub-atmo-fume {
-  left: 0;
-  top: 0;
-  width: 210px;
-  height: 150px;
-}
-.hub-atmo .hub-roam.hub-atmo-frost {
-  left: 0;
-  top: 0;
-  width: 168px;
-  height: 124px;
-}
-.hub-atmo .hub-roam.hub-atmo-chapel {
-  left: 0;
-  top: 0;
-  width: 176px;
-  height: 132px;
-}
-.hub-dust-mote {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(231, 229, 228, 0.85), rgba(214, 211, 209, 0.2) 55%, transparent 72%);
-}
-.hub-crt-mote {
-  width: 86px;
-  height: 86px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(110, 231, 183, 0.55), rgba(52, 211, 153, 0.16) 55%, transparent 72%);
-  box-shadow: 0 0 18px rgba(52, 211, 153, 0.28);
-}
-.hub-roam > .hub-clash-tint {
+.hub-spirit.hub-roam > .hub-clash-tint {
   position: absolute;
   inset: -20%;
   width: auto;
