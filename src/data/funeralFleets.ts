@@ -560,8 +560,8 @@ export function fleetBonusLine(v: FleetVehicle): string {
   const parts = [`Interment +${v.interment}`];
   if (v.serviceRep) parts.push(`Family +${v.serviceRep}`);
   if (v.memorialRep) parts.push(`Memorial +${v.memorialRep}`);
-  if (v.upkeepSaved) parts.push(`Upkeep $${v.upkeepSaved} kept`);
-  if (v.houseTip) parts.push(`Tip +$${v.houseTip}`);
+  if (v.upkeepSaved) parts.push(`Saves $${v.upkeepSaved} upkeep`);
+  if (v.houseTip) parts.push(`Adds $${v.houseTip} tip`);
   return parts.join(' · ');
 }
 
@@ -571,21 +571,21 @@ export function coachPerkNote(v: FleetVehicle): string | null {
   const bits: string[] = [];
   if (v.serviceRep) {
     bits.push(
-      `Family satisfaction +${v.serviceRep} reputation on every successful service.`
+      `Adds ${v.serviceRep} family reputation on every successful service.`
     );
   }
   if (v.memorialRep) {
     bits.push(
-      `Memorial prestige +${v.memorialRep} reputation when the service includes a viewing or burial.`
+      `Adds ${v.memorialRep} reputation on a viewing or burial.`
     );
   }
   if (v.upkeepSaved) {
     bits.push(
-      `Cheaper upkeep returns $${v.upkeepSaved} on a successful service.`
+      `Saves $${v.upkeepSaved} upkeep on a successful service.`
     );
   }
   if (v.houseTip) {
-    bits.push(`A plainly kept coach. Families add $${v.houseTip} to the tip.`);
+    bits.push(`Adds $${v.houseTip} to the house tip.`);
   }
   return bits.length ? bits.join(' ') : null;
 }
