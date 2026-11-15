@@ -31,6 +31,10 @@ export const DEFAULT_FAMILY_CHAPEL_PREFS: FamilyChapelPreferences = {
 const SERVICE_MUSIC_OPTIONS = [
   { id: 'chapel-service-1', label: 'Chapel Service I' },
   { id: 'chapel-service-2', label: 'Chapel Service II' },
+  { id: 'chapel-service-3', label: 'Chapel Service III' },
+  { id: 'chapel-service-4', label: 'Chapel Service IV' },
+  { id: 'chapel-service-5', label: 'Chapel Service V' },
+  { id: 'chapel-service-6', label: 'Chapel Service VI' },
 ] as const;
 
 export function serviceMusicOptions(): ReadonlyArray<{

@@ -38,6 +38,16 @@ const DEFAULT_MANIFEST: MenuPlaylistManifest = {
       file: '/audio/menu/menu-music-2.m4a',
       title: 'Main Menu II',
     },
+    {
+      id: 'menu-music-3',
+      file: '/audio/menu/menu-music-3.m4a',
+      title: 'Main Menu III',
+    },
+    {
+      id: 'menu-music-4',
+      file: '/audio/menu/menu-music-4.m4a',
+      title: 'Main Menu IV',
+    },
   ],
 };
 

@@ -14,6 +14,8 @@ Drop title-screen and hub menu beds here. The game loads `manifest.json` on the 
 | --- | --- |
 | `menu-music-1.m4a` | AAC LC ~256 kbps stereo — Main Menu I (~3:34) |
 | `menu-music-2.m4a` | AAC LC ~256 kbps stereo — Main Menu II (~3:59) |
+| `menu-music-3.m4a` | AAC LC ~256 kbps stereo — Main Menu III (~3:45) |
+| `menu-music-4.m4a` | AAC LC ~256 kbps stereo — Main Menu IV (~2:58) |
 
 Sources arrived as Opus-in-m4a and were re-encoded to AAC LC for Capacitor WebView.
 

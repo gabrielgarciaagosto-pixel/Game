@@ -38,6 +38,26 @@ const DEFAULT_MANIFEST: ServicePlaylistManifest = {
       file: '/audio/services/chapel-service-2.m4a',
       title: 'Chapel Service II',
     },
+    {
+      id: 'chapel-service-3',
+      file: '/audio/services/chapel-service-3.m4a',
+      title: 'Chapel Service III',
+    },
+    {
+      id: 'chapel-service-4',
+      file: '/audio/services/chapel-service-4.m4a',
+      title: 'Chapel Service IV',
+    },
+    {
+      id: 'chapel-service-5',
+      file: '/audio/services/chapel-service-5.m4a',
+      title: 'Chapel Service V',
+    },
+    {
+      id: 'chapel-service-6',
+      file: '/audio/services/chapel-service-6.m4a',
+      title: 'Chapel Service VI',
+    },
   ],
 };
 
