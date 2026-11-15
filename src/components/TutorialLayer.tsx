@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { resolvePlayerName } from '../data/playerName';
 import {
   bellSide,
@@ -113,9 +113,24 @@ function screenObstacles(): BellObstacle[] {
   return out;
 }
 
-function placeBell(saved: BellPoint | null, bounds: BellBounds): BellPoint {
+function placeBell(
+  saved: BellPoint | null,
+  bounds: BellBounds,
+  obstacles: BellObstacle[]
+): BellPoint {
   const seed = saved ?? defaultTutorialBell(bounds);
-  return snapTutorialBell(seed, bounds, screenObstacles());
+  return snapTutorialBell(seed, bounds, obstacles);
+}
+
+function sameObstacles(a: BellObstacle[], b: BellObstacle[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every(
+    (item, i) =>
+      item.x === b[i].x &&
+      item.y === b[i].y &&
+      item.w === b[i].w &&
+      item.h === b[i].h
+  );
 }
 
 export const TutorialLayer: React.FC = () => {
@@ -126,6 +141,7 @@ export const TutorialLayer: React.FC = () => {
   const playerName = useGameStore((s) => s.playerName);
   const filesPanelOpen = useGameStore((s) => s.filesPanelOpen);
   const archivesPanelOpen = useGameStore((s) => s.archivesPanelOpen);
+  const settingsOpen = useGameStore((s) => s.settingsOpen);
   const tutorialFileRead = useGameStore((s) => s.tutorialFileRead);
   const activeStation = useGameStore((s) => s.activeStation);
   const computerOpenApp = useGameStore((s) => s.computerOpenApp);
@@ -144,6 +160,7 @@ export const TutorialLayer: React.FC = () => {
   const [bounds, setBounds] = useState<BellBounds | null>(() =>
     typeof document === 'undefined' ? null : readBounds()
   );
+  const [obstacles, setObstacles] = useState<BellObstacle[]>([]);
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -183,6 +200,22 @@ export const TutorialLayer: React.FC = () => {
   useEffect(() => {
     setHintOpen(true);
   }, [tutorialStep, tutorial]);
+
+  useLayoutEffect(() => {
+    if (tutorial !== 'active') return;
+    const next = screenObstacles();
+    setObstacles((prev) => (sameObstacles(prev, next) ? prev : next));
+  }, [
+    tutorial,
+    tutorialStep,
+    activeStation,
+    filesPanelOpen,
+    archivesPanelOpen,
+    settingsOpen,
+    computerOpenApp,
+    bounds,
+    hintOpen,
+  ]);
 
   useEffect(() => {
     const measure = () => setBounds(readBounds());
@@ -238,7 +271,7 @@ export const TutorialLayer: React.FC = () => {
 
   if (tutorial !== 'active' || !step || !bounds) return null;
 
-  const resting = placeBell(tutorialBell, bounds);
+  const resting = placeBell(tutorialBell, bounds, obstacles);
   const pos = dragPos ?? resting;
   const side = bellSide(pos, bounds.width);
   const roomBelow = bounds.height - (pos.y + TUTORIAL_BELL_SIZE);
@@ -356,23 +389,23 @@ export const TutorialLayer: React.FC = () => {
         </span>
       </button>
       {!dragPos && hintOpen && (
-        <div className="pointer-events-auto w-full rounded-xl border border-amber-600/50 bg-zinc-950/95 px-3 py-2 text-[12px] leading-snug text-amber-50 shadow-xl">
+        <div className="pointer-events-none w-full rounded-xl border border-amber-600/50 bg-zinc-950/95 px-3 py-2 text-[12px] leading-snug text-amber-50 shadow-xl">
           {step.hint(name)}
         </div>
       )}
       {!dragPos && (
-        <div className="pointer-events-auto flex gap-1.5">
+        <div className="pointer-events-none flex gap-1.5">
           <button
             type="button"
             onClick={() => skipTutorialStep()}
-            className="rounded-full border border-amber-500/40 bg-zinc-950/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-100"
+            className="pointer-events-auto rounded-full border border-amber-500/40 bg-zinc-950/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-100"
           >
             Skip step
           </button>
           <button
             type="button"
             onClick={() => skipTutorial()}
-            className="rounded-full border border-stone-500/50 bg-zinc-950/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-stone-200"
+            className="pointer-events-auto rounded-full border border-stone-500/50 bg-zinc-950/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-stone-200"
           >
             Skip tutorial
           </button>
