@@ -277,17 +277,7 @@ export const CaseInboxWidget: React.FC = () => {
                       activeFile.cremationPermitStatus !== 'NOT_REQUIRED' && (
                         <div className="pt-1 border-t border-slate-800 text-[11px]">
                           <span className="text-slate-500">Cremation permit: </span>
-                          <strong
-                            className={
-                              activeFile.cremationPermitStatus === 'APPROVED'
-                                ? 'text-emerald-300'
-                                : activeFile.cremationPermitStatus === 'REJECTED'
-                                  ? 'text-red-300'
-                                  : activeFile.cremationPermitStatus === 'PENDING'
-                                    ? 'text-amber-300'
-                                    : 'text-slate-200'
-                            }
-                          >
+                          <strong className="case-permit-ink">
                             {permitStatusLabel(activeFile.cremationPermitStatus)}
                           </strong>
                           {activeFile.cremationPermitRejectReason && (

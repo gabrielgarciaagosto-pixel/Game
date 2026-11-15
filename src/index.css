@@ -889,14 +889,11 @@ canvas {
   color: #2a2118;
   border-color: #c4b49a;
 }
-/* Dark fee chips and permit status sit inside the sheet. Their own color
-   has to beat the brown ink rule above. */
+/* Dark fee chips sit inside the sheet. Their own color has to beat the
+   brown ink rule above. The case-file permit status is plain black ink. */
 .paper-sheet .bg-amber-950\/50.text-amber-100 { color: #fef3c7; }
 .paper-sheet .bg-red-950\/50.text-red-200 { color: #fecaca; }
-.paper-sheet strong.text-emerald-300 { color: #6ee7b7; }
-.paper-sheet strong.text-red-300 { color: #fca5a5; }
-.paper-sheet strong.text-amber-300 { color: #fcd34d; }
-.paper-sheet strong.text-slate-200 { color: #e2e8f0; }
+.paper-sheet strong.case-permit-ink { color: #111111; }
 .paper-sheet p.text-red-300\/90 { color: rgb(252 165 165 / 0.9); }
 
 .bone-hit {
