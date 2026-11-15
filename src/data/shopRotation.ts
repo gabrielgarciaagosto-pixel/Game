@@ -22,6 +22,7 @@ export type RareTone = 'LIGHT' | 'DARK';
  * grace lets a purchase finish if the player is mid-checkout.
  */
 import { VARIETY_ALWAYS, VARIETY_RARES } from './casketVariety';
+import { MODERN_URN_RARES } from './urnVariety';
 
 export const RARE_DURATION_HOURS = 2;
 export const RARE_GRACE_MINUTES = 15;
@@ -185,6 +186,16 @@ export const RARE_SCHEDULE: RareScheduleEntry[] = [
   ...VARIETY_RARES.map((rare) => ({
     id: rare.id,
     kind: 'casket' as const,
+    rarity: rare.rarity,
+    tone: rare.tone,
+    startHour: rare.startHour,
+    endHour: endHourAfter(rare.startHour),
+    stock: rare.stock,
+    hint: rare.hint,
+  })),
+  ...MODERN_URN_RARES.map((rare) => ({
+    id: rare.id,
+    kind: 'urn' as const,
     rarity: rare.rarity,
     tone: rare.tone,
     startHour: rare.startHour,

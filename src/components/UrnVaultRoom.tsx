@@ -1,9 +1,53 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { useTapAction } from '../hooks/useTapAction';
 import { CaseTransferBar } from './CaseTransferBar';
 import { displayCaseName, friendlyToken } from '../types/game';
 import { useGameStore } from '../store/useGameStore';
-import { URN_CATALOG } from '../data/urnCatalog';
+import { URN_CATALOG, getUrnById } from '../data/urnCatalog';
 import { UrnVessel } from './urns/UrnVessel';
+import {
+  URN_SETS,
+  beautifyTarget,
+  urnSetProgress,
+  type BeautifyStep,
+} from '../data/urnVariety';
+
+function BeautifyButton({
+  label,
+  detail,
+  can,
+  onPress,
+}: {
+  label: string;
+  detail: string;
+  can: boolean;
+  onPress: () => void;
+}) {
+  const tap = useTapAction(() => {
+    if (can) onPress();
+  });
+  return (
+    <button
+      type="button"
+      disabled={!can}
+      {...tap}
+      className={`w-full rounded-lg px-2 py-1.5 text-left ${
+        can ? 'bg-amber-700/80 active:bg-amber-600' : 'bg-stone-800 text-stone-500'
+      }`}
+    >
+      <div className="text-[11px] font-bold">
+        {label}
+      </div>
+      <div className="text-[9px] opacity-80 truncate">{detail}</div>
+    </button>
+  );
+}
+
+const BENCH: Array<{ step: BeautifyStep; label: string }> = [
+  { step: 'band', label: 'Add band' },
+  { step: 'finish', label: 'Change finish' },
+  { step: 'engrave', label: 'Engrave' },
+];
 
 export const UrnVaultRoom: React.FC = () => {
   const {
@@ -14,10 +58,15 @@ export const UrnVaultRoom: React.FC = () => {
     moveCaseTo,
     urnInventory,
     vaultCapacity,
+    cash,
+    beautifyUrn,
   } = useGameStore();
   const vault = cases.filter((c) => c.location === 'URN_VAULT');
   const selected = vault.find((c) => c.id === activeCaseId) ?? null;
   const collection = URN_CATALOG.filter((u) => (urnInventory[u.id] ?? 0) > 0);
+  const craftable = collection.filter((u) => beautifyTarget(u.id, 'band'));
+  const [benchId, setBenchId] = useState<string | null>(null);
+  const bench = craftable.find((u) => u.id === benchId) ?? craftable[0] ?? null;
   const niches = vaultCapacity();
 
   return (
@@ -54,6 +103,91 @@ export const UrnVaultRoom: React.FC = () => {
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto space-y-4 py-3">
+        <section>
+          <h3 className="text-[10px] font-black tracking-[0.2em] text-amber-300 mb-2 px-1">
+            BEAUTIFY
+          </h3>
+          {!bench ? (
+            <p className="text-stone-600 text-sm px-1">
+              Own a modern vessel, then add a band, change the finish, or engrave it here.
+            </p>
+          ) : (
+            <div className="rounded-2xl border border-amber-900/50 bg-stone-900/80 p-2">
+              {craftable.length > 1 && (
+                <div className="flex gap-1 overflow-x-auto pb-2">
+                  {craftable.map((urn) => (
+                    <button
+                      key={urn.id}
+                      type="button"
+                      onPointerDown={() => setBenchId(urn.id)}
+                      className={`shrink-0 px-2 py-1 rounded text-[10px] font-semibold ${
+                        bench.id === urn.id
+                          ? 'bg-amber-500 text-stone-950'
+                          : 'bg-stone-800 text-stone-300'
+                      }`}
+                    >
+                      {urn.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2 items-center">
+                <UrnVessel urn={bench} size="sm" showPlaque={false} />
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="text-[12px] font-bold text-amber-100 leading-tight">
+                    {bench.name}
+                  </div>
+                  <div className="text-[9px] text-stone-400">
+                    {bench.modular ? friendlyToken(bench.modular.body) : friendlyToken(bench.material)}
+                    {' · '}
+                    {bench.finish}
+                  </div>
+                  {BENCH.map(({ step, label }) => {
+                    const recipe = beautifyTarget(bench.id, step);
+                    const result = recipe ? getUrnById(recipe.resultId) : null;
+                    const can = !!recipe && cash >= (recipe?.cost ?? 0);
+                    return (
+                      <BeautifyButton
+                        key={step}
+                        label={`${label} · $${recipe?.cost ?? 0}`}
+                        detail={result?.name ?? ''}
+                        can={can}
+                        onPress={() => beautifyUrn(bench.id, step)}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section>
+          <h3 className="text-[10px] font-black tracking-[0.2em] text-amber-300 mb-2 px-1">
+            SETS
+          </h3>
+          <div className="space-y-2">
+            {URN_SETS.map((set) => {
+              const progress = urnSetProgress(set, urnInventory);
+              const pct = progress.total === 0 ? 0 : (progress.owned / progress.total) * 100;
+              return (
+                <div key={set.id} className="rounded-xl border border-stone-800 bg-stone-900/70 px-2 py-1.5">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <div className="text-[12px] font-bold text-amber-100">{set.name}</div>
+                    <div className="text-[10px] font-mono text-stone-400">
+                      {progress.owned}/{progress.total}
+                    </div>
+                  </div>
+                  <p className="text-[9px] text-stone-500">{set.blurb}</p>
+                  <div className="mt-1 h-1.5 rounded-full bg-stone-800 overflow-hidden">
+                    <div className="h-full bg-amber-400" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
         <section>
           <h3 className="text-[10px] font-black tracking-[0.2em] text-stone-400 mb-2 px-1">
             SEALED CASES
@@ -123,7 +257,10 @@ export const UrnVaultRoom: React.FC = () => {
                       {urn.name}
                     </div>
                     <div className="text-[9px] text-stone-400">
-                      {friendlyToken(urn.material)} · Own {urnInventory[urn.id] ?? 0}
+                      {urn.modular
+                        ? `${friendlyToken(urn.modular.body)} · ${urn.finish}`
+                        : friendlyToken(urn.material)}
+                      {' · '}Own {urnInventory[urn.id] ?? 0}
                     </div>
                   </div>
                 </div>

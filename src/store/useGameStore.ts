@@ -50,6 +50,7 @@ import {
 } from '../tutorial/steps';
 import { getCremationTargets } from '../utils/mortuaryMath';
 import { getUrnById, URN_MATERIALS } from '../data/urnCatalog';
+import { beautifyTarget, type BeautifyStep } from '../data/urnVariety';
 import {
   CASKET_MATERIALS,
   getCasketById,
@@ -433,6 +434,8 @@ interface GameState {
   storeUrnInVault: (caseId: string) => void;
   buyShowroomItem: (itemId: string) => void;
   buyUrn: (urnId: string) => boolean;
+  /** Turn one owned vessel into a banded, refinished, or engraved form. */
+  beautifyUrn: (urnId: string, step: BeautifyStep) => boolean;
   buyCasket: (casketId: string) => boolean;
   buyChapelDecor: (decorId: string) => boolean;
   buyFacilityUpgrade: (id: FacilityUpgradeId) => {
@@ -2768,6 +2771,24 @@ export const useGameStore = create<GameState>()(
         [urnId]: (state.urnInventory[urnId] ?? 0) + 1,
       },
       shopRotation,
+    });
+    return true;
+  },
+
+  beautifyUrn: (urnId, step) => {
+    const recipe = beautifyTarget(urnId, step);
+    const state = get();
+    if (!recipe) return false;
+    if ((state.urnInventory[urnId] ?? 0) < 1) return false;
+    if (state.cash < recipe.cost) return false;
+    const inventory = { ...state.urnInventory };
+    const left = (inventory[urnId] ?? 0) - 1;
+    if (left <= 0) delete inventory[urnId];
+    else inventory[urnId] = left;
+    inventory[recipe.resultId] = (inventory[recipe.resultId] ?? 0) + 1;
+    set({
+      cash: state.cash - recipe.cost,
+      urnInventory: inventory,
     });
     return true;
   },

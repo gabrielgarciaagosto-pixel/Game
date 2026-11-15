@@ -27,7 +27,10 @@ export function caseUsesUrnStand(c: DecedentCase): boolean {
 /** Always-purchasable catalog vessels (no hour rares, within rep). */
 export function buyableUrnPool(reputation: number) {
   return URN_CATALOG.filter(
-    (u) => !isHourGatedUrn(u.id) && u.reputationRequired <= reputation
+    (u) =>
+      !u.workshopOnly &&
+      !isHourGatedUrn(u.id) &&
+      u.reputationRequired <= reputation
   );
 }
 
@@ -42,7 +45,7 @@ export function pickFamilyUrnRequest(
 ): string {
   const buyable = buyableUrnPool(reputation);
   const fallback = URN_CATALOG.filter(
-    (u) => !isHourGatedUrn(u.id) && u.reputationRequired === 0
+    (u) => !u.workshopOnly && !isHourGatedUrn(u.id) && u.reputationRequired === 0
   );
   const catalog = buyable.length > 0 ? buyable : fallback;
 

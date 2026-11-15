@@ -26,6 +26,7 @@ import {
   URN_CATALOG,
   type UrnCatalogEntry,
 } from '../data/urnCatalog';
+import { MODERN_ALWAYS_IDS } from '../data/urnVariety';
 import { useGameStore } from '../store/useGameStore';
 import { friendlyToken } from '../types/game';
 import { formatTimeOf } from '../utils/clock12';
@@ -140,6 +141,13 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
   const live = useMemo(() => liveRares(now), [now]);
   const upcoming = useMemo(() => upcomingRares(now, 6), [now]);
 
+  const modernUrns = useMemo(
+    () =>
+      MODERN_ALWAYS_IDS.map((id) => catalogUrn(id)).filter(
+        (u): u is UrnCatalogEntry => !!u
+      ),
+    []
+  );
   const alwaysUrns = useMemo(
     () =>
       ALWAYS_URN_IDS.map((id) => catalogUrn(id)).filter(
@@ -360,7 +368,24 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
             )}
 
             <section>
-              <SectionLabel>Always in stock</SectionLabel>
+              <SectionLabel>Modern line</SectionLabel>
+              <div className="grid grid-cols-2 gap-2.5">
+                {modernUrns.map((urn) => (
+                  <UrnCard
+                    key={urn.id}
+                    urn={urn}
+                    owned={urnInventory[urn.id] ?? 0}
+                    reputation={reputation}
+                    cash={cash}
+                    onInspect={() => setInspect({ kind: 'urn', id: urn.id })}
+                    onBuy={() => requestBuy("Confirm urn", `Purchase for listed price?`, () => { buyUrn(urn.id); })}
+                  />
+                ))}
+              </div>
+            </section>
+
+            <section>
+              <SectionLabel>House classics</SectionLabel>
               <div className="grid grid-cols-2 gap-2.5">
                 {alwaysUrns.map((urn) => (
                   <UrnCard
@@ -924,7 +949,9 @@ function UrnCard({
             {urn.name}
           </div>
           <div className="text-[9px] text-stone-400">
-            {friendlyToken(urn.material)} · {friendlyToken(urn.finish)}
+            {urn.modular
+              ? `${friendlyToken(urn.modular.body)} · ${urn.finish}`
+              : `${friendlyToken(urn.material)} · ${friendlyToken(urn.finish)}`}
           </div>
           {rare && (
             <div className="text-[9px] text-amber-200/70 mt-0.5 font-mono">
@@ -1075,7 +1102,9 @@ function UrnInspectModal({
             </div>
             <h3 className="text-lg font-black text-amber-100">{urn.name}</h3>
             <p className="text-[11px] text-stone-400">
-              {friendlyToken(urn.material)} · {friendlyToken(urn.silhouette)}
+              {urn.modular
+                ? `${friendlyToken(urn.modular.body)} · ${friendlyToken(urn.modular.lid)} lid`
+                : `${friendlyToken(urn.material)} · ${friendlyToken(urn.silhouette)}`}
             </p>
           </div>
           <button
@@ -1097,7 +1126,7 @@ function UrnInspectModal({
 
         <p className="text-sm text-stone-200 leading-snug">{urn.blurb}</p>
         <p className="text-[11px] text-amber-200/80 mt-2">
-          Finish: {urn.finish}. Decheets: {urn.decoration}.
+          Finish: {urn.finish}. Decoration: {urn.decoration}.
         </p>
         <p className="text-[11px] text-stone-400 mt-1">
           Resale to families ${urn.resaleValue} · Prestige +{urn.prestigeBonus} ·

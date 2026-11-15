@@ -1,3 +1,5 @@
+import { MODERN_URNS } from './urnVariety';
+
 export type UrnMaterial =
   | 'MARBLE'
   | 'BRONZE'
@@ -17,6 +19,53 @@ export type UrnSilhouette =
   | 'KEEPSAKE'
   | 'ART_DECO'
   | 'TEMPLE';
+
+/** Simple modern bodies. Drawn in code, not traced from reference photos. */
+export type UrnBody =
+  | 'VASE'
+  | 'CYLINDER'
+  | 'CUBE'
+  | 'CHEST'
+  | 'ORB'
+  | 'CAPSULE'
+  | 'TEARDROP';
+
+export type UrnLid = 'DISC' | 'DOME' | 'KNOB' | 'FLUSH';
+
+export type UrnAccent = 'NONE' | 'BAND' | 'STRIPE' | 'ENGRAVED' | 'INLAY';
+
+export type UrnFinishId =
+  | 'BRUSHED_BRASS'
+  | 'BRONZE'
+  | 'PEWTER'
+  | 'SILVER'
+  | 'GOLD'
+  | 'GUNMETAL'
+  | 'MATTE_BLACK'
+  | 'GLOSS_BLACK'
+  | 'MATTE_WHITE'
+  | 'MIDNIGHT_BLUE'
+  | 'MARBLE_WHITE'
+  | 'MARBLE_BEIGE'
+  | 'MARBLE_BLACK_GOLD'
+  | 'GRANITE'
+  | 'MAPLE'
+  | 'WALNUT'
+  | 'CHERRY'
+  | 'BAMBOO'
+  | 'SABLE'
+  | 'CERAMIC'
+  | 'GLASS'
+  | 'CORTEN'
+  | 'BIO'
+  | 'GLAZE';
+
+export interface UrnModular {
+  body: UrnBody;
+  lid: UrnLid;
+  accent: UrnAccent;
+  finishId: UrnFinishId;
+}
 
 export interface UrnCatalogEntry {
   id: string;
@@ -40,9 +89,16 @@ export interface UrnCatalogEntry {
     accent: string;
     base: string;
   };
+  /** Present on the modern line. House classics keep the older silhouette drawing. */
+  modular?: UrnModular;
+  /** Vault bench result. Not sold in the emporium and not requested by families. */
+  workshopOnly?: boolean;
+  /** Shared by a vessel and the forms the bench can turn it into. */
+  lineId?: string;
+  setId?: string;
 }
 
-export const URN_CATALOG: UrnCatalogEntry[] = [
+const HOUSE_URNS: UrnCatalogEntry[] = [
   {
     id: 'urn_carrara_classic',
     name: 'Carrara Classic',
@@ -422,6 +478,8 @@ export const URN_CATALOG: UrnCatalogEntry[] = [
     },
   },
 ];
+
+export const URN_CATALOG: UrnCatalogEntry[] = [...HOUSE_URNS, ...MODERN_URNS];
 
 export function getUrnById(id: string | null | undefined): UrnCatalogEntry | null {
   if (!id) return null;
