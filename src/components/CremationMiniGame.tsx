@@ -8,7 +8,6 @@ import {
   purgeMsFor,
   type RetortButtonStyleId,
 } from '../data/crematoryCatalog';
-import { CrematoryCatalog } from './crematory/CrematoryCatalog';
 import { CaseTransferBar } from './CaseTransferBar';
 import { directiveNeedsCremationPermit } from '../data/cremationPermits';
 import { permitStatusLabel } from '../data/decedentVitals';
@@ -355,7 +354,6 @@ export const CremationMiniGame: React.FC = () => {
   const bayCount = Math.max(1, retortMachines.length || 1);
   const bayIndex = Math.max(0, Math.min(bayCount - 1, activeRetortIndex || 0));
   const bay = retortBays[bayIndex] ?? defaultRetortBay();
-  const [catalogOpen, setCatalogOpen] = useState(false);
   const swipeRef = useRef<{ x: number; y: number } | null>(null);
 
   const otherCaseIds = new Set(
@@ -824,14 +822,6 @@ export const CremationMiniGame: React.FC = () => {
       </div>
     );
 
-  const catalog = catalogOpen ? (
-    <CrematoryCatalog
-      bay={bay}
-      bayIndex={bayIndex}
-      onClose={() => setCatalogOpen(false)}
-    />
-  ) : null;
-
   if (!currentCase || !targets) {
     return (
       <div
@@ -849,16 +839,7 @@ export const CremationMiniGame: React.FC = () => {
         >
           Open Cooler
         </button>
-        <button
-          type="button"
-          data-click="tick"
-          onPointerDown={() => setCatalogOpen(true)}
-          className="px-4 py-2 bg-stone-800 rounded text-sm"
-        >
-          Upgrades
-        </button>
         {pager}
-        {catalog}
       </div>
     );
   }
@@ -897,7 +878,6 @@ export const CremationMiniGame: React.FC = () => {
           <CaseTransferBar currentCase={currentCase} />
         </div>
         {pager}
-        {catalog}
       </div>
     );
   }
@@ -1160,14 +1140,6 @@ export const CremationMiniGame: React.FC = () => {
             <CaseTransferBar currentCase={currentCase} />
           </div>
           <div className="flex flex-col gap-1 shrink-0">
-            <button
-              type="button"
-              data-click="tick"
-              onPointerDown={() => setCatalogOpen(true)}
-              className="px-2.5 py-1.5 bg-stone-800 rounded text-[10px]"
-            >
-              Upgrades
-            </button>
             <button
               type="button"
               onPointerDown={() => setActiveStation('OVERVIEW')}
@@ -1497,7 +1469,6 @@ export const CremationMiniGame: React.FC = () => {
         </div>
       </div>
       {pager}
-      {catalog}
     </div>
     </ButtonLookContext.Provider>
   );

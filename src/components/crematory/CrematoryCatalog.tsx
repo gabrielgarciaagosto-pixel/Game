@@ -8,35 +8,41 @@ import {
   QUALITY_TIERS,
   QUEUE_PRICE,
   SPEED_TIERS,
+  defaultRetortBay,
   brandLabel,
   buttonLabel,
   cremainsQualityScore,
   doorLabel,
   fuelCostFor,
   speedTimeFraction,
-  type RetortBay,
 } from '../../data/crematoryCatalog';
 import { nextFacilityTier } from '../../data/facilityUpgrades';
+import { retortCount } from '../../retort/retortRoster';
 import { useGameStore } from '../../store/useGameStore';
+import { audioManager } from '../../utils/audioManager';
 
 /**
- * Retort shop. Same brass-on-black cards as the fleet and urn showrooms.
- * Stat lines show the current figure and the next one.
+ * Craigmile Crematory Corp. Brass-on-black cards, same family as Lampblack.
+ * Stat lines show the current figure and the next one. A purchase lands on
+ * the retort the player has selected.
  */
-export const CrematoryCatalog: React.FC<{
-  bay: RetortBay;
-  bayIndex: number;
-  onClose: () => void;
-}> = ({ bay, bayIndex, onClose }) => {
+export const CrematoryCatalog: React.FC = () => {
   const cash = useGameStore((s) => s.cash);
   const levels = useGameStore((s) => s.facilityLevels);
   const wardrobe = useGameStore((s) => s.crematoryWardrobe);
+  const bays = useGameStore((s) => s.retortBays);
+  const active = useGameStore((s) => s.activeRetortIndex);
   const buyTrack = useGameStore((s) => s.buyCrematoryTrack);
   const buyTrim = useGameStore((s) => s.buyCrematoryCosmetic);
   const buyFacilityUpgrade = useGameStore((s) => s.buyFacilityUpgrade);
+  const count = retortCount(levels);
+  const [bayIndex, setBayIndex] = useState(() =>
+    Math.max(0, Math.min(count - 1, active ?? 0))
+  );
   const [note, setNote] = useState<string | null>(null);
-
-  const letter = String.fromCharCode(65 + bayIndex);
+  const index = Math.max(0, Math.min(count - 1, bayIndex));
+  const bay = bays[index] ?? defaultRetortBay();
+  const letter = String.fromCharCode(65 + index);
   const speedNow = Math.round(speedTimeFraction(bay.speedTier) * 100);
   const speedNext = SPEED_TIERS[bay.speedTier];
   const speedAfter = speedNext
@@ -58,36 +64,74 @@ export const CrematoryCatalog: React.FC<{
   };
 
   return (
-    <div className="absolute inset-0 z-[80] bg-[#120e0c] text-[#f6efe2] flex flex-col">
-      <header className="shrink-0 px-3 pt-3 pb-2 border-b border-[#c4a574]/30 flex items-start justify-between gap-2">
-        <div>
-          <p className="text-[10px] tracking-[0.28em] uppercase text-[#c4a574]">
-            Retort {letter}
-          </p>
-          <h2 className="font-serif text-lg leading-tight">Chamber catalog</h2>
-          <p className="text-[11px] text-[#e7dcc8]/80">
-            Cash ${cash.toLocaleString()}
-            {house > 0 ? ` · House efficiency tier ${house}` : ''}
-          </p>
-        </div>
-        <button
-          type="button"
-          data-click="tick"
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            onClose();
-          }}
-          className="px-2.5 py-1.5 rounded border border-[#c4a574]/50 text-[11px]"
+    <div
+      className="h-full flex flex-col overflow-hidden text-[#f3ead7]"
+      style={{
+        fontFamily: '"Source Sans 3", "Segoe UI", sans-serif',
+        background:
+          'radial-gradient(120% 80% at 50% -10%, #3a3228 0%, #141210 42%, #0c0b0a 100%)',
+      }}
+    >
+      <header className="shrink-0 px-3 pt-3 pb-2 border-b border-[#c4a574]/30">
+        <p
+          className="text-[10px] tracking-[0.28em] uppercase text-[#c4a574]"
+          style={{ fontFamily: 'Cinzel, "Libre Baskerville", serif' }}
         >
-          Close
-        </button>
+          Est. 1947 · Tulsa works
+        </p>
+        <h2
+          className="text-[1.35rem] leading-tight text-[#f6efe2]"
+          style={{ fontFamily: 'Cinzel, "Libre Baskerville", serif' }}
+        >
+          Craigmile Crematory Corp
+        </h2>
+        <p className="text-[11px] text-[#d9cbb6] mt-0.5">
+          Burners, brick, plates, and the buttons on the door
+        </p>
+        <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
+          <span className="px-2 py-0.5 rounded border border-[#c4a574]/40 bg-black/30">
+            Cash ${cash.toLocaleString()}
+          </span>
+          <span className="px-2 py-0.5 rounded border border-[#c4a574]/40 bg-black/30">
+            {count === 1 ? 'One retort' : `${count} retorts`}
+          </span>
+          {house > 0 && (
+            <span className="px-2 py-0.5 rounded border border-[#c4a574]/40 bg-black/30">
+              House efficiency {house}
+            </span>
+          )}
+        </div>
+        {count > 1 && (
+          <div className="mt-2 flex gap-1.5">
+            {Array.from({ length: count }).map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => {
+                  audioManager.playUiClick('tick');
+                  setBayIndex(i);
+                }}
+                className={`px-2.5 py-1 rounded text-[11px] font-semibold border ${
+                  i === index
+                    ? 'bg-[#c4a574] text-[#1a140c] border-[#c4a574]'
+                    : 'bg-black/30 text-[#f3ead7] border-[#c4a574]/30'
+                }`}
+              >
+                Retort {String.fromCharCode(65 + i)}
+              </button>
+            ))}
+          </div>
+        )}
+        <p className="mt-2 text-[11px] text-[#e7dcc8]">
+          Buying for retort {letter}. A second chamber is a house purchase.
+        </p>
       </header>
       {note && (
         <p className="px-3 py-1.5 text-[11px] text-[#c4a574] border-b border-[#c4a574]/20">
           {note}
         </p>
       )}
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 pt-3 pb-28 space-y-2">
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 pt-3 pb-36 space-y-2">
         <Card
           kicker="Speed"
           title={speedNext?.name ?? 'Speed line'}
@@ -101,7 +145,7 @@ export const CrematoryCatalog: React.FC<{
           owned={!speedNext}
           onBuy={
             speedNext
-              ? () => flash(buyTrack('speed'))
+              ? () => flash(buyTrack('speed', index))
               : undefined
           }
         />
@@ -116,7 +160,7 @@ export const CrematoryCatalog: React.FC<{
             'Processor, cooling, and filtration are all in. Poor trays come up less often.'
           }
           owned={!qualityOffer}
-          onBuy={qualityOffer ? () => flash(buyTrack('quality')) : undefined}
+          onBuy={qualityOffer ? () => flash(buyTrack('quality', index)) : undefined}
         />
         <Card
           kicker="Fuel"
@@ -129,7 +173,7 @@ export const CrematoryCatalog: React.FC<{
             'The meter is as lean as this chamber gets.'
           }
           owned={!fuelOffer}
-          onBuy={fuelOffer ? () => flash(buyTrack('fuel')) : undefined}
+          onBuy={fuelOffer ? () => flash(buyTrack('fuel', index)) : undefined}
         />
         <Card
           kicker="Capacity"
@@ -139,7 +183,7 @@ export const CrematoryCatalog: React.FC<{
           price={bay.preheat ? null : PREHEAT_PRICE}
           flavor="The next case starts warm, and the purge is shorter."
           owned={bay.preheat}
-          onBuy={bay.preheat ? undefined : () => flash(buyTrack('preheat'))}
+          onBuy={bay.preheat ? undefined : () => flash(buyTrack('preheat', index))}
         />
         <Card
           kicker="Capacity"
@@ -149,7 +193,7 @@ export const CrematoryCatalog: React.FC<{
           price={bay.queueSlot ? null : QUEUE_PRICE}
           flavor="A cooler case waits, then loads when this chamber clears."
           owned={bay.queueSlot}
-          onBuy={bay.queueSlot ? undefined : () => flash(buyTrack('queue'))}
+          onBuy={bay.queueSlot ? undefined : () => flash(buyTrack('queue', index))}
         />
         <Card
           kicker="Chambers"
@@ -196,7 +240,7 @@ export const CrematoryCatalog: React.FC<{
             flavor={offer.flavor}
             owned={bay.brand === offer.id}
             action={wardrobe.brands.includes(offer.id) ? 'Show' : 'Buy'}
-            onBuy={() => flash(buyTrim('brand', offer.id))}
+            onBuy={() => flash(buyTrim('brand', offer.id, index))}
           />
         ))}
         <Card
@@ -208,7 +252,7 @@ export const CrematoryCatalog: React.FC<{
           flavor="The stock plate. Zinc, refractory, the buttons you already know."
           owned={bay.brand === 'millennium'}
           action="Show"
-          onBuy={() => flash(buyTrim('brand', 'millennium'))}
+          onBuy={() => flash(buyTrim('brand', 'millennium', index))}
         />
         {DOOR_OFFERS.map((offer) => (
           <Card
@@ -221,7 +265,7 @@ export const CrematoryCatalog: React.FC<{
             flavor={offer.flavor}
             owned={bay.door === offer.id}
             action={wardrobe.doors.includes(offer.id) ? 'Show' : 'Buy'}
-            onBuy={() => flash(buyTrim('door', offer.id))}
+            onBuy={() => flash(buyTrim('door', offer.id, index))}
           />
         ))}
         <Card
@@ -233,7 +277,7 @@ export const CrematoryCatalog: React.FC<{
           flavor="The original door face."
           owned={bay.door === 'zinc'}
           action="Show"
-          onBuy={() => flash(buyTrim('door', 'zinc'))}
+          onBuy={() => flash(buyTrim('door', 'zinc', index))}
         />
         {BUTTON_OFFERS.map((offer) => (
           <Card
@@ -246,7 +290,7 @@ export const CrematoryCatalog: React.FC<{
             flavor={offer.flavor}
             owned={bay.buttons === offer.id}
             action={wardrobe.buttons.includes(offer.id) ? 'Show' : 'Buy'}
-            onBuy={() => flash(buyTrim('buttons', offer.id))}
+            onBuy={() => flash(buyTrim('buttons', offer.id, index))}
           />
         ))}
         <Card
@@ -262,7 +306,7 @@ export const CrematoryCatalog: React.FC<{
           flavor="Round green, red, and silver. This is the default."
           owned={bay.buttons === 'millennium'}
           action="Show"
-          onBuy={() => flash(buyTrim('buttons', 'millennium'))}
+          onBuy={() => flash(buyTrim('buttons', 'millennium', index))}
         />
       </div>
     </div>
@@ -321,9 +365,8 @@ function Card({
         ) : onBuy ? (
           <button
             type="button"
-            data-click="tick"
-            onPointerDown={(e) => {
-              e.stopPropagation();
+            onClick={() => {
+              audioManager.playUiClick('tick');
               onBuy();
             }}
             className="w-full py-2 rounded bg-[#c4a574] text-[#1a140c] text-[12px] font-bold"

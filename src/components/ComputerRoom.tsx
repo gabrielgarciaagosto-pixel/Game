@@ -13,6 +13,7 @@ import { FakeBrowserChrome } from './FakeBrowserChrome';
 import { FuneraryEmporium } from './FuneraryEmporium';
 import { FleetBrowser } from './FleetBrowser';
 import { RealtyBrowser } from './RealtyBrowser';
+import { CrematoryCatalog } from './crematory/CrematoryCatalog';
 
 function digitsOnlyHhmm(raw: string): string {
   return raw.replace(/\D/g, '').slice(0, 4);
@@ -22,7 +23,23 @@ function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-type DesktopApp = 'DESKTOP' | 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS';
+type DesktopApp =
+  | 'DESKTOP'
+  | 'VR441'
+  | 'SHOP'
+  | 'BANK'
+  | 'REALTY'
+  | 'FLEETS'
+  | 'CRAIGMILE';
+
+const BROWSER_APPS: DesktopApp[] = [
+  'SHOP',
+  'VR441',
+  'BANK',
+  'REALTY',
+  'FLEETS',
+  'CRAIGMILE',
+];
 
 /**
  * Office computer: CRT desktop + icons; apps open in a fake browser.
@@ -41,11 +58,7 @@ export const ComputerRoom: React.FC = () => {
   } = useGameStore();
 
   const [app, setApp] = useState<DesktopApp>(() =>
-    computerOpenApp === 'SHOP' ||
-    computerOpenApp === 'VR441' ||
-    computerOpenApp === 'BANK' ||
-    computerOpenApp === 'REALTY' ||
-    computerOpenApp === 'FLEETS'
+    computerOpenApp && BROWSER_APPS.includes(computerOpenApp)
       ? computerOpenApp
       : 'DESKTOP'
   );
@@ -56,13 +69,7 @@ export const ComputerRoom: React.FC = () => {
   const [filingFee, setFilingFee] = useState(() => rollPermitFilingFee());
 
   useEffect(() => {
-    if (
-      computerOpenApp === 'SHOP' ||
-      computerOpenApp === 'VR441' ||
-      computerOpenApp === 'BANK' ||
-      computerOpenApp === 'REALTY' ||
-      computerOpenApp === 'FLEETS'
-    ) {
+    if (computerOpenApp && BROWSER_APPS.includes(computerOpenApp)) {
       setApp(computerOpenApp);
       return;
     }
@@ -94,7 +101,7 @@ export const ComputerRoom: React.FC = () => {
     setComputerOpenApp(null);
   };
 
-  const openApp = (next: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS') => {
+  const openApp = (next: Exclude<DesktopApp, 'DESKTOP'>) => {
     setApp(next);
     setComputerOpenApp(next);
   };
@@ -155,6 +162,7 @@ export const ComputerRoom: React.FC = () => {
           <DesktopAppIcon kind="BANK" onOpen={() => openApp('BANK')} />
           <DesktopAppIcon kind="REALTY" onOpen={() => openApp('REALTY')} />
           <DesktopAppIcon kind="FLEETS" onOpen={() => openApp('FLEETS')} />
+          <DesktopAppIcon kind="CRAIGMILE" onOpen={() => openApp('CRAIGMILE')} />
         </div>
 
         <div className="crt-taskbar relative z-[7] shrink-0 h-10 flex items-center justify-between px-3">
@@ -432,6 +440,18 @@ export const ComputerRoom: React.FC = () => {
             onClose={goDesktop}
           >
             <FleetBrowser />
+          </FakeBrowserChrome>
+        </div>
+      )}
+
+      {app === 'CRAIGMILE' && (
+        <div className="absolute inset-0 z-20" style={{ inset: 0 }}>
+          <FakeBrowserChrome
+            title="Craigmile Crematory Corp"
+            url="https://www.craigmilecrematory.biz/catalog"
+            onClose={goDesktop}
+          >
+            <CrematoryCatalog />
           </FakeBrowserChrome>
         </div>
       )}

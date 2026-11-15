@@ -1,7 +1,13 @@
 import React from 'react';
 import { audioManager } from '../utils/audioManager';
 
-export type DesktopIconKind = 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS';
+export type DesktopIconKind =
+  | 'VR441'
+  | 'SHOP'
+  | 'BANK'
+  | 'REALTY'
+  | 'FLEETS'
+  | 'CRAIGMILE';
 
 const META: Record<
   DesktopIconKind,
@@ -12,6 +18,7 @@ const META: Record<
   BANK: { label: 'First National Bank', short: 'Bank' },
   REALTY: { label: 'Lychgate Realty', short: 'Realty' },
   FLEETS: { label: 'Funeral Fleets', short: 'Fleets' },
+  CRAIGMILE: { label: 'Craigmile Crematory', short: 'Craigmile' },
 };
 
 /** Crisp retro desktop icons — glyph art, phosphor-friendly edges. */
@@ -133,6 +140,19 @@ function IconArt({ kind }: { kind: DesktopIconKind }) {
           <circle cx="42" cy="40" r="5" fill="#111" />
           <circle cx="42" cy="40" r="2.2" fill="#e6c98a" />
           <path d="M8 34 H16" stroke="#d4b56a" strokeWidth="0.8" />
+        </svg>
+      );
+    case 'CRAIGMILE':
+      return (
+        <svg viewBox="0 0 56 56" className="w-full h-full" aria-hidden>
+          <rect width="56" height="56" fill="#1a120c" />
+          <rect x="14" y="10" width="28" height="36" rx="2" fill="#3a2a1c" />
+          <rect x="18" y="14" width="20" height="22" fill="#2a2118" />
+          <path d="M24 28 C26 18, 30 18, 32 28" fill="#e6a15a" />
+          <rect x="16" y="38" width="24" height="4" fill="#c4a574" />
+          <circle cx="22" cy="46" r="2" fill="#34d399" />
+          <circle cx="28" cy="46" r="2" fill="#f87171" />
+          <circle cx="34" cy="46" r="2" fill="#e7e5e4" />
         </svg>
       );
   }

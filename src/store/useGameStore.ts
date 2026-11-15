@@ -167,7 +167,7 @@ interface GameState {
    * Which Computer desktop app to open (null = desktop).
    * EMPORIUM redirects here with 'SHOP'. Not persisted.
    */
-  computerOpenApp: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS' | null;
+  computerOpenApp: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS' | 'CRAIGMILE' | null;
   /** Optional deep-link tab when opening BANK (not persisted) */
   bankOpenTab: 'overview' | 'loans' | 'listings' | null;
   cases: DecedentCase[];
@@ -267,7 +267,7 @@ interface GameState {
   hardResetGameState: (toast?: string | null) => void;
   setActiveStation: (station: StationId) => void;
   setComputerOpenApp: (
-    app: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS' | null
+    app: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS' | 'CRAIGMILE' | null
   ) => void;
   buyFleetVehicle: (id: string) => { ok: boolean; message: string };
   assignFleetVehicle: (fleetClass: FleetClass, id: string | null) => void;
@@ -277,11 +277,13 @@ interface GameState {
   chargeRetortFuel: () => void;
   queueCaseOnRetort: (caseId: string) => void;
   buyCrematoryTrack: (
-    track: 'speed' | 'quality' | 'fuel' | 'preheat' | 'queue'
+    track: 'speed' | 'quality' | 'fuel' | 'preheat' | 'queue',
+    bayIndex?: number
   ) => { ok: boolean; message: string };
   buyCrematoryCosmetic: (
     kind: 'brand' | 'door' | 'buttons',
-    id: string
+    id: string,
+    bayIndex?: number
   ) => { ok: boolean; message: string };
   ensureRetortForCase: (caseId: string) => void;
   resetRetort: () => void;
@@ -1329,11 +1331,12 @@ export const useGameStore = create<GameState>()(
       };
     }),
 
-  buyCrematoryTrack: (track) => {
+  buyCrematoryTrack: (track, bayIndex) => {
     const state = get();
     const count = retortCount(state.facilityLevels);
     const bays = alignBays(state.retortBays, count);
-    const i = Math.max(0, Math.min(count - 1, state.activeRetortIndex ?? 0));
+    const picked = typeof bayIndex === 'number' ? bayIndex : state.activeRetortIndex ?? 0;
+    const i = Math.max(0, Math.min(count - 1, picked));
     const bay = bays[i]!;
     let price = 0;
     let label = '';
@@ -1385,12 +1388,13 @@ export const useGameStore = create<GameState>()(
     return { ok: true, message: `Installed ${label}` };
   },
 
-  buyCrematoryCosmetic: (kind, id) => {
+  buyCrematoryCosmetic: (kind, id, bayIndex) => {
     const state = get();
     const wardrobe = normalizeWardrobe(state.crematoryWardrobe);
     const count = retortCount(state.facilityLevels);
     const bays = alignBays(state.retortBays, count);
-    const i = Math.max(0, Math.min(count - 1, state.activeRetortIndex ?? 0));
+    const picked = typeof bayIndex === 'number' ? bayIndex : state.activeRetortIndex ?? 0;
+    const i = Math.max(0, Math.min(count - 1, picked));
     const bay = { ...bays[i]! };
     let price = 0;
     let label = id;
