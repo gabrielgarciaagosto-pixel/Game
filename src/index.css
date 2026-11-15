@@ -526,8 +526,25 @@ canvas {
   top: 30%;
   width: 62%;
   height: 38%;
-  background: radial-gradient(ellipse at 18% 60%, rgba(255, 140, 30, 0.9), rgba(234, 88, 12, 0.42) 42%, transparent 72%);
   animation: hub-flicker 1.5s ease-in-out infinite;
+}
+/* The glow is the same ellipse as the old 38%-tall box (farthest-corner at 18% 60%).
+   That box sliced the ellipse at the bottom while the color was still opaque.
+   Paint it on a taller layer with the radii locked, so the existing transparent
+   stop can finish. Embers stay in the original box. */
+.hub-atmo-flame::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 150%;
+  background: radial-gradient(
+    ellipse 115.9655% 56.5685% at 18% 40%,
+    rgba(255, 140, 30, 0.9),
+    rgba(234, 88, 12, 0.42) 42%,
+    transparent 72%
+  );
 }
 .hub-atmo-flame span {
   position: absolute;
@@ -600,7 +617,21 @@ canvas {
   bottom: 18%;
   width: 46%;
   height: 26%;
-  background: radial-gradient(ellipse at 20% 80%, rgba(253, 230, 138, 0.22), transparent 68%);
+}
+/* Same ellipse the 26%-tall box used to clip. The bottom edge cut the gold
+   while it was still opaque, just under the computer card. Radii stay locked. */
+.hub-atmo-chapel::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 170%;
+  background: radial-gradient(
+    ellipse 113.1371% 66.5512% at 20% 47.0588%,
+    rgba(253, 230, 138, 0.22),
+    transparent 68%
+  );
 }
 .hub-candle {
   position: absolute;
