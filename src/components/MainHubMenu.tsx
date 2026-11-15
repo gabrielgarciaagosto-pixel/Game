@@ -391,10 +391,19 @@ export const MainHubMenu: React.FC = () => {
       <div className="relative z-40 shrink-0 border-b border-slate-800/90 pb-2 space-y-2 px-1">
         <div className="space-y-1">
           <NewsTicker />
-          <p className="text-[11px] text-slate-400 leading-snug" data-hub-last-case>
-            Last case:{' '}
-            <span className="text-amber-300 font-semibold">{lastCaseLine(lastCase, cases)}</span>
-          </p>
+          <div className="flex items-center gap-2 min-w-0">
+            <p className="min-w-0 flex-1 truncate text-[11px] text-slate-400 leading-snug" data-hub-last-case>
+              Last case:{' '}
+              <span className="text-amber-300 font-semibold">{lastCaseLine(lastCase, cases)}</span>
+            </p>
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              className="shrink-0 whitespace-nowrap bg-slate-950/80 px-1.5 py-0 rounded-lg border border-slate-800 font-mono text-[11px] leading-none text-slate-300"
+            >
+              Settings
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-1.5">
@@ -441,13 +450,6 @@ export const MainHubMenu: React.FC = () => {
           >
             URNS <span className="text-amber-300 font-bold">{urnOwned}</span>
           </StatChip>
-          <button
-            type="button"
-            onClick={() => setSettingsOpen(true)}
-            className="bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-slate-800 font-mono text-[11px] text-slate-300"
-          >
-            Settings
-          </button>
         </div>
 
         {open && (
