@@ -3,6 +3,7 @@ import { DEFAULT_PLAYER_NAME } from '../data/playerName';
 import { resetGame } from '../dev/devActions';
 import { useGameStore } from '../store/useGameStore';
 import { audioManager } from '../utils/audioManager';
+import { useSheetOpen } from './useSheetOpen';
 
 export const HouseSettings: React.FC = () => {
   const open = useGameStore((s) => s.settingsOpen);
@@ -17,6 +18,7 @@ export const HouseSettings: React.FC = () => {
   const [interfaceVol, setInterfaceVol] = useState(1);
   const [interfaceMuted, setInterfaceMuted] = useState(false);
   const [confirmErase, setConfirmErase] = useState(false);
+  useSheetOpen(open);
 
   useEffect(() => {
     if (!open) {

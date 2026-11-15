@@ -11,6 +11,7 @@ import { formatDateTime12 } from '../utils/clock12';
 import { gameNow } from '../utils/gameNow';
 import { useGameStore } from '../store/useGameStore';
 import { TapButton } from './TapButton';
+import { useSheetOpen } from './useSheetOpen';
 
 type Tab = 'overview' | 'loans';
 
@@ -41,6 +42,7 @@ export const BankBrowser: React.FC = () => {
     action: () => void;
   } | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  useSheetOpen(confirm != null);
 
   React.useEffect(() => {
     if (bankOpenTab === 'loans' || bankOpenTab === 'overview') {

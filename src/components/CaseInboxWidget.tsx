@@ -142,7 +142,7 @@ export const CaseInboxWidget: React.FC = () => {
   return (
     <>
       <div
-        className="fixed z-[52] flex items-end gap-2"
+        className="files-fab-anchor fixed z-[52] flex items-end gap-2"
         style={{
           bottom: 'var(--files-fab-bottom)',
           right: 'var(--safe-right)',

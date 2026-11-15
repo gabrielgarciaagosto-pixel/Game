@@ -11,6 +11,7 @@ import {
 } from '../data/funeralFleets';
 import { useGameStore } from '../store/useGameStore';
 import { TapButton } from './TapButton';
+import { useSheetOpen } from './useSheetOpen';
 import { FleetVehicleArt } from './fleets/FleetVehicleArt';
 
 type Filter = 'ALL' | FleetClass;
@@ -43,6 +44,7 @@ export const FleetBrowser: React.FC = () => {
     body: string;
     action: () => void;
   } | null>(null);
+  useSheetOpen(confirm != null);
 
   const cortege = useMemo(
     () => resolveCortege(ownedFleetIds, fleetAssignment),

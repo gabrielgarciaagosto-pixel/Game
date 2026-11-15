@@ -8,6 +8,7 @@ import {
 import { US_JURISDICTIONS } from '../data/usPlaces';
 import { useGameStore } from '../store/useGameStore';
 import { TapButton } from './TapButton';
+import { useSheetOpen } from './useSheetOpen';
 
 /** Deterministic faux “photo” gradients for offline/Android. */
 function listingPhotoStyle(listing: PropertyListing): React.CSSProperties {
@@ -52,6 +53,7 @@ export const RealtyBrowser: React.FC = () => {
   } | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [contactedId, setContactedId] = useState<string | null>(null);
+  useSheetOpen(confirm != null);
 
   const used = facilitySpaceUsed();
   const listings = useMemo(

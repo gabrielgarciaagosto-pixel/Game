@@ -35,6 +35,7 @@ import { activeMarket, quotedPrice } from '../news/newsWire';
 import { CasketVessel } from './caskets/CasketVessel';
 import { UrnVessel } from './urns/UrnVessel';
 import { TapButton } from './TapButton';
+import { useSheetOpen } from './useSheetOpen';
 
 type ShopTab = 'URNS' | 'CASKETS' | 'CHAPEL' | 'UPGRADES' | 'MERCH';
 
@@ -119,6 +120,7 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
     run: () => void;
   } | null>(null);
   const [spaceBlock, setSpaceBlock] = useState<string | null>(null);
+  useSheetOpen(confirmBuy != null || inspect != null);
 
   const spaceUsed = totalFacilitySpaceUsed(facilityLevels);
   const spaceTotal = ownedProperty?.spaceTotal ?? 20;

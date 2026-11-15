@@ -106,23 +106,30 @@ body {
 /*
   Bottom sheets are pinned to the viewport, which is drawn under the
   system navigation bar. Pad past that inset so the last control sits
-  above gesture nav and the 3-button bar, with a little air under it.
+  well above gesture nav and the 3-button bar.
   .sheet-safe-inset is for a sheet whose parent already consumed
   --safe-bottom (the in-game browser). Adding the inset again would
-  lift it twice.
+  lift it twice. --sheet-air is the empty band under the card.
 */
 .sheet-safe {
+  --sheet-air: 3.5rem;
   padding-top: 1rem;
   padding-left: max(1rem, var(--safe-left));
   padding-right: max(1rem, var(--safe-right));
-  padding-bottom: calc(var(--safe-bottom) + 1.5rem);
+  padding-bottom: calc(var(--safe-bottom) + var(--sheet-air));
 }
 
 .sheet-safe-inset {
+  --sheet-air: 3.5rem;
   padding-top: 1rem;
   padding-left: 1rem;
   padding-right: 1rem;
-  padding-bottom: 1.5rem;
+  padding-bottom: var(--sheet-air);
+}
+
+/* FILES is above the computer. Hide it for the life of a bottom sheet. */
+html[data-sheet-open] .files-fab-anchor {
+  display: none;
 }
 
 /* Shop inside the computer already ends at the nav inset. This extra
