@@ -200,6 +200,8 @@ interface GameState {
   tutorial: TutorialPhase;
   tutorialStep: number;
   tutorialCaseId: string | null;
+  /** Snapped tutorial-bell position. Null uses the left-edge default. */
+  tutorialBell: { x: number; y: number } | null;
   /** Runtime only — which case-file panels are open. */
   filesPanelOpen: boolean;
   archivesPanelOpen: boolean;
@@ -332,6 +334,7 @@ interface GameState {
   skipTutorialStep: () => void;
   completeTutorialStep: () => void;
   replayTutorial: () => void;
+  setTutorialBell: (pos: { x: number; y: number } | null) => void;
   noteTutorialFile: (caseId: string) => void;
   setCaseFilePanels: (filesOpen: boolean, archivesOpen: boolean) => void;
   /**
@@ -999,6 +1002,7 @@ export function freshPersistedGameFields() {
     tutorial: 'new' as TutorialPhase,
     tutorialStep: 0,
     tutorialCaseId: null as string | null,
+    tutorialBell: null as { x: number; y: number } | null,
     showroomInventory: defaultShowroomInventory.map((i) => ({ ...i })),
     urnInventory: {
       urn_carrara_classic: 1,
@@ -1366,6 +1370,14 @@ function advanceTutorial(state: GameState, force: boolean) {
   return { ...casesPatch, tutorialStep: next, tutorialFileRead: false };
 }
 
+function readTutorialBell(value: unknown): { x: number; y: number } | null {
+  if (!value || typeof value !== 'object') return null;
+  const pos = value as { x?: unknown; y?: unknown };
+  if (typeof pos.x !== 'number' || typeof pos.y !== 'number') return null;
+  if (!Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return null;
+  return { x: pos.x, y: pos.y };
+}
+
 export const useGameStore = create<GameState>()(
   persist(
     (set, get) => ({
@@ -1465,6 +1477,7 @@ export const useGameStore = create<GameState>()(
       tutorialCaseId: null,
       tutorialFileRead: false,
     }),
+  setTutorialBell: (pos) => set({ tutorialBell: pos }),
   noteTutorialFile: (caseId) =>
     set((state) => {
       if (state.tutorial !== 'active') return state;
@@ -3931,6 +3944,7 @@ export const useGameStore = create<GameState>()(
         tutorial: state.tutorial,
         tutorialStep: state.tutorialStep,
         tutorialCaseId: state.tutorialCaseId,
+        tutorialBell: state.tutorialBell,
       }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<GameState>;
@@ -4091,6 +4105,7 @@ export const useGameStore = create<GameState>()(
             typeof p.tutorialStep === 'number' ? p.tutorialStep : 0,
           tutorialCaseId:
             typeof p.tutorialCaseId === 'string' ? p.tutorialCaseId : null,
+          tutorialBell: readTutorialBell(p.tutorialBell),
           filesPanelOpen: false,
           archivesPanelOpen: false,
           tutorialFileRead: false,
