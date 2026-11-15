@@ -11,6 +11,8 @@
  * Rotation state (which slot rolled this day-cycle) is persisted in the save.
  */
 
+import { formatClock12 } from '../utils/clock12';
+
 export type ItemRarity = 'COMMON' | 'UNCOMMON' | 'RARE' | 'LEGENDARY';
 export type RareTone = 'LIGHT' | 'DARK';
 
@@ -56,7 +58,7 @@ export const RARE_SCHEDULE: RareScheduleEntry[] = [
     startHour: 8,
     endHour: endHourAfter(8),
     stock: 1,
-    hint: 'White porcelain — around 08:00 for ~2 hours.',
+    hint: 'White porcelain — around 8:00 AM for ~2 hours.',
   },
   {
     id: 'urn_amber_glass',
@@ -66,7 +68,7 @@ export const RARE_SCHEDULE: RareScheduleEntry[] = [
     startHour: 11,
     endHour: endHourAfter(11),
     stock: 1,
-    hint: 'Clear/amber glass — midday ~11:00–13:00.',
+    hint: 'Clear/amber glass — midday ~11:00 AM–1:00 PM.',
   },
   {
     id: 'urn_rose_bronze_vase',
@@ -76,7 +78,7 @@ export const RARE_SCHEDULE: RareScheduleEntry[] = [
     startHour: 14,
     endHour: endHourAfter(14),
     stock: 1,
-    hint: 'Warm gold-rose bronze — afternoon ~14:00–16:00.',
+    hint: 'Warm gold-rose bronze — afternoon ~2:00 PM–4:00 PM.',
   },
   {
     id: 'casket_mahogany_full',
@@ -86,7 +88,7 @@ export const RARE_SCHEDULE: RareScheduleEntry[] = [
     startHour: 10,
     endHour: endHourAfter(10),
     stock: 1,
-    hint: 'Polished warm woods — late morning ~10:00–12:00.',
+    hint: 'Polished warm woods — late morning ~10:00 AM–12:00 PM.',
   },
   {
     id: 'casket_copper_panel',
@@ -96,7 +98,7 @@ export const RARE_SCHEDULE: RareScheduleEntry[] = [
     startHour: 15,
     endHour: endHourAfter(15),
     stock: 1,
-    hint: 'Bright copper — mid-afternoon ~15:00–17:00.',
+    hint: 'Bright copper — mid-afternoon ~3:00 PM–5:00 PM.',
   },
 
   // —— DARK / late night (~2h each) ——
@@ -108,7 +110,7 @@ export const RARE_SCHEDULE: RareScheduleEntry[] = [
     startHour: 21,
     endHour: endHourAfter(21),
     stock: 2,
-    hint: 'Black marble — evening ~21:00–23:00.',
+    hint: 'Black marble — evening ~9:00 PM–11:00 PM.',
   },
   {
     id: 'urn_smoke_glass_tear',
@@ -118,7 +120,7 @@ export const RARE_SCHEDULE: RareScheduleEntry[] = [
     startHour: 22,
     endHour: endHourAfter(22),
     stock: 1,
-    hint: 'Smoke glass — late night ~22:00–00:00.',
+    hint: 'Smoke glass — late night ~10:00 PM–12:00 AM.',
   },
   {
     id: 'urn_porcelain_night',
@@ -128,7 +130,7 @@ export const RARE_SCHEDULE: RareScheduleEntry[] = [
     startHour: 23,
     endHour: endHourAfter(23),
     stock: 1,
-    hint: 'Obsidian porcelain — midnight window ~23:00–01:00.',
+    hint: 'Obsidian porcelain — midnight window ~11:00 PM–1:00 AM.',
   },
   {
     id: 'urn_verdigris_tear',
@@ -138,7 +140,7 @@ export const RARE_SCHEDULE: RareScheduleEntry[] = [
     startHour: 1,
     endHour: endHourAfter(1),
     stock: 1,
-    hint: 'Dark bronze / verdigris — ~01:00–03:00.',
+    hint: 'Dark bronze / verdigris — ~1:00 AM–3:00 AM.',
   },
   {
     id: 'urn_gunmetal_tower',
@@ -148,7 +150,7 @@ export const RARE_SCHEDULE: RareScheduleEntry[] = [
     startHour: 2,
     endHour: endHourAfter(2),
     stock: 1,
-    hint: 'Gunmetal towers — ~02:00–04:00.',
+    hint: 'Gunmetal towers — ~2:00 AM–4:00 AM.',
   },
   {
     id: 'casket_walnut_dome',
@@ -158,7 +160,7 @@ export const RARE_SCHEDULE: RareScheduleEntry[] = [
     startHour: 20,
     endHour: endHourAfter(20),
     stock: 2,
-    hint: 'Ebony walnut — ~20:00–22:00.',
+    hint: 'Ebony walnut — ~8:00 PM–10:00 PM.',
   },
   {
     id: 'casket_steel_gunmetal',
@@ -168,7 +170,7 @@ export const RARE_SCHEDULE: RareScheduleEntry[] = [
     startHour: 22,
     endHour: endHourAfter(22),
     stock: 1,
-    hint: 'Gunmetal steel — ~22:00–00:00.',
+    hint: 'Gunmetal steel — ~10:00 PM–12:00 AM.',
   },
   {
     id: 'casket_bronze_octagon',
@@ -178,7 +180,7 @@ export const RARE_SCHEDULE: RareScheduleEntry[] = [
     startHour: 0,
     endHour: endHourAfter(0),
     stock: 1,
-    hint: 'Dark cast bronze — ~00:00–02:00.',
+    hint: 'Dark cast bronze — ~12:00 AM–2:00 AM.',
   },
   ...VARIETY_RARES.map((rare) => ({
     id: rare.id,
@@ -351,7 +353,5 @@ export function isHourGatedCasket(id: string): boolean {
 }
 
 export function formatHourRange(entry: RareScheduleEntry): string {
-  const a = String(entry.startHour).padStart(2, '0');
-  const b = String(entry.endHour).padStart(2, '0');
-  return `${a}:00–${b}:00`;
+  return `${formatClock12(entry.startHour, 0)}–${formatClock12(entry.endHour, 0)}`;
 }

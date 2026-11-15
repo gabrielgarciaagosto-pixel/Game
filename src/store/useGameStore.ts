@@ -176,6 +176,11 @@ const DECAY_PER_SEC = 0.35;
 
 interface GameState {
   hasStartedGame: boolean;
+  /**
+   * Cold launch always starts true and is not saved. Continue clears it
+   * without touching the save. A reload sets it true again.
+   */
+  titleGate: boolean;
   cash: number;
   reputation: number;
   ossilegiumCommuneGrams: number;
@@ -292,6 +297,8 @@ interface GameState {
   retortBays: RetortBay[];
   crematoryWardrobe: CrematoryWardrobe;
   startGame: () => void;
+  /** Leave the title and return to the saved station. Does not rewrite the save. */
+  resumeGame: () => void;
   /**
    * Wipe gameplay progress in memory (title screen). Pair with pausing
    * persist writes so Capacitor reloads cannot resurrect the old save.
@@ -1269,6 +1276,7 @@ export const useGameStore = create<GameState>()(
   persist(
     (set, get) => ({
   ...freshPersistedGameFields(),
+  titleGate: true,
   computerOpenApp: null,
   bankOpenTab: null,
   intakeToast: null,
@@ -1295,15 +1303,19 @@ export const useGameStore = create<GameState>()(
       );
       return {
         hasStartedGame: true,
+        titleGate: false,
         activeStation: 'OVERVIEW' as const,
         cases,
         inboxFiles,
       };
     }),
 
+  resumeGame: () => set({ titleGate: false }),
+
   hardResetGameState: (toast) =>
     set({
       ...freshPersistedGameFields(),
+      titleGate: true,
       computerOpenApp: null,
       bankOpenTab: null,
       intakeToast:
@@ -3878,6 +3890,7 @@ export const useGameStore = create<GameState>()(
               : current.intermentScore ?? 0,
           lastCase: normalizeLastCase(p.lastCase) ?? current.lastCase ?? null,
           archivedCases: normalizeArchives(p.archivedCases),
+          titleGate: true,
           intakeToast:
             fleetRefund > 0
               ? `Silent Arrival left the line. $${fleetRefund.toLocaleString()} returned.`

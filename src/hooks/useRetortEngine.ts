@@ -27,6 +27,8 @@ function anyLive(machines: RetortMachine[]): boolean {
  */
 export function useRetortEngine() {
   const hasStartedGame = useGameStore((s) => s.hasStartedGame);
+  const titleGate = useGameStore((s) => s.titleGate);
+  const simulating = hasStartedGame && !titleGate;
   const doorMoving = useGameStore((s) =>
     anyDoor(s.retortMachines?.length ? s.retortMachines : [s.retort])
   );
@@ -37,14 +39,14 @@ export function useRetortEngine() {
   const tickRetortBurn = useGameStore((s) => s.tickRetortBurn);
 
   useEffect(() => {
-    if (!hasStartedGame || !doorMoving) return;
+    if (!simulating || !doorMoving) return;
     const id = window.setInterval(() => tickRetortDoor(), 40);
     return () => window.clearInterval(id);
-  }, [hasStartedGame, doorMoving, tickRetortDoor]);
+  }, [simulating, doorMoving, tickRetortDoor]);
 
   useEffect(() => {
-    if (!hasStartedGame || !machineLive) return;
+    if (!simulating || !machineLive) return;
     const id = window.setInterval(() => tickRetortBurn(), BURN_TICK_MS);
     return () => window.clearInterval(id);
-  }, [hasStartedGame, machineLive, tickRetortBurn]);
+  }, [simulating, machineLive, tickRetortBurn]);
 }

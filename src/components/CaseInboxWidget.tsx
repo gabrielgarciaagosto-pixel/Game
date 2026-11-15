@@ -14,6 +14,12 @@ import {
   permitStatusLabel,
 } from '../data/decedentVitals';
 import {
+  formatDateTime12,
+  formatTimeOf,
+  hour12Parts,
+  hour24From12,
+} from '../utils/clock12';
+import {
   decorPrefLabel,
   serviceMusicLabel,
 } from '../data/familyChapelPrefs';
@@ -252,7 +258,7 @@ export const CaseInboxWidget: React.FC = () => {
                     </h3>
                     <span className="text-[11px] text-slate-400">
                       Case ID #{activeFile.id} ·{' '}
-                      {new Date(activeFile.intakeTimestamp).toLocaleTimeString()}
+                      {formatTimeOf(new Date(activeFile.intakeTimestamp))}
                     </span>
                     {activeFile.headlineNote && (
                       <p
@@ -297,16 +303,12 @@ export const CaseInboxWidget: React.FC = () => {
                       </div>
                       <div>
                         <span className="text-slate-500">TOD</span>
-                        <div className="font-mono text-amber-200">
+                        <div className="font-mono text-amber-200 whitespace-nowrap">
                           {activeFile.dateOfDeathMs != null
-                            ? (() => {
-                                const colon = formatTod(
-                                  activeFile.timeOfDeathHour ?? 0,
-                                  activeFile.timeOfDeathMinute ?? 0
-                                );
-                                // HHMM first so paste into VR-441 yields 4 digits cleanly
-                                return `${colon.replace(':', '')} · ${colon}`;
-                              })()
+                            ? formatTod(
+                                activeFile.timeOfDeathHour ?? 0,
+                                activeFile.timeOfDeathMinute ?? 0
+                              )
                             : '—'}
                         </div>
                       </div>
@@ -442,7 +444,7 @@ export const CaseInboxWidget: React.FC = () => {
                         ? 'Family urn pickup set for '
                         : 'Viewing / service set for '}
                       <strong>
-                        {new Date(activeFile.serviceDateMs).toLocaleString()}
+                        {formatDateTime12(activeFile.serviceDateMs)}
                       </strong>
                       {gameNow() > activeFile.serviceDateMs ? (
                         <span className="text-red-400 font-bold"> — OVERDUE</span>
@@ -524,17 +526,43 @@ export const CaseInboxWidget: React.FC = () => {
                           {directPickup ? 'Pick pickup day' : 'Pick service day'}
                         </span>
                         <label className="text-[10px] text-slate-400 flex items-center gap-1">
-                          Hour (24h)
+                          Time
                           <select
-                            value={pickHour}
-                            onChange={(e) => setPickHour(Number(e.target.value))}
-                            className="bg-slate-800 rounded px-1 py-0.5 max-h-40"
+                            aria-label="Service hour"
+                            value={hour12Parts(pickHour).hour}
+                            onChange={(e) =>
+                              setPickHour(
+                                hour24From12(
+                                  Number(e.target.value),
+                                  hour12Parts(pickHour).meridiem
+                                )
+                              )
+                            }
+                            className="bg-slate-800 rounded px-1 py-0.5"
                           >
-                            {Array.from({ length: 24 }, (_, h) => h).map((h) => (
-                              <option key={h} value={h}>
-                                {String(h).padStart(2, '0')}:00
-                              </option>
-                            ))}
+                            {Array.from({ length: 12 }, (_, i) => i + 1).map(
+                              (h) => (
+                                <option key={h} value={h}>
+                                  {h}:00
+                                </option>
+                              )
+                            )}
+                          </select>
+                          <select
+                            aria-label="AM or PM"
+                            value={hour12Parts(pickHour).meridiem}
+                            onChange={(e) =>
+                              setPickHour(
+                                hour24From12(
+                                  hour12Parts(pickHour).hour,
+                                  e.target.value === 'PM' ? 'PM' : 'AM'
+                                )
+                              )
+                            }
+                            className="bg-slate-800 rounded px-1 py-0.5"
+                          >
+                            <option value="AM">AM</option>
+                            <option value="PM">PM</option>
                           </select>
                         </label>
                       </div>
@@ -667,7 +695,7 @@ function ArchivesPanel({
               </div>
               <div className="text-[11px] text-slate-400">
                 Case ID #{active.id} · closed{' '}
-                {new Date(active.closedAt).toLocaleString()}
+                {formatDateTime12(active.closedAt)}
               </div>
             </div>
             <p>
@@ -722,14 +750,8 @@ function ArchivesPanel({
                 </div>
                 <div>
                   <span>TOD</span>
-                  <div className="font-mono">
-                    {(() => {
-                      const colon = formatTod(
-                        active.timeOfDeathHour,
-                        active.timeOfDeathMinute
-                      );
-                      return `${colon.replace(':', '')} · ${colon}`;
-                    })()}
+                  <div className="font-mono whitespace-nowrap">
+                    {formatTod(active.timeOfDeathHour, active.timeOfDeathMinute)}
                   </div>
                 </div>
                 <div>

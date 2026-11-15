@@ -27,6 +27,7 @@ import {
   useGameStore,
 } from '../store/useGameStore';
 import { initialPermitStatus } from '../data/cremationPermits';
+import { formatClock12, formatDateTime12 } from '../utils/clock12';
 import type { DispositionDirective } from '../types/game';
 import { audioManager } from '../utils/audioManager';
 import {
@@ -119,7 +120,7 @@ export function advanceHours(hours: number) {
   useGameStore.getState().tickDecay();
   const d = new Date(gameNow());
   toast(
-    `+${hours}h → ${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} (offset ${(getClockOffsetMs() / 3_600_000).toFixed(1)}h)`
+    `+${hours}h → ${d.getMonth() + 1}/${d.getDate()} ${formatClock12(d.getHours(), d.getMinutes())} (offset ${(getClockOffsetMs() / 3_600_000).toFixed(1)}h)`
   );
 }
 
@@ -131,7 +132,7 @@ export function skipToNextDay() {
   advanceClockBy(delta);
   useGameStore.getState().tickFamilyUrnChoices();
   useGameStore.getState().expireUntaggedNames();
-  toast(`Skipped to next day (${new Date(gameNow()).toLocaleString()})`);
+  toast(`Skipped to next day (${formatDateTime12(gameNow())})`);
 }
 
 export function jumpToRareTone(tone: RareTone) {
@@ -150,7 +151,9 @@ export function jumpToRareTone(tone: RareTone) {
   }
   setClockOffsetMs(getClockOffsetMs() + (target.getTime() - now));
   useGameStore.setState({ shopRotation: createShopRotation() });
-  toast(`Jumped to ${tone} window ~${entry.startHour}:00 (${entry.id})`);
+  toast(
+    `Jumped to ${tone} window ~${formatClock12(entry.startHour, 0)} (${entry.id})`
+  );
 }
 
 export function forceRareRotation() {

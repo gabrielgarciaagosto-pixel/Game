@@ -1,13 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { GAME_VERSION } from '../version';
 
 interface UrnStartScreenProps {
   onStartComplete: () => void;
+  /** A save is already on disk. The button resumes it instead of starting over. */
+  canContinue?: boolean;
   title?: string;
   subtitle?: string;
 }
 
 export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
   onStartComplete,
+  canContinue = false,
   title = 'OSSUARIAN',
   subtitle = 'FIRST URN',
 }) => {
@@ -196,6 +200,21 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
         .start-btn.hidden-btn {
           opacity: 0;
           pointer-events: none;
+        }
+
+        .splash-credit {
+          position: absolute;
+          left: var(--safe-left);
+          right: var(--safe-right);
+          bottom: calc(var(--safe-bottom) + 0.85rem);
+          margin: 0;
+          font-family: 'Cinzel', Georgia, 'Times New Roman', serif;
+          font-size: 0.68rem;
+          font-weight: 500;
+          letter-spacing: 0.12em;
+          color: #6e675c;
+          text-align: center;
+          line-height: 1.4;
         }
 
         .ash-puff-1, .ash-puff-2, .ash-puff-3 {
@@ -399,9 +418,12 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
           onPointerDown={handleStartClick}
           className={`start-btn ${isAnimating ? 'hidden-btn' : ''}`}
         >
-          Start
+          {canContinue ? 'Continue' : 'Start'}
         </button>
       </div>
+      <p className="splash-credit">
+        Developed by Dextra-Mortem · v{GAME_VERSION}
+      </p>
     </div>
   );
 };

@@ -9,6 +9,7 @@ import { gameNow } from '../utils/gameNow';
  */
 export function useIntakeSpawner() {
   const hasStartedGame = useGameStore((s) => s.hasStartedGame);
+  const titleGate = useGameStore((s) => s.titleGate);
   const receiveNewIntake = useGameStore((s) => s.receiveNewIntake);
   const expireUntaggedNames = useGameStore((s) => s.expireUntaggedNames);
   const tickDecay = useGameStore((s) => s.tickDecay);
@@ -22,7 +23,7 @@ export function useIntakeSpawner() {
   clientFlowRef.current = clientFlow;
 
   useEffect(() => {
-    if (!hasStartedGame) return;
+    if (!hasStartedGame || titleGate) return;
 
     let timeoutId: ReturnType<typeof setTimeout>;
     let cancelled = false;
@@ -59,6 +60,7 @@ export function useIntakeSpawner() {
     };
   }, [
     hasStartedGame,
+    titleGate,
     receiveNewIntake,
     expireUntaggedNames,
     tickDecay,

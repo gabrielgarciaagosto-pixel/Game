@@ -29,7 +29,10 @@ export interface PermitFormDraft {
   legalName: string;
   dateOfBirth: string; // YYYY-MM-DD
   dateOfDeath: string;
-  /** 24h time — VR-441 uses 4-digit HHMM; HH:MM also accepted when matching. */
+  /**
+   * Time of death. VR-441 stores 12-hour text ("4:15 AM").
+   * Matching also accepts legacy 24-hour HHMM and HH:MM.
+   */
   timeOfDeath: string;
   placeOfBirth: string;
 }
@@ -63,11 +66,23 @@ export function emptyPermitForm(): PermitFormDraft {
 }
 
 /**
- * Normalize TOD for exact match: strip colons → 4-digit HHMM with leading zeros.
- * "09:30" and "0930" both → "0930". "930" / "9:30" → null (leading zero required).
+ * Normalize TOD for exact match into 4-digit 24-hour HHMM.
+ * "4:15 AM" and "04:15 AM" → "0415". "9:40 PM" → "2140".
+ * Legacy "09:30" and "0930" still match. "930" / "9:30" without AM/PM do not.
  */
 export function normalizeTodToHhmm(raw: string): string | null {
-  const digits = raw.trim().replace(/:/g, '');
+  const trimmed = raw.trim().replace(/\s+/g, ' ');
+  const twelve = trimmed.match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/);
+  if (twelve) {
+    let h = Number(twelve[1]);
+    const min = Number(twelve[2]);
+    const pm = twelve[3].toUpperCase() === 'PM';
+    if (h < 1 || h > 12 || min < 0 || min > 59) return null;
+    if (h === 12) h = pm ? 12 : 0;
+    else if (pm) h += 12;
+    return `${String(h).padStart(2, '0')}${String(min).padStart(2, '0')}`;
+  }
+  const digits = trimmed.replace(/:/g, '');
   if (!/^\d{4}$/.test(digits)) return null;
   const h = Number(digits.slice(0, 2));
   const min = Number(digits.slice(2, 4));

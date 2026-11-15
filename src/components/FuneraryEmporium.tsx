@@ -28,6 +28,7 @@ import {
 } from '../data/urnCatalog';
 import { useGameStore } from '../store/useGameStore';
 import { friendlyToken } from '../types/game';
+import { formatTimeOf } from '../utils/clock12';
 import { gameDate, gameNow, subscribeClock } from '../utils/gameNow';
 import { activeMarket, quotedPrice } from '../news/newsWire';
 import { CasketVessel } from './caskets/CasketVessel';
@@ -41,12 +42,8 @@ type InspectTarget =
   | { kind: 'casket'; id: string }
   | null;
 
-function pad2(n: number): string {
-  return String(n).padStart(2, '0');
-}
-
 function formatClock(d: Date): string {
-  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  return formatTimeOf(d);
 }
 
 function rarityClass(r: ItemRarity): string {

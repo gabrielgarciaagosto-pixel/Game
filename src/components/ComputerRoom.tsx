@@ -5,6 +5,7 @@ import {
   type PermitFormDraft,
 } from '../data/cremationPermits';
 import { US_PLACE_LABELS } from '../data/usPlaces';
+import { formatTimeOf } from '../utils/clock12';
 import { gameDate, subscribeClock } from '../utils/gameNow';
 import { useGameStore } from '../store/useGameStore';
 import { BankBrowser } from './BankBrowser';
@@ -15,12 +16,27 @@ import { FleetBrowser } from './FleetBrowser';
 import { RealtyBrowser } from './RealtyBrowser';
 import { CrematoryCatalog } from './crematory/CrematoryCatalog';
 
-function digitsOnlyHhmm(raw: string): string {
-  return raw.replace(/\D/g, '').slice(0, 4);
+type Meridiem = 'AM' | 'PM';
+
+function readTodFields(raw: string): {
+  hour: string;
+  minute: string;
+  mer: Meridiem;
+} {
+  const match = raw.trim().match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/);
+  if (!match) return { hour: '', minute: '00', mer: 'AM' };
+  return {
+    hour: String(Number(match[1])),
+    minute: match[2],
+    mer: match[3].toUpperCase() === 'PM' ? 'PM' : 'AM',
+  };
 }
 
-function pad2(n: number): string {
-  return String(n).padStart(2, '0');
+function writeTod(hour: string, minute: string, mer: Meridiem): string {
+  if (!hour) return '';
+  const min = Number(minute);
+  if (!Number.isFinite(min) || min < 0 || min > 59) return '';
+  return `${Number(hour)}:${String(min).padStart(2, '0')} ${mer}`;
 }
 
 type DesktopApp =
@@ -116,7 +132,7 @@ export const ComputerRoom: React.FC = () => {
     }
   };
 
-  const clockLabel = `${pad2(clock.getHours())}:${pad2(clock.getMinutes())}`;
+  const clockLabel = formatTimeOf(clock);
 
   return (
     <div
@@ -281,31 +297,70 @@ export const ComputerRoom: React.FC = () => {
                   </label>
                 </div>
                 <label className="block text-[10px] text-[#9bb8a4]">
-                  Time of death (24h HHMM)
-                  <input
-                    value={form.timeOfDeath}
-                    onChange={(e) =>
+                  Time of death
+                  {(() => {
+                    const tod = readTodFields(form.timeOfDeath);
+                    const commit = (next: {
+                      hour: string;
+                      minute: string;
+                      mer: Meridiem;
+                    }) =>
                       setForm((f) => ({
                         ...f,
-                        timeOfDeath: digitsOnlyHhmm(e.target.value),
-                      }))
-                    }
-                    onPaste={(e) => {
-                      e.preventDefault();
-                      setForm((f) => ({
-                        ...f,
-                        timeOfDeath: digitsOnlyHhmm(
-                          e.clipboardData.getData('text')
-                        ),
+                        timeOfDeath: writeTod(next.hour, next.minute, next.mer),
                       }));
-                    }}
-                    placeholder="1030"
-                    className="mt-1 w-full bg-[#061018] border border-[#2a4a5c] rounded px-2 py-2 text-sm text-[#e8f5e9] font-mono tracking-widest"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    autoComplete="off"
-                    aria-label="Time of death HHMM"
-                  />
+                    return (
+                      <div className="mt-1 grid grid-cols-3 gap-2">
+                        <select
+                          aria-label="Hour of death"
+                          value={tod.hour}
+                          onChange={(e) =>
+                            commit({ ...tod, hour: e.target.value })
+                          }
+                          className="w-full bg-[#061018] border border-[#2a4a5c] rounded px-2 py-2 text-sm text-[#e8f5e9] font-mono"
+                        >
+                          <option value="">Hour</option>
+                          {Array.from({ length: 12 }, (_, i) => i + 1).map(
+                            (h) => (
+                              <option key={h} value={String(h)}>
+                                {h}
+                              </option>
+                            )
+                          )}
+                        </select>
+                        <select
+                          aria-label="Minute of death"
+                          value={tod.minute}
+                          onChange={(e) =>
+                            commit({ ...tod, minute: e.target.value })
+                          }
+                          className="w-full bg-[#061018] border border-[#2a4a5c] rounded px-2 py-2 text-sm text-[#e8f5e9] font-mono"
+                        >
+                          {Array.from({ length: 60 }, (_, m) =>
+                            String(m).padStart(2, '0')
+                          ).map((m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          aria-label="AM or PM"
+                          value={tod.mer}
+                          onChange={(e) =>
+                            commit({
+                              ...tod,
+                              mer: e.target.value === 'PM' ? 'PM' : 'AM',
+                            })
+                          }
+                          className="w-full bg-[#061018] border border-[#2a4a5c] rounded px-2 py-2 text-sm text-[#e8f5e9] font-mono"
+                        >
+                          <option value="AM">AM</option>
+                          <option value="PM">PM</option>
+                        </select>
+                      </div>
+                    );
+                  })()}
                 </label>
                 <label className="block text-[10px] text-[#9bb8a4]">
                   Place of birth filter

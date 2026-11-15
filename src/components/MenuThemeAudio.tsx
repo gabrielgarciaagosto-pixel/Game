@@ -30,6 +30,7 @@ const DUCK_FADE_MS = 750;
  */
 export const MenuThemeAudio: React.FC = () => {
   const hasStartedGame = useGameStore((s) => s.hasStartedGame);
+  const titleGate = useGameStore((s) => s.titleGate);
   const activeStation = useGameStore((s) => s.activeStation);
 
   const manifestRef = useRef<MenuPlaylistManifest | null>(null);
@@ -40,8 +41,9 @@ export const MenuThemeAudio: React.FC = () => {
   /** Monotonic token so a stale playTrack never fades a newer menu start. */
   const playTokenRef = useRef(0);
 
-  const chapelOwns = hasStartedGame && activeStation === 'SHOWROOM';
-  const atHub = !hasStartedGame || activeStation === 'OVERVIEW';
+  const inPlay = hasStartedGame && !titleGate;
+  const chapelOwns = inPlay && activeStation === 'SHOWROOM';
+  const atHub = !inPlay || activeStation === 'OVERVIEW';
   const menuShouldPlay = !chapelOwns;
   const gainScale = atHub ? 1 : ROOM_DUCK;
   const menuShouldPlayRef = useRef(menuShouldPlay);

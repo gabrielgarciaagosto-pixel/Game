@@ -45,7 +45,7 @@ function App() {
   useEffect(() => {
     window.__ossuarianHardwareBack = () => {
       const state = useGameStore.getState();
-      if (!state.hasStartedGame) return 'exit';
+      if (state.titleGate || !state.hasStartedGame) return 'exit';
       if (state.bankForeclosed) {
         state.acknowledgeBankForeclosure();
         return 'handled';
@@ -86,7 +86,9 @@ function App() {
 
   const {
     hasStartedGame,
+    titleGate,
     startGame,
+    resumeGame,
     cash,
     reputation,
     intermentScore,
@@ -116,13 +118,14 @@ function App() {
       <CrematoryAudio />
       <ServiceMusicAudio />
       <NotificationPing />
-      <BankForeclosureScreen />
-      <ServiceFeedbackModal />
-      {!hasStartedGame ? (
+      {!titleGate && <BankForeclosureScreen />}
+      {!titleGate && <ServiceFeedbackModal />}
+      {titleGate || !hasStartedGame ? (
         <UrnStartScreen
           title="OSSUARIAN"
           subtitle="FIRST URN"
-          onStartComplete={startGame}
+          canContinue={hasStartedGame}
+          onStartComplete={hasStartedGame ? resumeGame : startGame}
         />
       ) : (
     <div className="relative flex flex-col w-full h-full overflow-hidden bg-slate-950 text-slate-100">

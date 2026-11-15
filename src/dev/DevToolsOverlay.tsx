@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
+import { formatDateTime12 } from '../utils/clock12';
 import {
   gameDate,
   gameNow,
@@ -192,7 +193,9 @@ export const DevToolsOverlay: React.FC = () => {
     origY: number;
     moved: boolean;
   } | null>(null);
-  const [clockLabel, setClockLabel] = useState(() => gameDate().toLocaleString());
+  const [clockLabel, setClockLabel] = useState(() =>
+    formatDateTime12(gameDate().getTime())
+  );
   const [audioLine, setAudioLine] = useState(() => actions.audioDebugLine());
   const [cashInput, setCashInput] = useState(String(cash));
   const [repInput, setRepInput] = useState(String(reputation));
@@ -211,14 +214,14 @@ export const DevToolsOverlay: React.FC = () => {
 
   useEffect(() => {
     return subscribeClock(() => {
-      setClockLabel(gameDate().toLocaleString());
+      setClockLabel(formatDateTime12(gameDate().getTime()));
     });
   }, []);
 
   useEffect(() => {
     if (!open) return;
     const id = window.setInterval(() => {
-      setClockLabel(gameDate().toLocaleString());
+      setClockLabel(formatDateTime12(gameDate().getTime()));
       setAudioLine(actions.audioDebugLine());
     }, 500);
     return () => window.clearInterval(id);

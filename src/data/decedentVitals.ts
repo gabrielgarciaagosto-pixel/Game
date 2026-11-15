@@ -1,3 +1,4 @@
+import { formatClock12 } from '../utils/clock12';
 import { pickRandomUsPlace } from './usPlaces';
 
 /** Vitals shown on Case Files and required for cremation permits. */
@@ -30,7 +31,7 @@ export function formatDateMs(ms: number): string {
 }
 
 export function formatTod(hour: number, minute: number): string {
-  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  return formatClock12(hour, minute);
 }
 
 export function formatVitalsDob(v: DecedentVitals): string {

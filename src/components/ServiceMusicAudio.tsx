@@ -27,6 +27,7 @@ function isViewingService(directive: string): boolean {
  */
 export const ServiceMusicAudio: React.FC = () => {
   const activeStation = useGameStore((s) => s.activeStation);
+  const titleGate = useGameStore((s) => s.titleGate);
   const cases = useGameStore((s) => s.cases);
   const activeCaseId = useGameStore((s) => s.activeCaseId);
   /** When retort flips OFF mid-service, re-assert the chapel bed. */
@@ -51,6 +52,7 @@ export const ServiceMusicAudio: React.FC = () => {
       : null;
 
   const serviceActive =
+    !titleGate &&
     activeStation === 'SHOWROOM' &&
     chapelCase != null &&
     isViewingService(chapelCase.directive);

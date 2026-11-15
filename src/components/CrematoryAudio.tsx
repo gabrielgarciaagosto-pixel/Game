@@ -20,6 +20,7 @@ export const CrematoryAudio: React.FC = () => {
   const primaryOn = useGameStore((s) => s.retort.primaryOn);
   const phase = useGameStore((s) => s.retort.phase);
   const activeStation = useGameStore((s) => s.activeStation);
+  const titleGate = useGameStore((s) => s.titleGate);
   const patchRetort = useGameStore((s) => s.patchRetort);
   const activeBedRef = useRef<'start' | 'loop' | 'off'>('off');
 
@@ -33,7 +34,8 @@ export const CrematoryAudio: React.FC = () => {
       if (id !== 'crematoryStart') return;
       const state = useGameStore.getState();
       const { audioMode: mode, primaryOn: on, phase: p } = state.retort;
-      const inCrematory = state.activeStation === 'CREMATION';
+      const inCrematory =
+        !state.titleGate && state.activeStation === 'CREMATION';
       if (mode === 'START' && on && p !== 'SWEEP' && p !== 'DONE') {
         patchRetort({ audioMode: 'LOOP' });
         const bus = audioManager.getCurrentId();
@@ -67,7 +69,7 @@ export const CrematoryAudio: React.FC = () => {
       phase === 'SWEEP' ||
       phase === 'DONE' ||
       !primaryOn;
-    const inCrematory = activeStation === 'CREMATION';
+    const inCrematory = !titleGate && activeStation === 'CREMATION';
     const otherMusicOwns =
       isServiceBedId(audioManager.getCurrentId()) ||
       isMenuBedId(audioManager.getCurrentId());
@@ -126,7 +128,7 @@ export const CrematoryAudio: React.FC = () => {
         durationMs: CROSSFADE_MS,
       });
     }
-  }, [audioMode, primaryOn, phase, activeStation, patchRetort]);
+  }, [audioMode, primaryOn, phase, activeStation, titleGate, patchRetort]);
 
   useEffect(() => {
     return () => {
@@ -141,7 +143,7 @@ export const CrematoryAudio: React.FC = () => {
   useEffect(() => {
     const onUnmute = () => {
       const state = useGameStore.getState();
-      if (state.activeStation !== 'CREMATION') return;
+      if (state.titleGate || state.activeStation !== 'CREMATION') return;
       const bus = audioManager.getCurrentId();
       if (isServiceBedId(bus) || isMenuBedId(bus)) return;
       const mode = state.retort.audioMode;

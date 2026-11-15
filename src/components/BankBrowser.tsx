@@ -7,6 +7,7 @@ import {
   BANK_FORECLOSURE_AFTER_MS,
   formatFamilyCountdown,
 } from '../data/bankForeclosure';
+import { formatDateTime12 } from '../utils/clock12';
 import { gameNow } from '../utils/gameNow';
 import { useGameStore } from '../store/useGameStore';
 import { TapButton } from './TapButton';
@@ -283,7 +284,7 @@ export const BankBrowser: React.FC = () => {
                 </div>
                 <div className="text-[10px] font-mono text-slate-400">
                   Rem ${l.principalRemaining.toLocaleString()} · next due{' '}
-                  {new Date(l.nextPaymentDueAt).toLocaleString()} · missed{' '}
+                  {formatDateTime12(l.nextPaymentDueAt)} · missed{' '}
                   {l.missedPayments}
                 </div>
                 <div className="flex gap-2">
