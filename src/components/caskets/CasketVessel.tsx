@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { friendlyToken } from '../../types/game';
 import type {
   CasketCarving,
   CasketCatalogEntry,
@@ -1400,7 +1401,7 @@ export const CasketVessel: React.FC<{
         <g>
           <rect x="300" y={O.y + 28} width="72" height="14" rx="2" fill="#1c1410" opacity="0.72" />
           <text x="336" y={O.y + 38} textAnchor="middle" fill="#f5e6c8" fontSize="8" fontFamily="Georgia, serif">
-            {casket.material}
+            {friendlyToken(casket.material)}
           </text>
         </g>
       )}

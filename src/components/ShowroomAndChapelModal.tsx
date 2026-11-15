@@ -25,7 +25,7 @@ import {
   serviceMusicOptions,
 } from '../data/familyChapelPrefs';
 import { caseUsesUrnStand } from '../data/familyUrnPick';
-import { directiveLabel } from '../types/game';
+import { directiveLabel, friendlyToken } from '../types/game';
 import { ChapelMourners } from './ChapelMourners';
 import { UrnVessel } from './urns/UrnVessel';
 import { CasketVessel } from './caskets/CasketVessel';
@@ -228,13 +228,14 @@ export const ShowroomAndChapelModal: React.FC = () => {
             CHAPEL — {displayCaseName(currentCase)}
           </h2>
           <p className="text-[10px] text-violet-300/70 leading-snug">
-            {directiveLabel(currentCase.directive)} ·             Prefers {currentCase.preferredFlowers}
+            {directiveLabel(currentCase.directive)} · Prefers{' '}
+            {friendlyToken(currentCase.preferredFlowers)}
             {currentCase.familyChapelPrefs.wallId
               ? ` · ${decorPrefLabel(currentCase.familyChapelPrefs.wallId)}`
               : ''}{' '}
-            · Urn {currentCase.preferredUrnMaterial}
+            · Urn {friendlyToken(currentCase.preferredUrnMaterial)}
             {!urnStandService
-              ? ` · Casket ${currentCase.preferredCasketMaterial}`
+              ? ` · Casket ${friendlyToken(currentCase.preferredCasketMaterial)}`
               : ''}{' '}
             · ${cash}
             {lateService ? ' · LATE' : ''}
@@ -611,7 +612,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
                     : 'bg-violet-950 text-violet-600'
                 }`}
               >
-                Place {flower}
+                Place {friendlyToken(flower)}
                 {preferred ? ' ★' : ''} ({inv?.ownedCount ?? 0})
               </button>
             );

@@ -4,8 +4,8 @@ import {
   DraperEight,
   FortyOneBed,
   IvoryDeck,
+  PEWTER_TRIM,
   PewterParish,
-  SilentArrival,
   SilverLandau,
 } from './profiles';
 
@@ -194,8 +194,6 @@ function Body({
           <Wheel cx={330} cy={132} r={22} whitewall />
         </g>
       );
-    case 'rec_silent_arrival':
-      return <SilentArrival paint={paint} glass={glass} />;
     case 'esc_civic_lead':
       return (
         <g>
@@ -295,8 +293,11 @@ function Body({
       return <SilverLandau paint={paint} glass={glass} />;
     case 'coa_state_landaulette':
       return <CrestLandau paint={paint} glass={glass} />;
-    default:
+    default: {
+      const trim = PEWTER_TRIM[vehicleId];
+      if (trim) return <PewterParish paint={paint} glass={glass} trim={trim} />;
       return null;
+    }
   }
 }
 
@@ -304,13 +305,25 @@ const PAINT: Record<string, [string, string, string?]> = {
   rec_parish_panel: ['#f4f1ea', '#c8c4b8'],
   rec_night_call: ['#24344a', '#101820'],
   rec_laurel: ['#2a241c', '#0c0c0e'],
-  rec_silent_arrival: ['#3a414a', '#2c323a', '#242a32'],
   esc_civic_lead: ['#2a2e33', '#101114'],
   esc_garden_deck: ['#f7f1e4', '#e4d2ae', '#c4b08a'],
   flw_forty_one: ['#f6f3ec', '#e4ddd0', '#b7b0a2'],
   esc_procession_twin: ['#161616', '#050505'],
   esc_family_landau: ['#1a1a1c', '#050505'],
   coa_parish_box: ['#d4c8b6', '#a89884', '#6e655c'],
+  coa_pewter_hollis_square: ['#c5cdd4', '#8e99a4', '#5c6670'],
+  coa_pewter_hollis_night: ['#2c3036', '#1c2026', '#121418'],
+  coa_pewter_hollis_chapel: ['#cbbba6', '#9a8b78', '#6a5e52'],
+  coa_pewter_keene_plain: ['#4a4e54', '#33373c', '#22262b'],
+  coa_pewter_keene_iron: ['#6a6e62', '#4a4e44', '#32362e'],
+  coa_pewter_keene_disc: ['#7d858c', '#565e66', '#3a4248'],
+  coa_pewter_vesper_arch: ['#8a93a0', '#5e6874', '#3e4650'],
+  coa_pewter_vesper_low: ['#b7b3aa', '#847f76', '#58544e'],
+  coa_pewter_vesper_lantern: ['#b0a89c', '#7c756c', '#524c46'],
+  coa_pewter_sable_split: ['#e4dcc8', '#c4b8a4', '#8a7e6c'],
+  coa_pewter_sable_wire: ['#d8d2c4', '#a39c8e', '#6e685e'],
+  coa_pewter_quill_alloy: ['#9aa0a6', '#6c7278', '#484e54'],
+  coa_pewter_quill_stack: ['#3e4a46', '#2a342f', '#1c2420'],
   coa_iron_landau: ['#2a2e32', '#121416', '#07080a'],
   coa_glass_formal: ['#f4f6f8', '#c8ced4', '#8e969e'],
   coa_state_landaulette: ['#2c3036', '#14161a', '#07080a'],
@@ -328,11 +341,9 @@ export const FleetVehicleArt: React.FC<{
   const hi = spec[0];
   const mid = spec[1];
   const shade = spec[2] ?? '#050505';
-  const tall = vehicleId === 'rec_silent_arrival';
-  const vbH = tall ? 198 : 170;
   return (
     <svg
-      viewBox={`0 0 420 ${vbH}`}
+      viewBox="0 0 420 170"
       className="w-full h-full"
       role="img"
       aria-label={title ?? vehicleId}
@@ -354,8 +365,8 @@ export const FleetVehicleArt: React.FC<{
           <stop offset="100%" stopColor="#6a4a12" />
         </radialGradient>
       </defs>
-      <rect width="420" height={vbH} fill="transparent" />
-      <ellipse cx="210" cy={tall ? 188 : 158} rx="170" ry="6" fill="rgba(0,0,0,0.28)" />
+      <rect width="420" height="170" fill="transparent" />
+      <ellipse cx="210" cy="158" rx="170" ry="6" fill="rgba(0,0,0,0.28)" />
       <Body vehicleId={vehicleId} g={g} />
     </svg>
   );

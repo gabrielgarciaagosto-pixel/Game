@@ -1,6 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
-import { directiveBlurb, directiveLabel } from '../types/game';
+import {
+  caseStatusLabel,
+  directiveBlurb,
+  directiveLabel,
+  friendlyToken,
+} from '../types/game';
 import {
   formatTod,
   formatVitalsDob,
@@ -13,6 +18,7 @@ import {
 } from '../data/familyChapelPrefs';
 import { getUrnById } from '../data/urnCatalog';
 import { gameNow } from '../utils/gameNow';
+import { DEV_TOOLS } from '../dev';
 import { UrnVessel } from './urns/UrnVessel';
 
 function startOfDay(ms: number): number {
@@ -109,8 +115,22 @@ export const CaseInboxWidget: React.FC = () => {
           className="fixed z-50 h-[min(62vh,26rem)] bg-slate-900 border-2 border-amber-500/60 rounded-2xl shadow-2xl flex overflow-hidden text-slate-100 select-none"
         >
           <div className="w-[38%] max-w-[9.5rem] border-r border-slate-800 overflow-y-auto bg-slate-950/60">
-            <div className="p-2 text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800">
-              Family Directives
+            <div className="p-2 border-b border-slate-800">
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Family Directives
+              </div>
+              {DEV_TOOLS ? (
+                <button
+                  type="button"
+                  aria-label="Developer tools"
+                  onClick={() =>
+                    window.dispatchEvent(new Event('ossuarian-dev-open'))
+                  }
+                  className="mt-1 font-mono text-[9px] font-bold tracking-wider text-lime-300 border border-lime-400/70 bg-zinc-950 rounded px-1 py-0.5"
+                >
+                  DEV
+                </button>
+              ) : null}
             </div>
             {inboxFiles.length === 0 && (
               <p className="p-3 text-xs text-slate-500">Inbox empty</p>
@@ -258,7 +278,7 @@ export const CaseInboxWidget: React.FC = () => {
                   <p>
                     <span className="text-slate-400">Weight & Tissue:</span>{' '}
                     <strong className="text-white">
-                      {activeFile.weightLbs} lbs ({activeFile.tissueCondition})
+                      {activeFile.weightLbs} lbs ({friendlyToken(activeFile.tissueCondition)})
                     </strong>
                   </p>
                   <p>
@@ -273,7 +293,7 @@ export const CaseInboxWidget: React.FC = () => {
                   <p>
                     <span className="text-slate-400">Flower Arrangement:</span>{' '}
                     <strong className="text-emerald-300">
-                      {activeFile.preferredFlowers}
+                      {friendlyToken(activeFile.preferredFlowers)}
                     </strong>
                   </p>
                   {(() => {
@@ -300,7 +320,7 @@ export const CaseInboxWidget: React.FC = () => {
                             Music · {serviceMusicLabel(prefs.musicTrackId)}
                           </span>
                           <span className="col-span-2">
-                            Flowers · {prefs.flowers}
+                            Flowers · {friendlyToken(prefs.flowers)}
                           </span>
                         </div>
                         <p className="text-[9px] text-violet-400/80">
@@ -332,7 +352,7 @@ export const CaseInboxWidget: React.FC = () => {
                                 {urn.name}
                               </div>
                               <div className="text-[10px] text-slate-400">
-                                {urn.material} · ${urn.cost}
+                                {friendlyToken(urn.material)} · ${urn.cost}
                               </div>
                             </div>
                           </div>
@@ -348,13 +368,7 @@ export const CaseInboxWidget: React.FC = () => {
                     <p>
                       <span className="text-slate-400">Status:</span>{' '}
                       <strong className="text-sky-300">
-                        {linkedCase.location}
-                        {linkedCase.embalmRank
-                          ? ` · Embalm ${linkedCase.embalmRank}`
-                          : ''}
-                        {linkedCase.cremationRank
-                          ? ` · Cremation ${linkedCase.cremationRank}`
-                          : ''}
+                        {caseStatusLabel(linkedCase)}
                       </strong>
                     </p>
                   )}

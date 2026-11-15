@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CaseTransferBar } from './CaseTransferBar';
-import { displayCaseName } from '../types/game';
+import { displayCaseName, friendlyToken } from '../types/game';
 import {
   caseAtLocation,
   CREMULATOR_REPLACEMENT_COST,
@@ -984,7 +984,7 @@ export const UrnFillingMiniGame: React.FC = () => {
                     {familyUrn.name}
                   </div>
                   <div className="text-[10px] text-zinc-400">
-                    {familyUrn.material} · prestige {familyUrn.prestigeBonus}
+                    {friendlyToken(familyUrn.material)} · prestige {familyUrn.prestigeBonus}
                   </div>
                   {familyOwned ? (
                     <button

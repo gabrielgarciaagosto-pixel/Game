@@ -226,8 +226,346 @@ export function SilverLandau({ paint, glass }: Ids) {
   );
 }
 
+/**
+ * Same 1994 parish body. Variants only swap roof pad, irons, belt,
+ * lamps, and wheels. Omit trim and the original Pewter Parish is drawn.
+ */
+export type PewterTrim = {
+  roof: 'full' | 'rear' | 'thin';
+  bars: 'twin' | 'single' | 'arch' | 'none';
+  windows: 'square' | 'narrow' | 'raked';
+  belt: string | null;
+  lamp: 'rect' | 'round' | 'stack';
+  tail: 'block' | 'round';
+  wheels: 'whitewall' | 'disc' | 'alloy' | 'wire' | 'blackwall';
+};
+
+export const PEWTER_TRIM: Record<string, PewterTrim> = {
+  coa_pewter_hollis_square: {
+    roof: 'full',
+    bars: 'twin',
+    windows: 'square',
+    belt: '#efe8dc',
+    lamp: 'rect',
+    tail: 'block',
+    wheels: 'alloy',
+  },
+  coa_pewter_hollis_night: {
+    roof: 'rear',
+    bars: 'twin',
+    windows: 'square',
+    belt: '#8a9098',
+    lamp: 'rect',
+    tail: 'block',
+    wheels: 'whitewall',
+  },
+  coa_pewter_hollis_chapel: {
+    roof: 'full',
+    bars: 'single',
+    windows: 'narrow',
+    belt: '#efe8dc',
+    lamp: 'rect',
+    tail: 'block',
+    wheels: 'disc',
+  },
+  coa_pewter_keene_plain: {
+    roof: 'rear',
+    bars: 'none',
+    windows: 'square',
+    belt: null,
+    lamp: 'rect',
+    tail: 'block',
+    wheels: 'blackwall',
+  },
+  coa_pewter_keene_iron: {
+    roof: 'full',
+    bars: 'twin',
+    windows: 'square',
+    belt: '#b7b3a4',
+    lamp: 'rect',
+    tail: 'block',
+    wheels: 'blackwall',
+  },
+  coa_pewter_keene_disc: {
+    roof: 'full',
+    bars: 'single',
+    windows: 'narrow',
+    belt: '#d5d0c6',
+    lamp: 'rect',
+    tail: 'block',
+    wheels: 'disc',
+  },
+  coa_pewter_vesper_arch: {
+    roof: 'full',
+    bars: 'arch',
+    windows: 'raked',
+    belt: '#efe8dc',
+    lamp: 'rect',
+    tail: 'round',
+    wheels: 'whitewall',
+  },
+  coa_pewter_vesper_low: {
+    roof: 'thin',
+    bars: 'single',
+    windows: 'narrow',
+    belt: '#cfc6b6',
+    lamp: 'rect',
+    tail: 'block',
+    wheels: 'alloy',
+  },
+  coa_pewter_vesper_lantern: {
+    roof: 'full',
+    bars: 'arch',
+    windows: 'square',
+    belt: '#efe8dc',
+    lamp: 'round',
+    tail: 'round',
+    wheels: 'wire',
+  },
+  coa_pewter_sable_split: {
+    roof: 'rear',
+    bars: 'twin',
+    windows: 'square',
+    belt: '#f4efe4',
+    lamp: 'rect',
+    tail: 'block',
+    wheels: 'whitewall',
+  },
+  coa_pewter_sable_wire: {
+    roof: 'full',
+    bars: 'twin',
+    windows: 'narrow',
+    belt: '#efe8dc',
+    lamp: 'rect',
+    tail: 'block',
+    wheels: 'wire',
+  },
+  coa_pewter_quill_alloy: {
+    roof: 'full',
+    bars: 'single',
+    windows: 'square',
+    belt: '#e4ddd0',
+    lamp: 'stack',
+    tail: 'block',
+    wheels: 'alloy',
+  },
+  coa_pewter_quill_stack: {
+    roof: 'thin',
+    bars: 'none',
+    windows: 'raked',
+    belt: null,
+    lamp: 'stack',
+    tail: 'round',
+    wheels: 'blackwall',
+  },
+};
+
+function Blackwall({ cx, cy, r }: { cx: number; cy: number; r: number }) {
+  return (
+    <g>
+      <circle cx={cx} cy={cy} r={r} fill="#1a1c20" />
+      <circle cx={cx} cy={cy} r={r * 0.72} fill="#2a2e34" />
+      <circle cx={cx} cy={cy} r={r * 0.22} fill="#8a9098" />
+    </g>
+  );
+}
+
+function ParishRoof({ kind }: { kind: PewterTrim['roof'] }) {
+  if (kind === 'rear') {
+    return <path d="M286 66 H376 L390 102 H286 Z" fill="#12141a" />;
+  }
+  if (kind === 'thin') {
+    return (
+      <g>
+        <path d="M148 64 L162 54 H358 L372 66 H156 Z" fill="#12141a" />
+        <path d="M286 66 H376 L390 102 H286 Z" fill="#12141a" />
+      </g>
+    );
+  }
+  return (
+    <g>
+      <path d="M134 66 L150 48 H366 L382 66 H142 Z" fill="#12141a" />
+      <path d="M286 66 H376 L390 102 H286 Z" fill="#12141a" />
+    </g>
+  );
+}
+
+function ParishBars({ kind }: { kind: PewterTrim['bars'] }) {
+  if (kind === 'none') return null;
+  if (kind === 'single') {
+    return (
+      <path
+        d="M176 50 L358 46"
+        stroke="#eef2f6"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    );
+  }
+  if (kind === 'arch') {
+    return (
+      <path
+        d="M178 44 Q268 58 356 44"
+        fill="none"
+        stroke="#eef2f6"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    );
+  }
+  return (
+    <path
+      d="M176 46 L358 42 M174 52 L360 48"
+      stroke="#eef2f6"
+      strokeWidth="1.35"
+      strokeLinecap="round"
+    />
+  );
+}
+
+function ParishWindows({
+  kind,
+  glass,
+}: {
+  kind: PewterTrim['windows'];
+  glass: string;
+}) {
+  if (kind === 'narrow') {
+    return (
+      <g>
+        <Pane d="M162 58 H198 V102 H162 Z" glass={glass} />
+        <Pane d="M214 56 H250 V102 H214 Z" glass={glass} />
+        <Pane d="M266 56 H304 V98 H266 Z" glass={glass} />
+      </g>
+    );
+  }
+  if (kind === 'raked') {
+    return (
+      <g>
+        <Pane d="M158 64 H202 V102 H158 Z" glass={glass} />
+        <Pane d="M210 56 H254 V102 H210 Z" glass={glass} />
+        <Pane d="M262 56 H308 V98 H262 Z" glass={glass} />
+      </g>
+    );
+  }
+  return (
+    <g>
+      <Pane d="M158 58 H202 V102 H158 Z" glass={glass} />
+      <Pane d="M210 56 H254 V102 H210 Z" glass={glass} />
+      <Pane d="M262 56 H308 V98 H262 Z" glass={glass} />
+    </g>
+  );
+}
+
+function ParishLamp({ kind }: { kind: PewterTrim['lamp'] }) {
+  if (kind === 'round') {
+    return (
+      <g>
+        <circle cx="29" cy="99" r="6.2" fill="#e4ddd0" />
+        <circle cx="29" cy="99" r="3.1" fill="#f4e7b0" />
+      </g>
+    );
+  }
+  if (kind === 'stack') {
+    return (
+      <g>
+        <rect x="20" y="90" width="16" height="7" rx="1" fill="#e4ddd0" />
+        <rect x="20" y="99" width="16" height="7" rx="1" fill="#cfc6b6" />
+      </g>
+    );
+  }
+  return (
+    <g>
+      <rect x="20" y="94" width="18" height="10" rx="1" fill="#e4ddd0" />
+      <path d="M23 97 H35 M23 100 H35 M23 103 H35" stroke="#2a2a2a" strokeWidth="0.7" />
+    </g>
+  );
+}
+
+function ParishTail({ kind }: { kind: PewterTrim['tail'] }) {
+  if (kind === 'round') return <circle cx="394" cy="92" r="7" fill="#5c1218" />;
+  return <path d="M388 76 H400 V106 H388 Z" fill="#5c1218" />;
+}
+
+function ParishWheels({ kind }: { kind: PewterTrim['wheels'] }) {
+  return (
+    <g>
+      <Well cx={112} cy={124} r={21} />
+      <Well cx={318} cy={124} r={21} />
+      {kind === 'whitewall' && (
+        <g>
+          <Whitewall cx={112} cy={124} r={21} />
+          <Whitewall cx={318} cy={124} r={21} />
+        </g>
+      )}
+      {kind === 'disc' && (
+        <g>
+          <Whitewall cx={112} cy={124} r={21} disc />
+          <Whitewall cx={318} cy={124} r={21} disc />
+        </g>
+      )}
+      {kind === 'alloy' && (
+        <g>
+          <AlloyWheel cx={112} cy={124} r={21} spokes={5} />
+          <AlloyWheel cx={318} cy={124} r={21} spokes={5} />
+        </g>
+      )}
+      {kind === 'wire' && (
+        <g>
+          <AlloyWheel cx={112} cy={124} r={21} spokes={12} />
+          <AlloyWheel cx={318} cy={124} r={21} spokes={12} />
+        </g>
+      )}
+      {kind === 'blackwall' && (
+        <g>
+          <Blackwall cx={112} cy={124} r={21} />
+          <Blackwall cx={318} cy={124} r={21} />
+        </g>
+      )}
+    </g>
+  );
+}
+
 /** Pewter square hearse. Black roof, twin irons, wide whitewalls. */
-export function PewterParish({ paint, glass }: Ids) {
+export function PewterParish({
+  paint,
+  glass,
+  trim,
+}: Ids & { trim?: PewterTrim }) {
+  if (!trim) {
+    return (
+      <g>
+        <path
+          d="M20 112 L36 100 L54 92 H100 L126 68 L148 52 H360 L384 66 L396 100 L388 116 H26 Z"
+          fill={`url(#${paint})`}
+          stroke="rgba(255,255,255,0.35)"
+          strokeWidth="0.7"
+        />
+        <path d="M134 66 L150 48 H366 L382 66 H142 Z" fill="#12141a" />
+        <path d="M286 66 H376 L390 102 H286 Z" fill="#12141a" />
+        <path
+          d="M176 46 L358 42 M174 52 L360 48"
+          stroke="#eef2f6"
+          strokeWidth="1.35"
+          strokeLinecap="round"
+        />
+        <Pane d="M158 58 H202 V102 H158 Z" glass={glass} />
+        <Pane d="M210 56 H254 V102 H210 Z" glass={glass} />
+        <Pane d="M262 56 H308 V98 H262 Z" glass={glass} />
+        <path d="M56 98 H386" stroke="#efe8dc" strokeWidth="1.5" />
+        <path d="M44 110 H388" stroke="#cfc6b6" strokeWidth="1.7" />
+        <rect x="20" y="94" width="18" height="10" rx="1" fill="#e4ddd0" />
+        <path d="M23 97 H35 M23 100 H35 M23 103 H35" stroke="#2a2a2a" strokeWidth="0.7" />
+        <rect x="16" y="106" width="26" height="5" rx="1" fill="#d9d3c6" />
+        <path d="M388 76 H400 V106 H388 Z" fill="#5c1218" />
+        <circle cx="346" cy="90" r="3.6" fill="none" stroke="#6a645c" strokeWidth="1.1" />
+        <Well cx={112} cy={124} r={21} />
+        <Well cx={318} cy={124} r={21} />
+        <Whitewall cx={112} cy={124} r={21} />
+        <Whitewall cx={318} cy={124} r={21} />
+      </g>
+    );
+  }
   return (
     <g>
       <path
@@ -236,28 +574,18 @@ export function PewterParish({ paint, glass }: Ids) {
         stroke="rgba(255,255,255,0.35)"
         strokeWidth="0.7"
       />
-      <path d="M134 66 L150 48 H366 L382 66 H142 Z" fill="#12141a" />
-      <path d="M286 66 H376 L390 102 H286 Z" fill="#12141a" />
-      <path
-        d="M176 46 L358 42 M174 52 L360 48"
-        stroke="#eef2f6"
-        strokeWidth="1.35"
-        strokeLinecap="round"
-      />
-      <Pane d="M158 58 H202 V102 H158 Z" glass={glass} />
-      <Pane d="M210 56 H254 V102 H210 Z" glass={glass} />
-      <Pane d="M262 56 H308 V98 H262 Z" glass={glass} />
-      <path d="M56 98 H386" stroke="#efe8dc" strokeWidth="1.5" />
+      <ParishRoof kind={trim.roof} />
+      <ParishBars kind={trim.bars} />
+      <ParishWindows kind={trim.windows} glass={glass} />
+      {trim.belt ? (
+        <path d="M56 98 H386" stroke={trim.belt} strokeWidth="1.5" />
+      ) : null}
       <path d="M44 110 H388" stroke="#cfc6b6" strokeWidth="1.7" />
-      <rect x="20" y="94" width="18" height="10" rx="1" fill="#e4ddd0" />
-      <path d="M23 97 H35 M23 100 H35 M23 103 H35" stroke="#2a2a2a" strokeWidth="0.7" />
+      <ParishLamp kind={trim.lamp} />
       <rect x="16" y="106" width="26" height="5" rx="1" fill="#d9d3c6" />
-      <path d="M388 76 H400 V106 H388 Z" fill="#5c1218" />
+      <ParishTail kind={trim.tail} />
       <circle cx="346" cy="90" r="3.6" fill="none" stroke="#6a645c" strokeWidth="1.1" />
-      <Well cx={112} cy={124} r={21} />
-      <Well cx={318} cy={124} r={21} />
-      <Whitewall cx={112} cy={124} r={21} />
-      <Whitewall cx={318} cy={124} r={21} />
+      <ParishWheels kind={trim.wheels} />
     </g>
   );
 }
@@ -410,128 +738,3 @@ export function FortyOneBed({ paint, glass }: Ids) {
   );
 }
 
-function PleatedDrape({
-  x,
-  y,
-  w,
-  h,
-  clipId,
-}: {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  clipId: string;
-}) {
-  const n = Math.max(6, Math.round(w / 6.2));
-  const folds = [];
-  for (let i = 0; i < n; i++) {
-    const x0 = x + (i * w) / n;
-    const x1 = x0 + w / n;
-    const mid = (x0 + x1) / 2;
-    const face = i % 2 === 0;
-    folds.push(
-      <path
-        key={i}
-        d={`M${x0} ${y + 8} Q${mid} ${y + 2} ${x1} ${y + 8} L${x1} ${y + h - 1} L${x0} ${y + h - 1} Z`}
-        fill={face ? '#f3f0e6' : '#8d8474'}
-      />
-    );
-    folds.push(
-      <path
-        key={`e${i}`}
-        d={`M${x1 - 0.55} ${y + 9} L${x1 - 0.55} ${y + h - 1.5}`}
-        stroke={face ? '#5c564c' : '#f7f4ea'}
-        strokeWidth="0.65"
-      />
-    );
-  }
-  return (
-    <g clipPath={`url(#${clipId})`}>
-      <rect x={x - 1} y={y} width={w + 2} height={h} fill="#2a261e" />
-      {folds}
-      <path
-        d={`M${x} ${y + 5} H${x + w}`}
-        stroke="#f6f1e4"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </g>
-  );
-}
-
-/** Tall removal SUV. Chrome belt, quarter-glass landau bar, curtained rear glass. */
-export function SilentArrival({ paint, glass }: Ids) {
-  const clipDoor = `${glass}-door`;
-  const clipQuarter = `${glass}-quarter`;
-  return (
-    <g>
-      <defs>
-        <clipPath id={clipDoor}>
-          <path d="M212 28 H284 V90 H212 Z" />
-        </clipPath>
-        <clipPath id={clipQuarter}>
-          <path d="M292 28 H348 V76 H292 Z" />
-        </clipPath>
-      </defs>
-      <path
-        d="M4 166 L4 128 L12 112 L16 78 L30 62 L56 54 L104 48 L124 32 L142 22 H346 L368 30 L390 48 L406 78 L412 124 L406 166 Z"
-        fill={`url(#${paint})`}
-        stroke="rgba(255,255,255,0.42)"
-        strokeWidth="0.9"
-      />
-      <path d="M18 104 H396 L404 166 H8 Z" fill="#1a1f26" />
-      <path
-        d="M142 20 H356"
-        stroke="#eef2f6"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-      <path
-        d="M152 24 H336"
-        stroke="rgba(255,255,255,0.2)"
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
-      <rect x="6" y="78" width="20" height="46" rx="1.2" fill="#12151a" stroke="#e2e8ee" strokeWidth="1.2" />
-      <path d="M10 86 H22 M10 94 H22 M10 102 H22 M10 110 H22 M10 118 H22" stroke="#d5dde4" strokeWidth="1.2" />
-      <rect x="28" y="68" width="42" height="18" rx="1.8" fill="#f4f1e6" stroke="#e2e8ee" strokeWidth="0.9" />
-      <rect x="30" y="70" width="28" height="14" fill="#fff" />
-      <rect x="58" y="72" width="10" height="10" fill="#c5d8ee" />
-      <path d="M2 122 H42 V166 H0 Z" fill="#222830" stroke="#d5dde4" strokeWidth="1.15" />
-      <path d="M4 132 H38" stroke="#f2f5f8" strokeWidth="2.4" />
-      <path d="M4 142 H38" stroke="#9aa3ad" strokeWidth="1.4" />
-      <Pane d="M132 30 H204 V90 H118 L132 30 Z" glass={glass} />
-      <PleatedDrape x={212} y={28} w={72} h={62} clipId={clipDoor} />
-      <PleatedDrape x={292} y={28} w={56} h={48} clipId={clipQuarter} />
-      <path d="M212 28 H284 V90 H212 Z" fill="rgba(186,206,220,0.22)" stroke="#d7e0e8" strokeWidth="0.9" />
-      <path d="M292 28 H348 V76 H292 Z" fill="rgba(186,206,220,0.2)" stroke="#d7e0e8" strokeWidth="0.9" />
-      <path
-        d="M300 40 Q320 56 344 42"
-        fill="none"
-        stroke="#f7f8f8"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <circle cx="300" cy="40" r="2.3" fill="#f7f8f8" stroke="#9aa3ad" strokeWidth="0.45" />
-      <circle cx="344" cy="42" r="2.3" fill="#f7f8f8" stroke="#9aa3ad" strokeWidth="0.45" />
-      <path d="M48 100 H398" stroke="#e8eef3" strokeWidth="1.8" />
-      <path d="M22 124 H394" stroke="#c5ced6" strokeWidth="1.5" />
-      <path d="M8 164 H48" stroke="#e8eef3" strokeWidth="2.8" />
-      <path d="M108 164 H292" stroke="#e8eef3" strokeWidth="2.8" />
-      <path d="M352 164 H404" stroke="#e8eef3" strokeWidth="2.8" />
-      <path d="M208 46 V110 M288 44 V110" stroke="#121316" strokeWidth="0.8" />
-      <rect x="176" y="98" width="14" height="2.2" rx="0.7" fill="#e8eef3" />
-      <rect x="250" y="98" width="14" height="2.2" rx="0.7" fill="#e8eef3" />
-      <path d="M396 86 H414 V160 H396 Z" fill="#6e1418" />
-      <path d="M399 92 H410 V154 H399 Z" fill="#e23b42" />
-      <circle cx="370" cy="128" r="3.4" fill="none" stroke="#c5ced6" strokeWidth="1.1" />
-      <path d="M48 164 Q78 90 108 164" fill="#101216" />
-      <path d="M292 164 Q322 90 352 164" fill="#101216" />
-      <AlloyWheel cx={78} cy={158} r={28} spokes={12} lip="#f6f1e4" />
-      <AlloyWheel cx={322} cy={158} r={28} spokes={12} lip="#f6f1e4" />
-      <path d="M50 162 Q78 96 106 162" fill="none" stroke="#d5dde4" strokeWidth="1.3" />
-      <path d="M294 162 Q322 96 350 162" fill="none" stroke="#d5dde4" strokeWidth="1.3" />
-    </g>
-  );
-}

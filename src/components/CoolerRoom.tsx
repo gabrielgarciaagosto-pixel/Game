@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { displayCaseName, decayLabel } from '../types/game';
+import { decayLabel, displayCaseName, friendlyToken } from '../types/game';
 import { useGameStore } from '../store/useGameStore';
 import { gameNow } from '../utils/gameNow';
 
@@ -109,7 +109,7 @@ export const CoolerRoom: React.FC = () => {
                   {displayCaseName(body)}
                 </div>
                 <div className="text-xs text-cyan-300 font-mono mt-1">
-                  Measured Weight: {body.weightLbs} lbs | {body.tissueCondition}
+                  Measured Weight: {body.weightLbs} lbs | {friendlyToken(body.tissueCondition)}
                 </div>
               </div>
 

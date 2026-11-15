@@ -7,35 +7,8 @@ import {
   subscribeClock,
 } from '../utils/gameNow';
 import * as actions from './devActions';
+import { stationLabel } from '../types/game';
 import { DEV_TOOLS } from './flags';
-
-const POS_KEY = 'ossuarian-dev-fab-pos';
-const DRAG_THRESHOLD = 8;
-
-type Pos = { x: number; y: number };
-
-function loadPos(): Pos {
-  try {
-    const raw = localStorage.getItem(POS_KEY);
-    if (raw) {
-      const p = JSON.parse(raw) as Pos;
-      if (typeof p.x === 'number' && typeof p.y === 'number') return p;
-    }
-  } catch {
-    /* ignore */
-  }
-  return { x: 16, y: 120 };
-}
-
-function clampPos(p: Pos): Pos {
-  const size = 44;
-  const maxX = Math.max(0, window.innerWidth - size - 8);
-  const maxY = Math.max(0, window.innerHeight - size - 8);
-  return {
-    x: Math.min(maxX, Math.max(8, p.x)),
-    y: Math.min(maxY, Math.max(8, p.y)),
-  };
-}
 
 function Section({
   title,
@@ -171,26 +144,21 @@ export const DevToolsOverlay: React.FC = () => {
   const reputation = useGameStore((s) => s.reputation);
 
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<Pos>(() => clampPos(loadPos()));
   const [clockLabel, setClockLabel] = useState(() => gameDate().toLocaleString());
   const [audioLine, setAudioLine] = useState(() => actions.audioDebugLine());
   const [cashInput, setCashInput] = useState(String(cash));
   const [repInput, setRepInput] = useState(String(reputation));
   const fps = useFps();
 
-  const dragRef = useRef<{
-    pointerId: number;
-    startX: number;
-    startY: number;
-    origX: number;
-    origY: number;
-    moved: boolean;
-  } | null>(null);
-
   useEffect(() => {
-    const onResize = () => setPos((p) => clampPos(p));
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    try {
+      localStorage.removeItem('ossuarian-dev-fab-pos');
+    } catch {
+      /* ignore */
+    }
+    const openTools = () => setOpen(true);
+    window.addEventListener('ossuarian-dev-open', openTools);
+    return () => window.removeEventListener('ossuarian-dev-open', openTools);
   }, []);
 
   useEffect(() => {
@@ -208,77 +176,11 @@ export const DevToolsOverlay: React.FC = () => {
     return () => window.clearInterval(id);
   }, [open]);
 
-  // Splash only excluded — FAB lives on hub + every station after Start.
-  if (!DEV_TOOLS || !hasStartedGame) return null;
-
-  const onPointerDown = (e: React.PointerEvent) => {
-    // Set drag state first — some Android WebViews throw on setPointerCapture.
-    dragRef.current = {
-      pointerId: e.pointerId,
-      startX: e.clientX,
-      startY: e.clientY,
-      origX: pos.x,
-      origY: pos.y,
-      moved: false,
-    };
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      /* capture optional — move/up still work without it */
-    }
-  };
-
-  const onPointerMove = (e: React.PointerEvent) => {
-    const d = dragRef.current;
-    if (!d || d.pointerId !== e.pointerId) return;
-    const dx = e.clientX - d.startX;
-    const dy = e.clientY - d.startY;
-    if (!d.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
-    d.moved = true;
-    setPos(clampPos({ x: d.origX + dx, y: d.origY + dy }));
-  };
-
-  const onPointerUp = (e: React.PointerEvent) => {
-    const d = dragRef.current;
-    dragRef.current = null;
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch {
-      /* ignore */
-    }
-    if (!d) return;
-    if (!d.moved) {
-      setOpen((v) => !v);
-      return;
-    }
-    const next = clampPos({
-      x: d.origX + (e.clientX - d.startX),
-      y: d.origY + (e.clientY - d.startY),
-    });
-    setPos(next);
-    try {
-      localStorage.setItem(POS_KEY, JSON.stringify(next));
-    } catch {
-      /* ignore */
-    }
-  };
+  // Splash excluded. The control lives in the FILES menu so it never
+  // sits on the hub cards, the status bar, or the FILES button.
+  if (!DEV_TOOLS || !hasStartedGame || !open) return null;
 
   return (
-    <>
-      <button
-        type="button"
-        aria-label="Developer tools"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        className="fixed z-[9998] w-11 h-11 rounded-full border-2 border-lime-400/80 bg-zinc-950/90 text-lime-300 shadow-lg shadow-black/50 flex items-center justify-center touch-none select-none"
-        style={{ left: pos.x, top: pos.y }}
-      >
-        <span className="font-mono text-[10px] font-bold tracking-wider">DEV</span>
-      </button>
-
-      {open && (
         <div
           className="fixed z-[9999] inset-x-3 bottom-3 top-[18%] max-w-lg mx-auto rounded-md border border-lime-500/50 bg-zinc-950/95 text-lime-100 shadow-2xl flex flex-col overflow-hidden"
           style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
@@ -306,7 +208,7 @@ export const DevToolsOverlay: React.FC = () => {
             </div>
             <div>
               {audioLine} · fps {fps} · ${cash} · rep {reputation} ·{' '}
-              {activeStation}
+              {stationLabel(activeStation)}
             </div>
           </div>
 
@@ -480,7 +382,5 @@ export const DevToolsOverlay: React.FC = () => {
             </p>
           </div>
         </div>
-      )}
-    </>
   );
 };

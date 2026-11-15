@@ -25,7 +25,7 @@ import { UrnVaultRoom } from './components/UrnVaultRoom';
 import { DevToolsOverlay, DEV_TOOLS } from './dev';
 import { useIntakeSpawner } from './hooks/useIntakeSpawner';
 import { useRetortEngine } from './hooks/useRetortEngine';
-import { directiveLabel, displayCaseName } from './types/game';
+import { directiveLabel, displayCaseName, locationLabel } from './types/game';
 import { useGameStore } from './store/useGameStore';
 
 function App() {
@@ -153,7 +153,7 @@ function App() {
                 </div>
                 <div className="font-mono text-xs text-sky-300 truncate">
                   {activeCase ? directiveLabel(activeCase.directive) : '—'}
-                  {activeCase?.location ? ` · ${activeCase.location}` : ''}
+                  {activeCase?.location ? ` · ${locationLabel(activeCase.location)}` : ''}
                 </div>
               </div>
               <div>

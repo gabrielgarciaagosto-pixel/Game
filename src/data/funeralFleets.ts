@@ -21,6 +21,9 @@ export interface FleetVehicle {
   crew: string;
   finish: string;
   blurb: string;
+  /** Coachbuilder, set only on the parish-body variants. */
+  builder?: string;
+  builderLine?: string;
 }
 
 export interface FleetAssignment {
@@ -39,6 +42,62 @@ export const EMPTY_FLEET_ASSIGNMENT: FleetAssignment = {
 
 export const FLEET_BRAND = 'Lampblack Coach & Motor';
 export const FLEET_DOMAIN = 'www.lampblackcoach.biz';
+
+/** Catalog ids withdrawn from the line. Price is returned once on load. */
+export const RETIRED_FLEET_REFUNDS: Record<string, number> = {
+  rec_silent_arrival: 24000,
+};
+
+const HEARTH = {
+  builder: 'Hearth & Hollis',
+  builderLine:
+    'Parish squares from a river-town shop that still pads roofs by hand.',
+};
+const MARROW = {
+  builder: 'Marrow & Keene',
+  builderLine: 'The same box, finished for houses that skip the shine.',
+};
+const VESPER = {
+  builder: 'Vesper Landau Works',
+  builderLine: 'One quiet iron and a smaller lamp on the 1994 footprint.',
+};
+const SABLE = {
+  builder: 'Sable Parish Coach',
+  builderLine: 'Two-tone roofs and a thin belt. The silhouette stays put.',
+};
+const QUILL = {
+  builder: 'Quill & Rocker',
+  builderLine: 'Lamp and wheel changes only. The parish body does not move.',
+};
+
+function pewterVariant(
+  id: string,
+  name: string,
+  price: number,
+  finish: string,
+  blurb: string,
+  house: { builder: string; builderLine: string }
+): FleetVehicle {
+  return {
+    id,
+    fleetClass: 'COACH',
+    tier: 1,
+    tierName: 'Budget',
+    name,
+    era: '1994 square',
+    price,
+    repBonus: 0,
+    moneyBonus: 0,
+    interment: 6,
+    length: "19'6\"",
+    power: '5.7L V8',
+    crew: 'Casket + 2',
+    finish,
+    blurb,
+    builder: house.builder,
+    builderLine: house.builderLine,
+  };
+}
 
 export const FLEET_CATALOG: FleetVehicle[] = [
   {
@@ -91,23 +150,6 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     crew: '3 + cot',
     finish: 'Black, gold pinstripe',
     blurb: 'Skirted arches and a curtained quarter. Removal that already looks like the procession.',
-  },
-  {
-    id: 'rec_silent_arrival',
-    fleetClass: 'RECOVERY',
-    tier: 4,
-    tierName: 'House',
-    name: 'Silent Arrival',
-    era: '2019 removal',
-    price: 24000,
-    repBonus: 18,
-    moneyBonus: 0,
-    interment: 0,
-    length: "18'6\"",
-    power: '3.5L V6',
-    crew: '3 + cot',
-    finish: 'Lampblack, chrome belt',
-    blurb: 'Long-wheelbase removal SUV. Chrome belt, a thin landau swoosh on the quarter glass, and a vertical tail lamp. The reputation piece.',
   },
   {
     id: 'esc_civic_lead',
@@ -211,6 +253,110 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     finish: 'Pewter, black roof',
     blurb: 'Boxy landau. Rectangular lamps, a black padded roof, twin chrome irons, and wide whitewalls.',
   },
+  pewterVariant(
+    'coa_pewter_hollis_square',
+    'Hollis Square',
+    3600,
+    'Cool gray, alloy wheels',
+    'The parish body in cool gray, with the twin irons kept and alloy wheels in the same wells.',
+    HEARTH
+  ),
+  pewterVariant(
+    'coa_pewter_hollis_night',
+    'Hollis Night',
+    3900,
+    'Near-black, rear pad',
+    'Near-black paint and a rear roof pad only. Whitewalls stay where the original put them.',
+    HEARTH
+  ),
+  pewterVariant(
+    'coa_pewter_hollis_chapel',
+    'Hollis Chapel',
+    4200,
+    'Warm stone, disc wheels',
+    'Warm stone paint, one landau iron, and a chrome disc over the whitewall.',
+    HEARTH
+  ),
+  pewterVariant(
+    'coa_pewter_keene_plain',
+    'Keene Plain',
+    2800,
+    'Charcoal, blackwalls',
+    'No landau irons and no belt. Blackwall tires on the parish wells.',
+    MARROW
+  ),
+  pewterVariant(
+    'coa_pewter_keene_iron',
+    'Keene Iron',
+    3400,
+    'Olive gray, blackwalls',
+    'Olive gray, the twin irons returned, and blackwall tires.',
+    MARROW
+  ),
+  pewterVariant(
+    'coa_pewter_keene_disc',
+    'Keene Disc',
+    4100,
+    'Slate, disc whitewall',
+    'Slate paint, a single iron, and a disc hub on the whitewall.',
+    MARROW
+  ),
+  pewterVariant(
+    'coa_pewter_vesper_arch',
+    'Vesper Arch',
+    4500,
+    'Blue-gray, arched iron',
+    'One arched iron and a round tail lamp. The 1994 body is unchanged.',
+    VESPER
+  ),
+  pewterVariant(
+    'coa_pewter_vesper_low',
+    'Vesper Low',
+    4300,
+    'Pewter, low roof pad',
+    'A lower roof pad, one iron, and alloy wheels in the original wells.',
+    VESPER
+  ),
+  pewterVariant(
+    'coa_pewter_vesper_lantern',
+    'Vesper Lantern',
+    4800,
+    'Warm gray, round lamp',
+    'Round headlamp, an arched iron, and wire wheels. Same nose, same roof line.',
+    VESPER
+  ),
+  pewterVariant(
+    'coa_pewter_sable_split',
+    'Sable Split',
+    4000,
+    'Light body, black quarter',
+    'Light paint, a black rear roof only, and a thin belt. Whitewalls.',
+    SABLE
+  ),
+  pewterVariant(
+    'coa_pewter_sable_wire',
+    'Sable Wire',
+    4600,
+    'Ivory-gray, wire wheels',
+    'Ivory-gray paint, twin irons, and wire wheels. The box does not grow.',
+    SABLE
+  ),
+  pewterVariant(
+    'coa_pewter_quill_alloy',
+    'Quill Alloy',
+    3700,
+    'Medium gray, stacked lamps',
+    'Stacked lamps and alloy wheels. One iron. The parish silhouette stays.',
+    QUILL
+  ),
+  pewterVariant(
+    'coa_pewter_quill_stack',
+    'Quill Stack',
+    3500,
+    'Green-gray, blackwalls',
+    'Stacked lamps, no extra iron, blackwall tires. The body path is the parish body.',
+    QUILL
+  ),
   {
     id: 'coa_iron_landau',
     fleetClass: 'COACH',

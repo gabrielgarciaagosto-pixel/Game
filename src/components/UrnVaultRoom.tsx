@@ -1,6 +1,6 @@
 import React from 'react';
 import { CaseTransferBar } from './CaseTransferBar';
-import { displayCaseName } from '../types/game';
+import { displayCaseName, friendlyToken } from '../types/game';
 import { useGameStore } from '../store/useGameStore';
 import { URN_CATALOG } from '../data/urnCatalog';
 import { UrnVessel } from './urns/UrnVessel';
@@ -82,7 +82,7 @@ export const UrnVaultRoom: React.FC = () => {
                     {displayCaseName(urn)}
                   </div>
                   <div className="text-[10px] text-stone-400 mt-1">
-                    Cremation {urn.cremationRank ?? '—'}
+                    Retort {urn.cremationRank ?? '—'}
                   </div>
                   <div className="mt-2 h-12 rounded-b-2xl border border-stone-600 bg-gradient-to-b from-stone-600 to-stone-800 flex items-end justify-center pb-1 text-[9px] font-mono">
                     SEALED
@@ -123,7 +123,7 @@ export const UrnVaultRoom: React.FC = () => {
                       {urn.name}
                     </div>
                     <div className="text-[9px] text-stone-400">
-                      {urn.material} · Own {urnInventory[urn.id] ?? 0}
+                      {friendlyToken(urn.material)} · Own {urnInventory[urn.id] ?? 0}
                     </div>
                   </div>
                 </div>

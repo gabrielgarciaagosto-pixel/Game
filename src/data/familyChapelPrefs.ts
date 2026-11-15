@@ -4,6 +4,7 @@ import {
   type ChapelThemeSelection,
   type FlowerKind,
 } from './chapelDecor';
+import { friendlyToken } from '../types/game';
 
 /** Family wishes for chapel dressing — matching is bonus-only. */
 export interface FamilyChapelPreferences {
@@ -122,7 +123,7 @@ export function evaluateChapelPrefMatches(opts: {
   rows.push({
     key: 'flowers',
     label: 'Flowers',
-    preferredName: prefs.flowers,
+    preferredName: friendlyToken(prefs.flowers),
     matched: flowersPlaced.includes(prefs.flowers),
   });
 

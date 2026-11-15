@@ -57,12 +57,12 @@ export const CaseTransferBar: React.FC<Props> = ({
       )}
       {currentCase.embalmRank && (
         <span className="text-[11px] font-mono px-2 py-1 rounded bg-emerald-900/80 text-emerald-200">
-          Embalm {currentCase.embalmRank}
+          Prep {currentCase.embalmRank}
         </span>
       )}
       {currentCase.cremationRank && (
         <span className="text-[11px] font-mono px-2 py-1 rounded bg-orange-900/80 text-orange-200">
-          Cremation {currentCase.cremationRank}
+          Retort {currentCase.cremationRank}
         </span>
       )}
       {DESTINATIONS.filter((d) => {

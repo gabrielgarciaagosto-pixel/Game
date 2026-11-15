@@ -670,7 +670,7 @@ export const CremationMiniGame: React.FC = () => {
         </div>
         <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center">
           <p className="text-3xl font-black text-amber-300">
-            Rank {currentCase.cremationRank ?? '—'}
+            Retort {currentCase.cremationRank ?? '—'}
           </p>
           <button
             type="button"

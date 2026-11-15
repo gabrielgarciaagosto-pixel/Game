@@ -54,6 +54,45 @@ export type CaseLocation =
   | 'CHAPEL'
   | 'URN_VAULT';
 
+/** Case-file and HUD wording. Location ids stay in the save. */
+export function locationLabel(location: CaseLocation): string {
+  switch (location) {
+    case 'COOLER':
+      return 'In cooler';
+    case 'EMBALMING':
+      return 'At embalming';
+    case 'CREMATION':
+      return 'Cremating';
+    case 'URN_FILLING':
+      return 'Urn ready';
+    case 'CHAPEL':
+      return 'In the chapel';
+    case 'URN_VAULT':
+      return 'In the vault';
+  }
+}
+
+export function caseStatusLabel(c: {
+  location: CaseLocation;
+  embalmRank?: Rank | null;
+  cremationRank?: Rank | null;
+}): string {
+  const parts = [locationLabel(c.location)];
+  if (c.embalmRank) parts.push(`Prep ${c.embalmRank}`);
+  if (c.cremationRank) parts.push(`Retort ${c.cremationRank}`);
+  return parts.join(' · ');
+}
+
+/** Title-case a stored token such as OAK or LILIES. Prose is left as written. */
+export function friendlyToken(value: string): string {
+  if (!/^[A-Z0-9]+(?:_[A-Z0-9]+)*$/.test(value)) return value;
+  return value
+    .toLowerCase()
+    .split('_')
+    .map((word) => (word ? word.charAt(0).toUpperCase() + word.slice(1) : word))
+    .join(' ');
+}
+
 export type StationId =
   | 'OVERVIEW'
   | 'COOLER'
@@ -64,6 +103,31 @@ export type StationId =
   | 'URN_VAULT'
   | 'EMPORIUM'
   | 'COMPUTER';
+
+export function stationLabel(station: StationId | string): string {
+  switch (station) {
+    case 'OVERVIEW':
+      return 'Hub';
+    case 'COOLER':
+      return 'Cooler';
+    case 'EMBALMING':
+      return 'Embalming';
+    case 'CREMATION':
+      return 'Crematory';
+    case 'URN_FILLING':
+      return 'Urn processing';
+    case 'SHOWROOM':
+      return 'Chapel';
+    case 'URN_VAULT':
+      return 'Urn vault';
+    case 'EMPORIUM':
+      return 'Shop';
+    case 'COMPUTER':
+      return 'Computer';
+    default:
+      return 'In house';
+  }
+}
 
 export type PreferredUrnMaterial =
   | 'MARBLE'

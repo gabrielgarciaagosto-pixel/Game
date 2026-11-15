@@ -89,7 +89,7 @@ export const FleetBrowser: React.FC = () => {
           {FLEET_BRAND}
         </h2>
         <p className="text-[11px] text-[#d9cbb6] mt-0.5">
-          Removal SUVs, flower cars, escorts, and funeral coaches
+          Removal vans, flower cars, escorts, and funeral coaches
         </p>
         <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
           <span className="px-2 py-0.5 rounded border border-[#c4a574]/40 bg-black/30">
@@ -213,6 +213,9 @@ export const FleetBrowser: React.FC = () => {
                     <p className="text-[11px] text-[#c4a574]">
                       {FLEET_CLASS_LABEL[v.fleetClass]} · {v.tierName} · {v.era}
                     </p>
+                    {v.builder ? (
+                      <p className="text-[11px] text-[#e6c98a]">{v.builder}</p>
+                    ) : null}
                     <p className="text-[12px] text-[#e7dcc8]">{fleetBonusLine(v)}</p>
                     {owned(v.id) && (
                       <p className="text-[10px] uppercase tracking-wider text-[#9ddeaf]">
@@ -255,6 +258,12 @@ export const FleetBrowser: React.FC = () => {
                   <p className="text-[13px] text-[#e7dcc8] mt-1 leading-relaxed">
                     {detail.blurb}
                   </p>
+                  {detail.builder ? (
+                    <p className="text-[12px] text-[#e6c98a] mt-1 leading-snug">
+                      {detail.builder}
+                      {detail.builderLine ? ` — ${detail.builderLine}` : ''}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-[12px] border-y border-[#c4a574]/25 py-3">
                   <Spec k="Asking" v={`$${detail.price.toLocaleString()}`} />

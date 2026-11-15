@@ -65,6 +65,7 @@ import {
 } from '../data/bankProducts';
 import {
   EMPTY_FLEET_ASSIGNMENT,
+  RETIRED_FLEET_REFUNDS,
   getFleetVehicle,
   normalizeFleetAssignment,
   resolveCortege,
@@ -2868,6 +2869,30 @@ export const useGameStore = create<GameState>()(
         const activeStation = fromEmporium
           ? ('COMPUTER' as const)
           : (rawStation as StationId);
+        const ownedRaw = (
+          Array.isArray(p.ownedFleetIds)
+            ? p.ownedFleetIds
+            : current.ownedFleetIds ?? []
+        ) as string[];
+        const priorLedger = p.financeLedger ?? current.financeLedger ?? [];
+        let fleetRefund = 0;
+        const fleetRefundNotes: typeof priorLedger = [];
+        const ownedFleetIds = ownedRaw.filter((id) => {
+          const amount = RETIRED_FLEET_REFUNDS[id];
+          if (amount == null) return true;
+          const noteId = `led_fleet_refund_${id}`;
+          if (!priorLedger.some((entry) => entry.id === noteId)) {
+            fleetRefund += amount;
+            fleetRefundNotes.push({
+              id: noteId,
+              at: gameNow(),
+              label: 'Fleet withdrawn — Silent Arrival',
+              amount,
+              kind: 'OTHER',
+            });
+          }
+          return false;
+        });
         return {
           ...current,
           ...p,
@@ -2889,7 +2914,11 @@ export const useGameStore = create<GameState>()(
           showroomInventory: p.showroomInventory ?? current.showroomInventory,
           permitSubmissions: p.permitSubmissions ?? current.permitSubmissions,
           permitWrongStreak: p.permitWrongStreak ?? current.permitWrongStreak,
-          financeLedger: p.financeLedger ?? current.financeLedger,
+          cash:
+            (typeof p.cash === 'number' ? p.cash : current.cash) + fleetRefund,
+          financeLedger: fleetRefundNotes.length
+            ? [...fleetRefundNotes, ...priorLedger].slice(0, 80)
+            : priorLedger,
           negativeCashSinceMs:
             p.negativeCashSinceMs ?? current.negativeCashSinceMs ?? null,
           bankWarningIssued:
@@ -2900,9 +2929,7 @@ export const useGameStore = create<GameState>()(
             current.ownedProperty ??
             ownedFromListing(STARTER_PROPERTY, 0),
           activeLoans: p.activeLoans ?? current.activeLoans ?? [],
-          ownedFleetIds: Array.isArray(p.ownedFleetIds)
-            ? p.ownedFleetIds
-            : current.ownedFleetIds ?? [],
+          ownedFleetIds,
           fleetAssignment: normalizeFleetAssignment(
             p.fleetAssignment ?? current.fleetAssignment
           ),
@@ -2911,7 +2938,10 @@ export const useGameStore = create<GameState>()(
               ? p.intermentScore
               : current.intermentScore ?? 0,
           lastCase: normalizeLastCase(p.lastCase) ?? current.lastCase ?? null,
-          intakeToast: null,
+          intakeToast:
+            fleetRefund > 0
+              ? `Silent Arrival left the line. $${fleetRefund.toLocaleString()} returned.`
+              : null,
           legalAlert: null,
           serviceFeedback: null,
           bankOpenTab: null,

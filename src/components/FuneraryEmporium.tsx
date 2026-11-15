@@ -27,6 +27,7 @@ import {
   type UrnCatalogEntry,
 } from '../data/urnCatalog';
 import { useGameStore } from '../store/useGameStore';
+import { friendlyToken } from '../types/game';
 import { gameDate, subscribeClock } from '../utils/gameNow';
 import { CasketVessel } from './caskets/CasketVessel';
 import { UrnVessel } from './urns/UrnVessel';
@@ -881,7 +882,7 @@ function UrnCard({
             {urn.name}
           </div>
           <div className="text-[9px] text-stone-400">
-            {urn.material} · {urn.finish}
+            {friendlyToken(urn.material)} · {friendlyToken(urn.finish)}
           </div>
           {rare && (
             <div className="text-[9px] text-amber-200/70 mt-0.5 font-mono">
@@ -958,7 +959,7 @@ function CasketCard({
             {casket.name}
           </div>
           <div className="text-[9px] text-stone-400">
-            {casket.material} · {casket.finish}
+            {friendlyToken(casket.material)} · {friendlyToken(casket.finish)}
           </div>
           {rare && (
             <div className="text-[9px] text-amber-200/70 mt-0.5 font-mono">
@@ -1028,7 +1029,7 @@ function UrnInspectModal({
             </div>
             <h3 className="text-lg font-black text-amber-100">{urn.name}</h3>
             <p className="text-[11px] text-stone-400">
-              {urn.material} · {urn.silhouette.replace('_', ' ')}
+              {friendlyToken(urn.material)} · {friendlyToken(urn.silhouette)}
             </p>
           </div>
           <button
@@ -1132,7 +1133,7 @@ function CasketInspectModal({
             </div>
             <h3 className="text-lg font-black text-amber-100">{casket.name}</h3>
             <p className="text-[11px] text-stone-400">
-              {casket.material} · {casket.silhouette.replace('_', ' ')}
+              {friendlyToken(casket.material)} · {friendlyToken(casket.silhouette)}
             </p>
           </div>
           <button

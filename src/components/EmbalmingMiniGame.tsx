@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CaseTransferBar } from './CaseTransferBar';
-import { displayCaseName, decayLabel } from '../types/game';
+import { decayLabel, displayCaseName, friendlyToken } from '../types/game';
 import { caseAtLocation, useGameStore } from '../store/useGameStore';
 import { hapticGlug } from '../utils/haptics';
 import {
@@ -231,7 +231,7 @@ export const EmbalmingMiniGame: React.FC = () => {
             </span>{' '}
             | Condition:{' '}
             <span className="text-amber-300 font-semibold">
-              {currentCase.tissueCondition}
+              {friendlyToken(currentCase.tissueCondition)}
             </span>{' '}
             (Factor ×{currentCase.dehydrationFactor})
             {currentCase.decayLevel > 5 && (
