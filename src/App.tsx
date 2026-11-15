@@ -21,6 +21,8 @@ import { ServiceFeedbackModal } from './components/ServiceFeedbackModal';
 import { ServiceMusicAudio } from './components/ServiceMusicAudio';
 import { ShowroomAndChapelModal } from './components/ShowroomAndChapelModal';
 import { UrnFillingMiniGame } from './components/UrnFillingMiniGame';
+import { HouseSettings } from './components/HouseSettings';
+import { TutorialLayer } from './components/TutorialLayer';
 import { UrnStartScreen } from './components/UrnStartScreen';
 import { UrnVaultRoom } from './components/UrnVaultRoom';
 import { DevToolsOverlay, DEV_TOOLS } from './dev';
@@ -45,6 +47,10 @@ function App() {
   useEffect(() => {
     window.__ossuarianHardwareBack = () => {
       const state = useGameStore.getState();
+      if (state.settingsOpen) {
+        state.setSettingsOpen(false);
+        return 'handled';
+      }
       if (state.titleGate || !state.hasStartedGame) return 'exit';
       if (state.bankForeclosed) {
         state.acknowledgeBankForeclosure();
@@ -115,6 +121,8 @@ function App() {
   return (
     <>
       <MenuThemeAudio />
+      <TutorialLayer />
+      <HouseSettings />
       <CrematoryAudio />
       <ServiceMusicAudio />
       <NotificationPing />

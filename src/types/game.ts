@@ -185,6 +185,8 @@ export interface DecedentCase {
   familyRequestedUrnId: string | null;
   /** Wall-clock when the family request should fire */
   familyUrnDueAt: number | null;
+  /** How the family speaks of them in the thank-you. "Mom", "Dad", and so on. */
+  familyRelation?: string;
   /** 0–100 ash-pour quality from the urnization mini-game */
   urnPourQuality: number;
   /**

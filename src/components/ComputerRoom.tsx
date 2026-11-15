@@ -5,6 +5,7 @@ import {
   type PermitFormDraft,
 } from '../data/cremationPermits';
 import { US_PLACE_LABELS } from '../data/usPlaces';
+import { resolvePlayerName } from '../data/playerName';
 import { formatTimeOf } from '../utils/clock12';
 import { gameDate, subscribeClock } from '../utils/gameNow';
 import { useGameStore } from '../store/useGameStore';
@@ -71,6 +72,7 @@ export const ComputerRoom: React.FC = () => {
     permitSubmissions,
     permitWrongStreak,
     financeLedger,
+    playerName,
   } = useGameStore();
 
   const [app, setApp] = useState<DesktopApp>(() =>
@@ -233,7 +235,8 @@ export const ComputerRoom: React.FC = () => {
             </header>
             <main className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3 pb-20">
               <p className="text-[11px] text-[#9bb8a4] leading-snug rounded border border-[#2f6b4f]/50 bg-[#0c1f16]/70 px-3 py-2">
-                Open <strong className="text-[#e8f5e9]">FILES</strong> to copy
+                {resolvePlayerName(playerName)}, open{' '}
+                <strong className="text-[#e8f5e9]">FILES</strong> to copy
                 vitals. Draft stays if you switch apps. Fee every submit.
               </p>
               <section className="paper-sheet rounded border border-[#8a7048] p-3 space-y-2">

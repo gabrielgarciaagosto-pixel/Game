@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { DEFAULT_PLAYER_NAME } from '../data/playerName';
+import { useGameStore } from '../store/useGameStore';
 import { GAME_VERSION } from '../version';
 
 interface UrnStartScreenProps {
@@ -15,6 +17,11 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
   title = 'OSSUARIAN',
   subtitle = 'FIRST URN',
 }) => {
+  const playerName = useGameStore((s) => s.playerName);
+  const setPlayerName = useGameStore((s) => s.setPlayerName);
+  const setSettingsOpen = useGameStore((s) => s.setSettingsOpen);
+  const [naming, setNaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
   const [isAnimating, setIsAnimating] = useState(false);
   const [isFadingOut, setIsFadingOut] = useState(false);
   const [isRattling, setIsRattling] = useState(false);
@@ -49,6 +56,11 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
 
   const handleStartClick = () => {
     if (isAnimating) return;
+    if (!canContinue) {
+      setNameDraft(playerName);
+      setNaming(true);
+      return;
+    }
     if (rattleTimerRef.current != null) {
       window.clearTimeout(rattleTimerRef.current);
       rattleTimerRef.current = null;
@@ -61,6 +73,24 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
       setStatusText('Settled.');
       setIsFadingOut(true);
 
+      const doneId = window.setTimeout(() => {
+        onStartComplete();
+      }, 700);
+      timersRef.current.push(doneId);
+    }, 2300);
+    timersRef.current.push(fadeId);
+  };
+
+  const confirmName = () => {
+    if (isAnimating) return;
+    setPlayerName(nameDraft);
+    setNaming(false);
+    setIsAnimating(true);
+    setIsRattling(false);
+    setStatusText('Loading...');
+    const fadeId = window.setTimeout(() => {
+      setStatusText('Settled.');
+      setIsFadingOut(true);
       const doneId = window.setTimeout(() => {
         onStartComplete();
       }, 700);
@@ -200,6 +230,51 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
         .start-btn.hidden-btn {
           opacity: 0;
           pointer-events: none;
+        }
+
+        .name-gate {
+          width: min(100%, 18rem);
+          margin-top: 0.4rem;
+          user-select: text;
+        }
+
+        .name-lead {
+          margin: 0.8rem 0 0.45rem;
+          font-family: 'Cinzel', Georgia, 'Times New Roman', serif;
+          font-size: 0.95rem;
+          letter-spacing: 0.04em;
+          color: #ebe6dd;
+        }
+
+        .name-input {
+          width: 100%;
+          box-sizing: border-box;
+          border-radius: 8px;
+          border: 1px solid #6e5a3a;
+          background: #121218;
+          color: #f3eadc;
+          padding: 0.65rem 0.75rem;
+          font-size: 1rem;
+          text-align: center;
+        }
+
+        .name-hint {
+          margin: 0.45rem 0 0;
+          font-size: 0.68rem;
+          letter-spacing: 0.04em;
+          color: #6e675c;
+        }
+
+        .splash-settings {
+          margin-top: 0.85rem;
+          border: none;
+          background: transparent;
+          color: #6e675c;
+          font-family: 'Cinzel', Georgia, 'Times New Roman', serif;
+          font-size: 0.68rem;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          cursor: pointer;
         }
 
         .splash-credit {
@@ -412,14 +487,42 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
         {subtitle ? <p className="splash-subtitle">{subtitle}</p> : null}
         <p className="splash-status">{statusText}</p>
 
-        <button
-          type="button"
-          onClick={handleStartClick}
-          onPointerDown={handleStartClick}
-          className={`start-btn ${isAnimating ? 'hidden-btn' : ''}`}
-        >
-          {canContinue ? 'Continue' : 'Start'}
-        </button>
+        {naming ? (
+          <div className="name-gate">
+            <p className="name-lead">What should we call you?</p>
+            <input
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              placeholder={DEFAULT_PLAYER_NAME}
+              maxLength={24}
+              autoComplete="given-name"
+              aria-label="Your name"
+              className="name-input"
+            />
+            <p className="name-hint">Leave blank and the house will use {DEFAULT_PLAYER_NAME}.</p>
+            <button type="button" className="start-btn" onClick={confirmName}>
+              Begin
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={handleStartClick}
+            onPointerDown={handleStartClick}
+            className={`start-btn ${isAnimating ? 'hidden-btn' : ''}`}
+          >
+            {canContinue ? 'Continue' : 'Start'}
+          </button>
+        )}
+        {!isAnimating && !naming && (
+          <button
+            type="button"
+            className="splash-settings"
+            onClick={() => setSettingsOpen(true)}
+          >
+            Settings
+          </button>
+        )}
       </div>
       <p className="splash-credit">
         Developed by Dextra-Mortem · v{GAME_VERSION}

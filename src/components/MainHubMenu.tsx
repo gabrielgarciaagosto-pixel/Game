@@ -199,6 +199,7 @@ function StatChip({
 export const MainHubMenu: React.FC = () => {
   const {
     setActiveStation,
+    setSettingsOpen,
     cases,
     cash,
     reputation,
@@ -434,6 +435,13 @@ export const MainHubMenu: React.FC = () => {
           >
             URNS <span className="text-amber-300 font-bold">{urnOwned}</span>
           </StatChip>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-slate-800 font-mono text-[11px] text-slate-300"
+          >
+            Settings
+          </button>
         </div>
 
         {open && (

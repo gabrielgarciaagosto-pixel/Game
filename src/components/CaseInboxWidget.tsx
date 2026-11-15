@@ -53,6 +53,8 @@ export const CaseInboxWidget: React.FC = () => {
     archivedCases,
     markFileRead,
     setServiceDate,
+    setCaseFilePanels,
+    noteTutorialFile,
     cases,
     finalizeServiceAndNextCase,
   } = useGameStore();
@@ -63,6 +65,11 @@ export const CaseInboxWidget: React.FC = () => {
   );
   const archivesOpenRef = useRef(false);
   archivesOpenRef.current = archivesOpen;
+
+  useEffect(() => {
+    setCaseFilePanels(isOpen, archivesOpen);
+    return () => setCaseFilePanels(false, false);
+  }, [isOpen, archivesOpen, setCaseFilePanels]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [pickupOpen, setPickupOpen] = useState(false);
@@ -213,6 +220,7 @@ export const CaseInboxWidget: React.FC = () => {
                 onClick={() => {
                   setSelectedFileId(file.id);
                   markFileRead(file.id);
+                  noteTutorialFile(file.id);
                   setCalendarOpen(false);
                   setPickupOpen(false);
                 }}

@@ -35,6 +35,12 @@ import {
 } from '../retort/retortRoster';
 import { audioManager } from '../utils/audioManager';
 import { playIntakeBell } from '../utils/soundEffects';
+import {
+  kinFromId,
+  resolvePlayerName,
+  rollFamilyKin,
+} from '../data/playerName';
+import { TUTORIAL_STEPS, type TutorialPhase } from '../tutorial/steps';
 import { getCremationTargets } from '../utils/mortuaryMath';
 import { getUrnById, URN_MATERIALS } from '../data/urnCatalog';
 import {
@@ -181,6 +187,17 @@ interface GameState {
    * without touching the save. A reload sets it true again.
    */
   titleGate: boolean;
+  /** What families and the state call the player. Blank resolves to Mortician. */
+  playerName: string;
+  /** new until the first game; offer on the hub; active while the bell is up; done when finished or skipped. */
+  tutorial: TutorialPhase;
+  tutorialStep: number;
+  tutorialCaseId: string | null;
+  /** Runtime only — which case-file panels are open. */
+  filesPanelOpen: boolean;
+  archivesPanelOpen: boolean;
+  tutorialFileRead: boolean;
+  settingsOpen: boolean;
   cash: number;
   reputation: number;
   ossilegiumCommuneGrams: number;
@@ -217,6 +234,8 @@ interface GameState {
   /** Post-service family feedback (honored prefs + boost) — not persisted */
   serviceFeedback: {
     decedentName: string;
+    /** "Mom", "Dad", or another family word for the thank-you. */
+    kinLabel: string;
     honored: string[];
     missed: string[];
     prefBonus: number;
@@ -299,6 +318,15 @@ interface GameState {
   startGame: () => void;
   /** Leave the title and return to the saved station. Does not rewrite the save. */
   resumeGame: () => void;
+  setPlayerName: (name: string) => void;
+  setSettingsOpen: (open: boolean) => void;
+  beginTutorial: () => void;
+  skipTutorial: () => void;
+  skipTutorialStep: () => void;
+  completeTutorialStep: () => void;
+  replayTutorial: () => void;
+  noteTutorialFile: (caseId: string) => void;
+  setCaseFilePanels: (filesOpen: boolean, archivesOpen: boolean) => void;
   /**
    * Wipe gameplay progress in memory (title screen). Pair with pausing
    * persist writes so Capacitor reloads cannot resurrect the old save.
@@ -549,6 +577,7 @@ export function generateRandomCase(now = gameNow()): DecedentCase {
   return {
     id: Math.random().toString(36).substring(2, 8).toUpperCase(),
     name: randomDecedentName(),
+    familyRelation: rollFamilyKin(),
     weightLbs: weights[Math.floor(Math.random() * weights.length)],
     tissueCondition: pickedCond.cond,
     dehydrationFactor: pickedCond.factor,
@@ -795,6 +824,7 @@ function normalizeCase(c: DecedentCase): DecedentCase {
     cremationPermitSubmittedAt: c.cremationPermitSubmittedAt ?? null,
     cremationPermitEvaluatesAt: c.cremationPermitEvaluatesAt ?? null,
     cremationPermitRejectReason: c.cremationPermitRejectReason ?? null,
+    familyRelation: c.familyRelation || kinFromId(c.id),
     unpermittedCremation: c.unpermittedCremation ?? false,
     headlineCase: c.headlineCase ?? null,
   };
@@ -958,6 +988,10 @@ export function freshPersistedGameFields() {
     activeCaseId: null as string | null,
     inboxFiles: [] as CaseInboxFile[],
     archivedCases: [] as ArchivedCaseFile[],
+    playerName: '',
+    tutorial: 'new' as TutorialPhase,
+    tutorialStep: 0,
+    tutorialCaseId: null as string | null,
     showroomInventory: defaultShowroomInventory.map((i) => ({ ...i })),
     urnInventory: {
       urn_carrara_classic: 1,
@@ -1272,11 +1306,43 @@ function stepOneRetort(
   return next;
 }
 
+function tutorialGateOf(state: GameState) {
+  const row = state.cases.find((c) => c.id === state.tutorialCaseId);
+  const permitFiled =
+    row != null &&
+    (row.cremationPermitStatus !== 'NONE' ||
+      state.permitSubmissions.some((sub) => sub.caseId === row.id));
+  return {
+    filesOpen: state.filesPanelOpen,
+    archivesOpen: state.archivesPanelOpen,
+    fileRead: state.tutorialFileRead,
+    activeStation: state.activeStation,
+    computerOpenApp: state.computerOpenApp,
+    permitFiled,
+    tagged: row?.isTagged === true,
+  };
+}
+
+function advanceTutorial(state: GameState, force: boolean) {
+  if (state.tutorial !== 'active') return state;
+  const step = TUTORIAL_STEPS[state.tutorialStep];
+  if (!force && (!step || !step.done(tutorialGateOf(state)))) return state;
+  const next = state.tutorialStep + 1;
+  if (!step || next >= TUTORIAL_STEPS.length) {
+    return { tutorial: 'done' as const, tutorialStep: 0, tutorialFileRead: false };
+  }
+  return { tutorialStep: next, tutorialFileRead: false };
+}
+
 export const useGameStore = create<GameState>()(
   persist(
     (set, get) => ({
   ...freshPersistedGameFields(),
   titleGate: true,
+  filesPanelOpen: false,
+  archivesPanelOpen: false,
+  tutorialFileRead: false,
+  settingsOpen: false,
   computerOpenApp: null,
   bankOpenTab: null,
   intakeToast: null,
@@ -1307,15 +1373,79 @@ export const useGameStore = create<GameState>()(
         activeStation: 'OVERVIEW' as const,
         cases,
         inboxFiles,
+        tutorial: state.tutorial === 'new' ? 'offer' : state.tutorial,
       };
     }),
 
   resumeGame: () => set({ titleGate: false }),
 
+  setPlayerName: (name) => set({ playerName: resolvePlayerName(name) }),
+  setSettingsOpen: (open) => set({ settingsOpen: open }),
+  beginTutorial: () => {
+    const state = get();
+    const now = gameNow();
+    const base = generateRandomCase(now);
+    const next: DecedentCase = {
+      ...base,
+      directive: 'CREMATION_DIRECT',
+      familyRelation: 'Mom',
+      familyUrnDueAt: now + 45_000,
+      familyRequestedUrnId: null,
+      basePayout: basePayoutFor('CREMATION_DIRECT'),
+      cremationPermitStatus: initialPermitStatus('CREMATION_DIRECT'),
+      cremationPermitSubmittedAt: null,
+      cremationPermitEvaluatesAt: null,
+      cremationPermitRejectReason: null,
+      unpermittedCremation: false,
+      isTagged: false,
+      nameExpired: false,
+    };
+    set({
+      cases: [...state.cases, next],
+      inboxFiles: [toInboxFile(next), ...state.inboxFiles],
+      activeCaseId: state.activeCaseId ?? next.id,
+      tutorial: 'active',
+      tutorialStep: 0,
+      tutorialCaseId: next.id,
+      tutorialFileRead: false,
+      intakeToast: null,
+    });
+  },
+  skipTutorial: () =>
+    set({
+      tutorial: 'done',
+      tutorialStep: 0,
+      tutorialFileRead: false,
+    }),
+  skipTutorialStep: () =>
+    set((state) => advanceTutorial(state, true)),
+  completeTutorialStep: () =>
+    set((state) => advanceTutorial(state, false)),
+  replayTutorial: () =>
+    set({
+      tutorial: 'offer',
+      tutorialStep: 0,
+      tutorialCaseId: null,
+      tutorialFileRead: false,
+    }),
+  noteTutorialFile: (caseId) =>
+    set((state) => {
+      if (state.tutorial !== 'active') return state;
+      if (state.tutorialCaseId && caseId !== state.tutorialCaseId) return state;
+      return { tutorialFileRead: true };
+    }),
+  setCaseFilePanels: (filesOpen, archivesOpen) =>
+    set({ filesPanelOpen: filesOpen, archivesPanelOpen: archivesOpen }),
+
   hardResetGameState: (toast) =>
     set({
       ...freshPersistedGameFields(),
+      playerName: get().playerName,
       titleGate: true,
+      filesPanelOpen: false,
+      archivesPanelOpen: false,
+      tutorialFileRead: false,
+      settingsOpen: false,
       computerOpenApp: null,
       bankOpenTab: null,
       intakeToast:
@@ -1931,8 +2061,8 @@ export const useGameStore = create<GameState>()(
         const urn = getUrnById(urnId);
         any = true;
         toast = urn
-          ? `Family selected ${urn.name} for ${c.isTagged ? c.name : 'their loved one'}`
-          : 'Family sent a vessel request';
+          ? `${resolvePlayerName(state.playerName)}, the family selected ${urn.name} for ${c.isTagged ? c.name : 'their loved one'}`
+          : `${resolvePlayerName(state.playerName)}, the family sent a vessel request`;
         return {
           ...c,
           familyRequestedUrnId: urnId,
@@ -1976,7 +2106,7 @@ export const useGameStore = create<GameState>()(
           sub.caseId != null && sub.mismatchLabels.length === 0;
         if (approved) {
           wrongStreak = 0;
-          toast = 'Cremation permit APPROVED.';
+          toast = `Cremation permit APPROVED, ${resolvePlayerName(state.playerName)}.`;
           return {
             ...sub,
             status: 'APPROVED' as const,
@@ -1984,8 +2114,7 @@ export const useGameStore = create<GameState>()(
           };
         }
         wrongStreak += 1;
-        toast =
-          'Cremation permit REJECTED — vital records could not be verified.';
+        toast = `Cremation permit REJECTED, ${resolvePlayerName(state.playerName)} — vital records could not be verified.`;
         if (wrongStreak >= PERMIT_ERROR_STREAK_LIMIT) {
           cash = cash - PERMIT_ERROR_STREAK_FINE;
           reputation = Math.max(0, reputation - PERMIT_ERROR_STREAK_REP_HIT);
@@ -1999,7 +2128,7 @@ export const useGameStore = create<GameState>()(
             },
             ...financeLedger,
           ].slice(0, 80);
-          legalAlert = `STATE VITAL RECORDS FINE: ${PERMIT_ERROR_STREAK_LIMIT}+ incorrect cremation permit filings. $${PERMIT_ERROR_STREAK_FINE} levied and reputation docked. Review Case Files carefully before resubmitting.`;
+          legalAlert = `STATE VITAL RECORDS FINE: ${resolvePlayerName(state.playerName)}, ${PERMIT_ERROR_STREAK_LIMIT}+ incorrect cremation permit filings. $${PERMIT_ERROR_STREAK_FINE} levied and reputation docked. Review Case Files carefully before resubmitting.`;
           wrongStreak = 0;
         }
         return {
@@ -2123,14 +2252,12 @@ export const useGameStore = create<GameState>()(
       permitSubmissions: [submission, ...state.permitSubmissions].slice(0, 40),
       cases,
       inboxFiles,
-      intakeToast: exact
-        ? `Permit filed (fee $${fee}) — pending state evaluation.`
-        : `Permit filed (fee $${fee}) — pending state evaluation.`,
+      intakeToast: `Permit filed, ${resolvePlayerName(state.playerName)} (fee $${fee}) — pending state evaluation.`,
     });
 
     return {
       ok: true,
-      message: `Submission received. Filing fee $${fee} charged. Vital Records will evaluate shortly.`,
+      message: `${resolvePlayerName(state.playerName)}, submission received. Filing fee $${fee} charged. Vital Records will evaluate shortly.`,
     };
   },
 
@@ -2448,7 +2575,7 @@ export const useGameStore = create<GameState>()(
         ? Math.max(0, state.reputation - UNPERMITTED_CREMATION_REP_HIT)
         : state.reputation,
       legalAlert: unpermitted
-        ? `STATE BOARD INSPECTION: ${active.name} was cremated without an approved cremation permit (status: ${active.cremationPermitStatus}). Fine $${UNPERMITTED_CREMATION_FINE.toLocaleString()} and reputation −${UNPERMITTED_CREMATION_REP_HIT}. File permits on the Computer before firing the retort.`
+        ? `${resolvePlayerName(state.playerName)}, STATE BOARD INSPECTION: ${active.name} was cremated without an approved cremation permit (status: ${active.cremationPermitStatus}). Fine $${UNPERMITTED_CREMATION_FINE.toLocaleString()} and reputation −${UNPERMITTED_CREMATION_REP_HIT}. File permits on the Computer before firing the retort.`
         : state.legalAlert,
       financeLedger: [...fineNote, ...state.financeLedger].slice(0, 80),
       ossilegiumCommuneGrams:
@@ -3551,6 +3678,7 @@ export const useGameStore = create<GameState>()(
           ? null
           : {
               decedentName: c.name,
+              kinLabel: c.familyRelation || 'them',
               honored,
               missed,
               prefBonus: prefBonusPts,
@@ -3576,7 +3704,7 @@ export const useGameStore = create<GameState>()(
               fuelMetered,
             },
         intakeToast: serviceFailed
-          ? state.intakeToast
+          ? `${resolvePlayerName(state.playerName)}, the service for ${c.familyRelation || 'them'} did not go through.`
           : `Service complete — $${netPayout.toLocaleString()}`,
         cases: remaining,
         inboxFiles: state.inboxFiles.filter((f) => f.id !== c.id),
@@ -3746,6 +3874,10 @@ export const useGameStore = create<GameState>()(
         newsNextLiveAt: state.newsNextLiveAt,
         newsCelebGate: state.newsCelebGate,
         newsRecent: state.newsRecent,
+        playerName: state.playerName,
+        tutorial: state.tutorial,
+        tutorialStep: state.tutorialStep,
+        tutorialCaseId: state.tutorialCaseId,
       }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<GameState>;
@@ -3890,6 +4022,26 @@ export const useGameStore = create<GameState>()(
               : current.intermentScore ?? 0,
           lastCase: normalizeLastCase(p.lastCase) ?? current.lastCase ?? null,
           archivedCases: normalizeArchives(p.archivedCases),
+          playerName: resolvePlayerName(
+            typeof p.playerName === 'string' ? p.playerName : ''
+          ),
+          tutorial:
+            p.tutorial === 'new' ||
+            p.tutorial === 'offer' ||
+            p.tutorial === 'active' ||
+            p.tutorial === 'done'
+              ? p.tutorial
+              : p.hasStartedGame
+                ? 'done'
+                : 'new',
+          tutorialStep:
+            typeof p.tutorialStep === 'number' ? p.tutorialStep : 0,
+          tutorialCaseId:
+            typeof p.tutorialCaseId === 'string' ? p.tutorialCaseId : null,
+          filesPanelOpen: false,
+          archivesPanelOpen: false,
+          tutorialFileRead: false,
+          settingsOpen: false,
           titleGate: true,
           intakeToast:
             fleetRefund > 0

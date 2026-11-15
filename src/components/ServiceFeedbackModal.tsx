@@ -1,8 +1,10 @@
 import React from 'react';
+import { resolvePlayerName } from '../data/playerName';
 import { useGameStore } from '../store/useGameStore';
 
 export const ServiceFeedbackModal: React.FC = () => {
   const feedback = useGameStore((s) => s.serviceFeedback);
+  const playerName = useGameStore((s) => s.playerName);
   const clear = useGameStore((s) => s.clearServiceFeedback);
 
   if (!feedback) return null;
@@ -16,6 +18,10 @@ export const ServiceFeedbackModal: React.FC = () => {
         <h3 className="text-lg font-bold text-emerald-100">
           {feedback.decedentName}
         </h3>
+        <p className="text-sm text-emerald-50">
+          Thank you, {resolvePlayerName(playerName)}, for caring for{' '}
+          {feedback.kinLabel}.
+        </p>
         <div className="rounded-lg border border-emerald-800/50 bg-emerald-950/40 px-3 py-2 space-y-1">
           <div className="text-[10px] uppercase tracking-wider text-emerald-300/80">
             Payout
