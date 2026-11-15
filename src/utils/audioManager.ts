@@ -34,6 +34,33 @@ export function isCrematoryBed(id: string | null | undefined): boolean {
   return id === 'crematoryStart' || id === 'crematoryLoop';
 }
 
+/**
+ * Race `work` against a timer and always clear that timer.
+ * A decode that finishes first must not leave the timer to reject later.
+ */
+export function withDeadline<T>(
+  work: Promise<T>,
+  ms: number,
+  label: string,
+  clock?: {
+    set: (fn: () => void, delay: number) => number;
+    clear: (id: number) => void;
+  }
+): Promise<T> {
+  const set =
+    clock?.set ??
+    ((fn: () => void, delay: number) => window.setTimeout(fn, delay) as unknown as number);
+  const clear = clock?.clear ?? ((id: number) => window.clearTimeout(id));
+  let timer = 0;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = set(() => reject(new Error(label)), ms);
+  });
+  timeout.catch(() => undefined);
+  return Promise.race([work, timeout]).finally(() => {
+    clear(timer);
+  }) as Promise<T>;
+}
+
 type Voice = {
   id: MusicBedId;
   source: AudioBufferSourceNode;
@@ -64,6 +91,13 @@ class AudioManager {
   private gestureInstalled = false;
   /** File beds that `decodeAudioData` rejected. HTMLAudioElement plays those. */
   private elements: HTMLAudioElement[] = [];
+  /** A fallback bed whose play() was blocked. Retried on the next gesture. */
+  private pendingPlay: {
+    el: HTMLAudioElement;
+    id: MusicBedId;
+    generation: number;
+  } | null = null;
+  private elementFades = new WeakMap<HTMLAudioElement, number>();
 
   /** Tunable crossfade length in milliseconds. */
   crossfadeMs = CROSSFADE_MS;
@@ -161,6 +195,7 @@ class AudioManager {
         /* ignore */
       }
     }
+    this.retryPendingElement();
     if (this.unlocked) return;
     this.unlocked = true;
     // Theme is not a live bed. Crematory clips preload in the background
@@ -197,12 +232,11 @@ class AudioManager {
         throw new Error(`bed ${id} ${res.status}`);
       }
       const raw = await res.arrayBuffer();
-      const buffer = await Promise.race([
+      const buffer = await withDeadline(
         ctx.decodeAudioData(raw.slice(0)),
-        new Promise<AudioBuffer>((_, reject) => {
-          window.setTimeout(() => reject(new Error(`decode timeout ${id}`)), 12000);
-        }),
-      ]);
+        12000,
+        `decode timeout ${id}`
+      );
       this.buffers.set(id, buffer);
       this.loadPromises.delete(id);
       return buffer;
@@ -222,22 +256,25 @@ class AudioManager {
    * times any room duck).
    */
   setCurrentVolume(volume: number, durationMs: number): void {
-    if (this.muted || !this.ctx) return;
+    if (this.muted) return;
     const vol = Math.max(0.0001, Math.min(1, volume));
-    const dur = Math.max(0.05, durationMs / 1000);
-    const t = this.ctx.currentTime;
-    for (const voice of this.voices) {
-      if (voice.generation !== this.generation) continue;
-      if (voice.endsAt != null && voice.endsAt < t) continue;
-      try {
-        const now = Math.max(0.0001, voice.gain.gain.value);
-        voice.gain.gain.cancelScheduledValues(t);
-        voice.gain.gain.setValueAtTime(now, t);
-        voice.gain.gain.linearRampToValueAtTime(vol, t + dur);
-      } catch {
-        /* ignore */
+    if (this.ctx) {
+      const dur = Math.max(0.05, durationMs / 1000);
+      const t = this.ctx.currentTime;
+      for (const voice of this.voices) {
+        if (voice.generation !== this.generation) continue;
+        if (voice.endsAt != null && voice.endsAt < t) continue;
+        try {
+          const now = Math.max(0.0001, voice.gain.gain.value);
+          voice.gain.gain.cancelScheduledValues(t);
+          voice.gain.gain.setValueAtTime(now, t);
+          voice.gain.gain.linearRampToValueAtTime(vol, t + dur);
+        } catch {
+          /* ignore */
+        }
       }
     }
+    for (const el of this.elements) this.fadeElement(el, vol, durationMs);
   }
 
   private clearHandoffTimer() {
@@ -452,7 +489,7 @@ class AudioManager {
 
     this.clearHandoffTimer();
     this.fadeOutVoices(fadeSec);
-    this.stopElements();
+    this.releaseElements(fadeSec);
     this.currentId = id;
     const voice = this.startVoice(id, buffer, {
       loop,
@@ -473,21 +510,123 @@ class AudioManager {
     this.generation += 1;
     const fadeSec = Math.max(0.05, durationMs / 1000);
     this.fadeOutVoices(fadeSec);
-    this.stopElements();
+    this.releaseElements(fadeSec);
     this.currentId = null;
     window.setTimeout(() => this.pruneVoices(), durationMs + 100);
   }
 
-  private stopElements() {
-    for (const el of this.elements) {
+  private fadeElement(
+    el: HTMLAudioElement,
+    to: number,
+    durationMs: number,
+    done?: () => void
+  ) {
+    const prev = this.elementFades.get(el);
+    if (prev != null) window.clearInterval(prev);
+    const from = Number.isFinite(el.volume) ? el.volume : 0.0001;
+    const dest = Math.max(0, Math.min(1, to));
+    const steps = 8;
+    let i = 0;
+    const timer = window.setInterval(() => {
+      i += 1;
+      const next = from + (dest - from) * Math.min(1, i / steps);
       try {
-        el.pause();
-        el.src = '';
+        el.volume = Math.max(0, Math.min(1, next));
       } catch {
         /* ignore */
       }
-    }
+      if (i >= steps) {
+        window.clearInterval(timer);
+        if (this.elementFades.get(el) === timer) this.elementFades.delete(el);
+        done?.();
+      }
+    }, Math.max(16, durationMs / steps));
+    this.elementFades.set(el, timer as unknown as number);
+  }
+
+  /** Fade a fallback bed out, then pause it. A hard cut skips the crossfade. */
+  private releaseElements(fadeSec: number) {
+    const old = this.elements;
     this.elements = [];
+    if (this.pendingPlay && old.includes(this.pendingPlay.el)) this.pendingPlay = null;
+    for (const el of old) {
+      const finish = () => {
+        try {
+          el.pause();
+          el.src = '';
+        } catch {
+          /* ignore */
+        }
+      };
+      if (fadeSec <= 0.05) {
+        finish();
+        continue;
+      }
+      this.fadeElement(el, 0, fadeSec * 1000, finish);
+    }
+  }
+
+  private stopElements() {
+    this.releaseElements(0);
+  }
+
+  private retryPendingElement() {
+    const pending = this.pendingPlay;
+    if (!pending || pending.generation !== this.generation) return;
+    void pending.el
+      .play()
+      .then(() => {
+        if (this.pendingPlay?.el !== pending.el) return;
+        if (pending.generation !== this.generation) {
+          try {
+            pending.el.pause();
+          } catch {
+            /* ignore */
+          }
+          return;
+        }
+        this.currentId = pending.id;
+        this.pendingPlay = null;
+      })
+      .catch(() => undefined);
+  }
+
+  private async tryElementPlay(el: HTMLAudioElement, id: MusicBedId, generation: number) {
+    this.pendingPlay = { el, id, generation };
+    try {
+      await el.play();
+    } catch {
+      if (this.currentId === id && this.pendingPlay?.el === el) this.currentId = null;
+      return;
+    }
+    if (generation !== this.generation || this.pendingPlay?.el !== el) {
+      try {
+        el.pause();
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    this.currentId = id;
+    this.pendingPlay = null;
+  }
+
+  private watchElementNearEnd(el: HTMLAudioElement, id: MusicBedId, fadeSec: number) {
+    const onTime = () => {
+      if (this.currentId !== id) return;
+      const duration = el.duration;
+      if (!Number.isFinite(duration) || duration <= 0) return;
+      if (duration - el.currentTime > fadeSec) return;
+      el.removeEventListener('timeupdate', onTime);
+      for (const handler of this.oneShotHandlers) {
+        try {
+          handler(id);
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+    el.addEventListener('timeupdate', onTime);
   }
 
   /**
@@ -500,38 +639,17 @@ class AudioManager {
     opts: { loop: boolean; volume: number; fadeSec: number; generation: number }
   ) {
     this.fadeOutVoices(opts.fadeSec);
-    this.stopElements();
+    this.releaseElements(opts.fadeSec);
+    this.currentId = null;
     const el = new Audio(url);
     el.loop = opts.loop;
     el.preload = 'auto';
     el.volume = 0.0001;
     this.elements.push(el);
-    this.currentId = id;
     const vol = Math.max(0.0001, Math.min(1, opts.volume));
-    const steps = 8;
-    let i = 0;
-    const timer = window.setInterval(() => {
-      i += 1;
-      try {
-        el.volume = Math.min(vol, (vol * i) / steps);
-      } catch {
-        /* ignore */
-      }
-      if (i >= steps) window.clearInterval(timer);
-    }, Math.max(16, (opts.fadeSec * 1000) / steps));
-    void el.play().catch(() => undefined);
-    if (!opts.loop) {
-      el.addEventListener('ended', () => {
-        if (this.currentId !== id) return;
-        for (const h of this.oneShotHandlers) {
-          try {
-            h(id);
-          } catch {
-            /* ignore */
-          }
-        }
-      });
-    }
+    this.fadeElement(el, vol, opts.fadeSec * 1000);
+    void this.tryElementPlay(el, id, opts.generation);
+    if (!opts.loop) this.watchElementNearEnd(el, id, opts.fadeSec);
   }
 
   stopImmediate() {

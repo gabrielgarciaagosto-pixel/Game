@@ -1,19 +1,29 @@
 /**
- * County wire for the hub news feed. Two hundred headlines.
+ * County wire for the hub news feed.
+ *
+ * EFFECT changes a shop price or the intake pace. Case-spawning celebrity
+ * lines are EFFECT too, but they use their own rare slot.
+ * MISCELLANEOUS does not change the game: rival parlors, celebrity flavor,
+ * and odd county news.
  *
  * VOLUME moves the intake pace for one or two in-game days.
  * RIVAL is flavor about a funeral home the player does not own yet.
  * MARKET moves one shop price for one or two in-game days.
  * CELEBRITY is a fictional name. A few of them also open a case file.
+ * ODD is general county color. No prices, no intake, no case.
  */
 
-export type NewsCategory = 'VOLUME' | 'RIVAL' | 'MARKET' | 'CELEBRITY';
+export type NewsCategory = 'VOLUME' | 'RIVAL' | 'MARKET' | 'CELEBRITY' | 'ODD';
+
+export type NewsGroup = 'EFFECT' | 'MISCELLANEOUS';
 
 export type MarketGood = 'URNS' | 'CASKETS' | 'FUEL' | 'FLOWERS' | 'EMBALMING';
 
 export interface NewsHeadline {
   id: string;
   category: NewsCategory;
+  /** EFFECT moves price or volume, or opens a celebrity case. MISCELLANEOUS does not. */
+  group: NewsGroup;
   text: string;
   /** 1 or 2 in-game days. A day is 24 family hours. */
   days: number;
@@ -31,10 +41,10 @@ export interface NewsHeadline {
 export const EMBALMING_SUPPLY_BASE = 36;
 
 function vol(id: string, text: string, flow: number, days: number): NewsHeadline {
-  return { id, category: 'VOLUME', text, flow, days };
+  return { id, category: 'VOLUME', group: 'EFFECT', text, flow, days };
 }
 function rival(id: string, text: string): NewsHeadline {
-  return { id, category: 'RIVAL', text, days: 1 };
+  return { id, category: 'RIVAL', group: 'MISCELLANEOUS', text, days: 1 };
 }
 function market(
   id: string,
@@ -43,7 +53,7 @@ function market(
   price: number,
   days: number
 ): NewsHeadline {
-  return { id, category: 'MARKET', text, good, price, days };
+  return { id, category: 'MARKET', group: 'EFFECT', text, good, price, days };
 }
 function celeb(
   id: string,
@@ -51,7 +61,18 @@ function celeb(
   name: string,
   spawnsCase: boolean
 ): NewsHeadline {
-  return { id, category: 'CELEBRITY', text, celeb: name, spawnsCase, days: 2 };
+  return {
+    id,
+    category: 'CELEBRITY',
+    group: spawnsCase ? 'EFFECT' : 'MISCELLANEOUS',
+    text,
+    celeb: name,
+    spawnsCase,
+    days: 2,
+  };
+}
+function odd(id: string, text: string): NewsHeadline {
+  return { id, category: 'ODD', group: 'MISCELLANEOUS', text, days: 1 };
 }
 
 export const NEWS_HEADLINES: readonly NewsHeadline[] = [
@@ -255,6 +276,54 @@ export const NEWS_HEADLINES: readonly NewsHeadline[] = [
   celeb('cel-38', 'Ollie Grange, mascot of the feed store, has died elsewhere.', 'Ollie Grange', false),
   celeb('cel-39', 'Willa Socket the radio engineer has died.', 'Willa Socket', false),
   celeb('cel-40', 'Archie Pebble, who named the town creeks, has died across town.', 'Archie Pebble', false),
+  odd('odd-01', 'A raccoon filed a complaint at the courthouse and lost.'),
+  odd('odd-02', 'The river ran backwards for an hour. The fish looked surprised.'),
+  odd('odd-03', 'Someone left a tuba on the town hall steps.'),
+  odd('odd-04', 'The library ghost is only checking out cookbooks.'),
+  odd('odd-05', 'A parade of lawn chairs went down Main before breakfast.'),
+  odd('odd-06', 'The grain-elevator clock is an hour early and proud of it.'),
+  odd('odd-07', 'Pigeons have unionized the bandstand.'),
+  odd('odd-08', 'A fog bank took questions after the meeting.'),
+  odd('odd-09', 'The diner served a soup that remembered your name.'),
+  odd('odd-10', 'The Oak Street lights blinked good-night in Morse.'),
+  odd('odd-11', 'A wedding cake escaped a van and rolled three blocks.'),
+  odd('odd-12', 'The mayor’s dog has a press secretary.'),
+  odd('odd-13', 'Thunder rehearsed over the ridge, then cancelled.'),
+  odd('odd-14', 'A hot-air balloon landed in the cemetery and apologized.'),
+  odd('odd-15', 'The bingo hall smelled like cinnamon and secrets.'),
+  odd('odd-16', 'Someone mowed a short poem into the high-school lawn.'),
+  odd('odd-17', 'The ferry captain is singing only in questions today.'),
+  odd('odd-18', 'A crate of hats arrived with no return address.'),
+  odd('odd-19', 'The moon looks closer. The astronomers are staying polite.'),
+  odd('odd-20', 'Children say the creek is telling knock-knock jokes.'),
+  odd('odd-21', 'A brass band practiced in the parking lot at dawn.'),
+  odd('odd-22', 'The weather vane has chosen a new favorite direction.'),
+  odd('odd-23', 'The ice-cream truck is playing only lullabies.'),
+  odd('odd-24', 'The post office lost a letter and found a better one.'),
+  odd('odd-25', 'Geese are holding the crosswalk longer than usual.'),
+  odd('odd-26', 'A piano rode the freight elevator alone.'),
+  odd('odd-27', 'The county fair’s largest pumpkin has a fan club.'),
+  odd('odd-28', 'The bakery’s night shift sent the town fresh rolls.'),
+  odd('odd-29', 'A scarecrow downtown was dressed for the opera.'),
+  odd('odd-30', 'The radio played static that sounded like applause.'),
+  odd('odd-31', 'Someone donated a fountain that only runs on Tuesdays.'),
+  odd('odd-32', 'The bridge inspector waved at every car twice.'),
+  odd('odd-33', 'A lost collection of balloons is gathering over the mill.'),
+  odd('odd-34', 'The hardware store is giving away single screws.'),
+  odd('odd-35', 'Choir practice carried all the way to the water tower.'),
+  odd('odd-36', 'A quiet comet is scheduled, weather permitting.'),
+  odd('odd-37', 'The town cat has taken the night clerk’s chair.'),
+  odd('odd-38', 'Lemonade stands are outnumbering the parking meters.'),
+  odd('odd-39', 'A train whistled a tune nobody taught it.'),
+  odd('odd-40', 'The gazebo lights came on by themselves and stayed kind.'),
+  odd('odd-41', 'Farmers say the corn is listening, so they lowered their voices.'),
+  odd('odd-42', 'A suitcase of sheet music was returned to the depot.'),
+  odd('odd-43', 'The barber pole spun the wrong way and nobody minded.'),
+  odd('odd-44', 'Kids found a round stone and named it Mayor.'),
+  odd('odd-45', 'The evening paper printed an extra page of good luck.'),
+  odd('odd-46', 'A rowboat drifted past the docks with its lantern still lit.'),
+  odd('odd-47', 'The school bell rang once, softly, after hours.'),
+  odd('odd-48', 'Someone chalked a map of the clouds on the sidewalk.'),
 ];
 
 const BY_ID = new Map(NEWS_HEADLINES.map((h) => [h.id, h]));
@@ -269,8 +338,15 @@ export function headlineCounts(): Record<NewsCategory, number> {
     RIVAL: 0,
     MARKET: 0,
     CELEBRITY: 0,
+    ODD: 0,
   };
   for (const h of NEWS_HEADLINES) counts[h.category] += 1;
+  return counts;
+}
+
+export function headlineGroupCounts(): Record<NewsGroup, number> {
+  const counts: Record<NewsGroup, number> = { EFFECT: 0, MISCELLANEOUS: 0 };
+  for (const h of NEWS_HEADLINES) counts[h.group] += 1;
   return counts;
 }
 

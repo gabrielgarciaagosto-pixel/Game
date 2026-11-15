@@ -72,6 +72,7 @@ import {
   cremainsQualityScore,
   defaultRetortBay,
   fuelCostFor,
+  fuelMemoDollars,
   fuelPlanBonus,
   liftPoorRank,
   preheatCaseBonus,
@@ -1072,6 +1073,11 @@ function settleFinishedChamber(
   const hold = aligned.machines.findIndex((m) => m.caseId === finishedId);
   const index = hold >= 0 ? hold : aligned.index;
   const bay = bays[index] ?? defaultRetortBay();
+  const finished = aligned.machines[index];
+  const fuelChargedCost =
+    finished?.fuelCharged === true && typeof finished.fuelChargedCost === 'number'
+      ? finished.fuelChargedCost
+      : null;
   const machines = aligned.machines.slice();
   machines[index] = { ...IDLE_RETORT };
   bays[index] = { ...bay, queueCaseId: null };
@@ -1087,6 +1093,7 @@ function settleFinishedChamber(
     activeRetortIndex: index,
     retortBays: bays,
     cremationBurnActive: stillBurn,
+    fuelChargedCost,
   };
 }
 
@@ -1307,6 +1314,7 @@ export const useGameStore = create<GameState>()(
       ownedListingId: state.ownedProperty?.listingId ?? '',
       openCaseIds: new Set(state.cases.map((c) => c.id)),
       coolerFull: coolerCount >= cap,
+      headlineCaseOpen: state.cases.some((c) => c.headlineCase != null),
     });
     if (!result.changed && !result.spawn) return;
 
@@ -1317,13 +1325,16 @@ export const useGameStore = create<GameState>()(
     let lastCase = state.lastCase;
     let activeCaseId = state.activeCaseId;
     const spawn = result.spawn;
-    if (spawn && coolerCount < cap) {
+    const spawnSlot = spawn
+      ? wire.find((item) => item.live && item.headlineId === spawn.id)
+      : undefined;
+    if (spawn && spawnSlot && coolerCount < cap) {
       const next = generateHeadlineCase(spawn, now);
       playIntakeBell();
       cases = [...cases, next];
       inboxFiles = [toInboxFile(next), ...inboxFiles];
       wire = wire.map((item) =>
-        item.live && item.headlineId === spawn.id ? { ...item, caseId: next.id } : item
+        item === spawnSlot ? { ...item, caseId: next.id } : item
       );
       intakeToast = `${next.name} — headline intake`;
       activeCaseId = activeCaseId ?? next.id;
@@ -1333,6 +1344,8 @@ export const useGameStore = create<GameState>()(
         service: directiveLabel(next.directive),
         at: next.arrivedAt,
       };
+    } else if (spawnSlot) {
+      wire = wire.filter((item) => item !== spawnSlot);
     }
     set({
       newsWire: wire,
@@ -1430,7 +1443,7 @@ export const useGameStore = create<GameState>()(
         intakeToast: `Retort fuel $${cost}`,
         ...focusMachines(
           state,
-          { ...state.retort, fuelCharged: true },
+          { ...state.retort, fuelCharged: true, fuelChargedCost: cost },
           state.activeRetortIndex ?? 0
         ),
       };
@@ -2241,6 +2254,7 @@ export const useGameStore = create<GameState>()(
       retortSpeedTier: settled.bay.speedTier,
       retortQualityTier: settled.bay.qualityTier,
       retortFuelTier: settled.bay.fuelTier,
+      fuelChargedCost: settled.fuelChargedCost,
       retortPreheat: settled.bay.preheat,
       retortQueue: settled.bay.queueSlot,
       location: 'URN_FILLING' as const,
@@ -3201,7 +3215,7 @@ export const useGameStore = create<GameState>()(
         ? retortBayCaseBonus(retortCount(state.facilityLevels))
         : 0;
       const fuelMetered = burned
-        ? quotedPrice(fuelCostFor(c.retortFuelTier ?? 0), 'FUEL', state.newsWire, gameNow())
+        ? fuelMemoDollars(c.fuelChargedCost, c.retortFuelTier ?? 0)
         : 0;
       const headlineAdjust =
         c.headlineCase && !serviceFailed

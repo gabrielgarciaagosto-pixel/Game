@@ -32,6 +32,8 @@ export interface RetortMachine {
   secondarySetPoint: number;
   /** Gas for this firing has already been billed. */
   fuelCharged: boolean;
+  /** Dollars billed for this firing. The service card repeats this figure. */
+  fuelChargedCost: number | null;
 }
 
 export const SECONDARY_SP = 1700;
@@ -69,6 +71,7 @@ export const IDLE_RETORT: RetortMachine = {
   primarySetPoint: PRIMARY_SP,
   secondarySetPoint: SECONDARY_SP,
   fuelCharged: false,
+  fuelChargedCost: null,
 };
 
 export function randomPurgeMs(): number {

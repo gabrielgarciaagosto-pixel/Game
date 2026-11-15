@@ -204,6 +204,8 @@ export interface DecedentCase {
   retortSpeedTier?: number;
   retortQualityTier?: number;
   retortFuelTier?: number;
+  /** Dollars taken for retort fuel when the chamber was fired. */
+  fuelChargedCost?: number | null;
   retortPreheat?: boolean;
   retortQueue?: boolean;
   isUrnFilled: boolean;

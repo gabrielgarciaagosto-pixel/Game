@@ -1,9 +1,10 @@
 /**
  * Which headlines are on the hub wire, and what they do.
  *
- * One economic effect at a time: either a volume shift or a price shift.
- * A celebrity file can sit beside that, and only one of those at a time.
- * Rival lines fill the crawl and do not change the game.
+ * One price or volume effect at a time. It lasts the headline's one or two
+ * in-game days, then waits half a day before another can start.
+ * Miscellaneous lines fill the rest of the crawl and turn over faster.
+ * A celebrity case can sit beside that, and only one of those at a time.
  * An in-game day is 24 family hours.
  */
 import { PROPERTY_LISTINGS } from '../data/bankProducts';
@@ -44,6 +45,8 @@ export interface NewsTickInput {
   ownedListingId: string;
   openCaseIds: ReadonlySet<string>;
   coolerFull: boolean;
+  /** A headline case is already in the house, even if the wire lost the line. */
+  headlineCaseOpen?: boolean;
   rng?: () => number;
 }
 
@@ -56,7 +59,16 @@ export interface NewsTickResult {
   changed: boolean;
 }
 
-const GAP = Math.round(NEWS_DAY_MS * 0.25);
+/** How long a miscellaneous line stays on the crawl. Four family hours. */
+export const MISC_HOLD_MS = 4 * 60 * FAMILY_MINUTE_MS;
+/**
+ * After a price or volume line ends, the next one waits this long.
+ * A one-day effect plus this gap cannot start twice in one in-game day.
+ */
+export const EFFECT_COOLDOWN_MS = Math.round(NEWS_DAY_MS * 0.5);
+const MISC_SLOTS = 4;
+/** Celebrity case lines are rolled once per in-game day, and miss more often than they hit. */
+const CELEB_ROLL = 0.35;
 
 function hashId(id: string): number {
   let h = 2166136261;
@@ -111,16 +123,60 @@ function makeItem(
   h: NewsHeadline,
   now: number,
   owned: string,
-  live: boolean
+  live: boolean,
+  holdMs?: number
 ): NewsWireItem {
   const home = h.category === 'RIVAL' ? homeForHeadline(h.id, owned) : null;
   return {
     headlineId: h.id,
     startedAt: now,
-    endsAt: now + h.days * NEWS_DAY_MS,
+    endsAt: now + (holdMs ?? h.days * NEWS_DAY_MS),
     live,
     ...(home ? { homeId: home.id, homeLabel: home.label } : {}),
   };
+}
+
+function isEconomicId(id: string): boolean {
+  const cat = category(id);
+  return cat === 'VOLUME' || cat === 'MARKET';
+}
+
+function isSpawnHeadline(h: NewsHeadline | null | undefined): boolean {
+  return !!h && h.category === 'CELEBRITY' && h.spawnsCase === true;
+}
+
+function isSpawnItem(item: NewsWireItem): boolean {
+  return item.live && isSpawnHeadline(headlineById(item.headlineId));
+}
+
+function miscCount(wire: readonly NewsWireItem[]): number {
+  return wire.filter((item) => !isEconomicId(item.headlineId) && !isSpawnItem(item)).length;
+}
+
+function pickFrom(pool: readonly NewsHeadline[], rng: () => number): NewsHeadline | null {
+  if (pool.length === 0) return null;
+  return pool[Math.floor(rng() * pool.length)] ?? null;
+}
+
+function pickMisc(blocked: Set<string>, rng: () => number, owned: string): NewsHeadline | null {
+  const pool = NEWS_HEADLINES.filter((h) => {
+    if (h.group !== 'MISCELLANEOUS' || blocked.has(h.id)) return false;
+    if (h.category === 'RIVAL' && !homeForHeadline(h.id, owned)) return false;
+    return true;
+  });
+  return pickFrom(pool, rng);
+}
+
+function pickSpawn(blocked: Set<string>, rng: () => number): NewsHeadline | null {
+  const pool = NEWS_HEADLINES.filter((h) => isSpawnHeadline(h) && !blocked.has(h.id));
+  return pickFrom(pool, rng);
+}
+
+function settleWire(wire: readonly NewsWireItem[]): NewsWireItem[] {
+  const economic = wire.filter((item) => item.live && isEconomicId(item.headlineId)).slice(-1);
+  const spawn = wire.filter((item) => isSpawnItem(item)).slice(-1);
+  const misc = wire.filter((item) => !isEconomicId(item.headlineId) && !isSpawnItem(item));
+  return [...economic, ...spawn, ...misc.slice(-MISC_SLOTS)];
 }
 
 function remember(recent: string[], id: string): string[] {
@@ -153,11 +209,8 @@ export function advanceNewsWire(input: NewsTickInput): NewsTickResult {
     changed = true;
   }
 
-  const liveCat = (cat: NewsCategory) =>
-    wire.some((item) => item.live && category(item.headlineId) === cat);
-
-  const economic = liveCat('VOLUME') || liveCat('MARKET');
-  if (!economic && input.now >= nextLiveAt) {
+  const economicLive = wire.some((item) => item.live && isEconomicId(item.headlineId));
+  if (!economicLive && input.now >= nextLiveAt) {
     const prefer: NewsCategory =
       Math.floor(input.now / NEWS_DAY_MS) % 2 === 0 ? 'MARKET' : 'VOLUME';
     const other: NewsCategory = prefer === 'MARKET' ? 'VOLUME' : 'MARKET';
@@ -166,51 +219,75 @@ export function advanceNewsWire(input: NewsTickInput): NewsTickResult {
     if (h) {
       const item = makeItem(h, input.now, input.ownedListingId, true);
       wire.push(item);
-      nextLiveAt = item.endsAt + GAP;
+      nextLiveAt = item.endsAt + EFFECT_COOLDOWN_MS;
       changed = true;
     }
   }
 
-  if (!liveCat('CELEBRITY') && input.now >= celebGate) {
-    celebGate = input.now + Math.round(NEWS_DAY_MS * 0.5);
+  const spawnBusy = wire.some(isSpawnItem) || input.headlineCaseOpen === true;
+  if (!spawnBusy && input.now >= celebGate) {
+    celebGate = input.now + NEWS_DAY_MS;
     changed = true;
-    if (rng() < 0.7) {
+    if (rng() < CELEB_ROLL && !input.coolerFull) {
       const blocked = blockedIds(wire, recent);
-      const h = pick('CELEBRITY', blocked, rng);
+      const h = pickSpawn(blocked, rng);
       if (h) {
-        const canSpawn = !!h.spawnsCase && !input.coolerFull;
-        const item = makeItem(h, input.now, input.ownedListingId, canSpawn);
-        if (canSpawn) spawn = h;
-        const rivalAt = wire.findIndex(
-          (row) => !row.live && category(row.headlineId) === 'RIVAL'
-        );
-        if (wire.length >= 4 && rivalAt >= 0) wire.splice(rivalAt, 1);
-        wire.push(item);
+        wire.push(makeItem(h, input.now, input.ownedListingId, true));
+        spawn = h;
       }
     }
   }
 
-  while (wire.length < 3) {
+  let guard = 0;
+  while (miscCount(wire) < MISC_SLOTS && guard < 12) {
+    guard += 1;
     const blocked = blockedIds(wire, recent);
-    const h = pick('RIVAL', blocked, rng);
+    const h = pickMisc(blocked, rng, input.ownedListingId);
     if (!h) break;
-    const item = makeItem(h, input.now, input.ownedListingId, false);
-    if (!item.homeId) break;
+    const hold = MISC_HOLD_MS - (guard - 1) * 60 * FAMILY_MINUTE_MS;
+    const item = makeItem(h, input.now, input.ownedListingId, false, hold);
+    if (h.category === 'RIVAL' && !item.homeId) break;
     wire.push(item);
     changed = true;
   }
 
-  const capped = wire.slice(0, 4);
-  if (capped.length !== wire.length) changed = true;
+  const settled = settleWire(wire);
+  if (settled.length !== wire.length) changed = true;
+  if (spawn && !settled.some((item) => item.live && item.headlineId === spawn!.id)) {
+    spawn = null;
+  }
 
   return {
-    wire: capped,
+    wire: settled,
     nextLiveAt,
     celebGate,
     recent,
     spawn,
     changed,
   };
+}
+
+/**
+ * The crawl lands on miscellaneous lines more often than on a price or volume line.
+ * `roll` is 0–1. Below 0.7, an effect landing skips ahead to the next misc line.
+ */
+export function preferMiscIndex(
+  lines: readonly { misc: boolean }[],
+  index: number,
+  roll: number
+): number {
+  const count = lines.length;
+  if (count === 0) return 0;
+  let i = ((index % count) + count) % count;
+  i = (i + 1) % count;
+  if (!lines.some((line) => line.misc)) return i;
+  if (lines[i]?.misc) return i;
+  if (roll >= 0.7) return i;
+  for (let step = 0; step < count; step += 1) {
+    i = (i + 1) % count;
+    if (lines[i]?.misc) return i;
+  }
+  return i;
 }
 
 export function quotedPrice(

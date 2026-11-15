@@ -239,6 +239,17 @@ export function fuelCostFor(tier: number): number {
   return costs[i] ?? 180;
 }
 
+/** Dollars already taken off the balance for this firing. Never a later quote. */
+export function fuelMemoDollars(
+  charged: number | null | undefined,
+  tier: number
+): number {
+  if (typeof charged === 'number' && Number.isFinite(charged) && charged >= 0) {
+    return Math.round(charged);
+  }
+  return fuelCostFor(tier);
+}
+
 /** Extra cash at the service for fuel plans past the first. Tier 0 and 1 pay through the meter alone. */
 export function fuelPlanBonus(tier: number): number {
   const bonus = [0, 0, 150, 410];

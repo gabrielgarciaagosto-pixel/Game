@@ -23,6 +23,10 @@ export function alignMachines(
     ...IDLE_RETORT,
     ...m,
     fuelCharged: m.fuelCharged === true,
+    fuelChargedCost:
+      m.fuelCharged === true && typeof m.fuelChargedCost === 'number'
+        ? m.fuelChargedCost
+        : null,
   }));
   const idx = Math.max(0, Math.min(Math.max(0, count - 1), index || 0));
   while (src.length <= idx) src.push({ ...IDLE_RETORT });
@@ -30,6 +34,10 @@ export function alignMachines(
     ...IDLE_RETORT,
     ...active,
     fuelCharged: active.fuelCharged === true,
+    fuelChargedCost:
+      active.fuelCharged === true && typeof active.fuelChargedCost === 'number'
+        ? active.fuelChargedCost
+        : null,
   };
   while (src.length < count) src.push({ ...IDLE_RETORT });
   return { machines: src.slice(0, count), index: idx };

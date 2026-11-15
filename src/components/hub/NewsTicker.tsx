@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { headlineById } from '../../data/newsHeadlines';
-import { trendFor, wireLine, type NewsTrend } from '../../news/newsWire';
+import { preferMiscIndex, trendFor, wireLine, type NewsTrend } from '../../news/newsWire';
 import { useGameStore } from '../../store/useGameStore';
 
 function TrendMark({ trend }: { trend: NewsTrend }) {
@@ -18,34 +18,61 @@ function TrendMark({ trend }: { trend: NewsTrend }) {
   );
 }
 
+function MiscTag() {
+  return (
+    <span className="shrink-0 rounded bg-slate-700/80 px-1 py-0.5 text-[8px] font-black tracking-[0.12em] text-slate-200">
+      MISC
+    </span>
+  );
+}
+
+type TickerLine = {
+  id: string;
+  text: string;
+  trend: NewsTrend;
+  misc: boolean;
+  spawn: boolean;
+};
+
 /**
  * Replaces the hub title. One headline is on screen, then the next slides in.
- * Volume and price lines carry a small arrow. Rival lines do not.
+ * Price and volume lines carry an arrow. Miscellaneous lines carry a MISC tag.
+ * A celebrity case keeps its own mark. The crawl prefers miscellaneous lines.
  */
 export const NewsTicker: React.FC = () => {
   const wire = useGameStore((s) => s.newsWire);
-  const lines = wire
-    .map((item) => ({
-      id: item.headlineId + String(item.startedAt),
-      text: wireLine(item),
-      trend: trendFor(item.headlineId),
-      celeb: headlineById(item.headlineId)?.category === 'CELEBRITY',
-    }))
+  const lines: TickerLine[] = wire
+    .map((item) => {
+      const headline = headlineById(item.headlineId);
+      return {
+        id: item.headlineId + String(item.startedAt),
+        text: wireLine(item),
+        trend: trendFor(item.headlineId),
+        misc: headline?.group === 'MISCELLANEOUS',
+        spawn: headline?.category === 'CELEBRITY' && headline.spawnsCase === true,
+      };
+    })
     .filter((line) => line.text);
+  const linesRef = useRef(lines);
   const [index, setIndex] = useState(0);
   const count = lines.length;
+
+  useEffect(() => {
+    linesRef.current = lines;
+  }, [lines]);
 
   useEffect(() => {
     if (count < 2) return;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const id = window.setInterval(() => {
-      setIndex((n) => (n + 1) % count);
+      setIndex((n) => preferMiscIndex(linesRef.current, n, Math.random()));
     }, reduced ? 8000 : 6500);
     return () => window.clearInterval(id);
   }, [count]);
 
   const safeIndex = count === 0 ? 0 : index % count;
   const line = lines[safeIndex];
+  const showArrow = !!line && !line.misc && !line.spawn && line.trend !== 'none';
 
   return (
     <div
@@ -56,8 +83,9 @@ export const NewsTicker: React.FC = () => {
         <span className="shrink-0 pt-0.5 text-[9px] font-black tracking-[0.16em] text-amber-200/90">
           NEWS
         </span>
-        {line ? <TrendMark trend={line.trend} /> : null}
-        {line?.celeb ? (
+        {line?.misc ? <MiscTag /> : null}
+        {showArrow && line ? <TrendMark trend={line.trend} /> : null}
+        {line?.spawn ? (
           <span aria-hidden className="shrink-0 pt-0.5 text-[9px] text-amber-200/70">
             ◆
           </span>
@@ -66,6 +94,7 @@ export const NewsTicker: React.FC = () => {
           <p
             key={line?.id ?? 'quiet'}
             data-news-text={line?.text ?? ''}
+            data-news-kind={line?.misc ? 'misc' : line?.spawn ? 'case' : 'effect'}
             title={line?.text}
             className="news-swap text-[12px] leading-snug text-slate-100 line-clamp-3"
           >
