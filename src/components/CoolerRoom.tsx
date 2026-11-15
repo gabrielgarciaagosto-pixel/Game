@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { decayLabel, displayCaseName, friendlyToken } from '../types/game';
-import { useGameStore } from '../store/useGameStore';
+import { TAG_WINDOW_MS, useGameStore } from '../store/useGameStore';
+import { tagWindowIsHeld } from '../tutorial/steps';
 import { gameNow } from '../utils/gameNow';
 
 export const CoolerRoom: React.FC = () => {
@@ -62,11 +63,13 @@ export const CoolerRoom: React.FC = () => {
             );
           }
 
-          const secondsLeft = Math.max(
-            0,
-            Math.ceil((body.tagExpiresAt - now) / 1000)
-          );
-          const canStillTag = !body.isTagged && secondsLeft > 0;
+          const tagHeld =
+            !body.isTagged &&
+            tagWindowIsHeld(body.tagExpiresAt, TAG_WINDOW_MS, now);
+          const secondsLeft = tagHeld
+            ? 0
+            : Math.max(0, Math.ceil((body.tagExpiresAt - now) / 1000));
+          const canStillTag = !body.isTagged && (tagHeld || secondsLeft > 0);
           const isSelected = activeCaseId === body.id;
 
           return (
@@ -89,7 +92,8 @@ export const CoolerRoom: React.FC = () => {
                   }}
                   className="absolute -top-3 left-1/2 -translate-x-1/2 z-20 bg-amber-400 text-slate-950 px-3 py-1.5 rounded-full font-extrabold text-xs shadow-xl animate-bounce whitespace-nowrap border-2 border-white"
                 >
-                  TAP TO TAG: &quot;{body.name}&quot; ({secondsLeft}s)
+                  TAP TO TAG: &quot;{body.name}&quot;
+                  {tagHeld ? '' : ` (${secondsLeft}s)`}
                 </button>
               )}
 
@@ -97,7 +101,7 @@ export const CoolerRoom: React.FC = () => {
                 <span>BAY #{index + 1}</span>
                 {body.isTagged ? (
                   <span className="text-emerald-400 font-bold">✓ TAGGED</span>
-                ) : secondsLeft === 0 ? (
+                ) : !tagHeld && secondsLeft === 0 ? (
                   <span className="text-red-400 font-bold">UNTAGGED</span>
                 ) : (
                   <span className="text-amber-300">AWAITING TAG</span>

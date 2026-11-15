@@ -40,7 +40,14 @@ import {
   resolvePlayerName,
   rollFamilyKin,
 } from '../data/playerName';
-import { TUTORIAL_STEPS, type TutorialPhase } from '../tutorial/steps';
+import {
+  TUTORIAL_STEPS,
+  TUTORIAL_TAG_HOLD_MS,
+  TUTORIAL_TAG_STEP,
+  releaseHeldTagWindow,
+  tagWindowIsHeld,
+  type TutorialPhase,
+} from '../tutorial/steps';
 import { getCremationTargets } from '../utils/mortuaryMath';
 import { getUrnById, URN_MATERIALS } from '../data/urnCatalog';
 import {
@@ -174,7 +181,7 @@ import {
   type NewsWireItem,
 } from '../news/newsWire';
 
-const TAG_WINDOW_MS = 60_000;
+export const TAG_WINDOW_MS = 60_000;
 const INTAKE_MIN_MS = 180_000;
 const INTAKE_MAX_MS = 300_000;
 /** Decay points per second outside cooler when not embalmed/cremated */
@@ -1323,15 +1330,40 @@ function tutorialGateOf(state: GameState) {
   };
 }
 
+function casesWithTagWindowReleased(
+  state: GameState,
+  now: number
+): DecedentCase[] | null {
+  if (!state.tutorialCaseId) return null;
+  let changed = false;
+  const cases = state.cases.map((c) => {
+    if (c.id !== state.tutorialCaseId) return c;
+    const next = releaseHeldTagWindow(c, now, TAG_WINDOW_MS);
+    if (next !== c) changed = true;
+    return next;
+  });
+  return changed ? cases : null;
+}
+
 function advanceTutorial(state: GameState, force: boolean) {
   if (state.tutorial !== 'active') return state;
   const step = TUTORIAL_STEPS[state.tutorialStep];
   if (!force && (!step || !step.done(tutorialGateOf(state)))) return state;
   const next = state.tutorialStep + 1;
+  const released =
+    next >= TUTORIAL_TAG_STEP
+      ? casesWithTagWindowReleased(state, gameNow())
+      : null;
+  const casesPatch = released ? { cases: released } : {};
   if (!step || next >= TUTORIAL_STEPS.length) {
-    return { tutorial: 'done' as const, tutorialStep: 0, tutorialFileRead: false };
+    return {
+      ...casesPatch,
+      tutorial: 'done' as const,
+      tutorialStep: 0,
+      tutorialFileRead: false,
+    };
   }
-  return { tutorialStep: next, tutorialFileRead: false };
+  return { ...casesPatch, tutorialStep: next, tutorialFileRead: false };
 }
 
 export const useGameStore = create<GameState>()(
@@ -1399,6 +1431,7 @@ export const useGameStore = create<GameState>()(
       unpermittedCremation: false,
       isTagged: false,
       nameExpired: false,
+      tagExpiresAt: now + TUTORIAL_TAG_HOLD_MS,
     };
     set({
       cases: [...state.cases, next],
@@ -1412,10 +1445,14 @@ export const useGameStore = create<GameState>()(
     });
   },
   skipTutorial: () =>
-    set({
-      tutorial: 'done',
-      tutorialStep: 0,
-      tutorialFileRead: false,
+    set((state) => {
+      const released = casesWithTagWindowReleased(state, gameNow());
+      return {
+        tutorial: 'done',
+        tutorialStep: 0,
+        tutorialFileRead: false,
+        ...(released ? { cases: released } : {}),
+      };
     }),
   skipTutorialStep: () =>
     set((state) => advanceTutorial(state, true)),
@@ -1643,8 +1680,24 @@ export const useGameStore = create<GameState>()(
   expireUntaggedNames: () =>
     set((state) => {
       const now = gameNow();
+      const holdTutorial =
+        state.tutorial === 'active' && state.tutorialStep < TUTORIAL_TAG_STEP;
       let changed = false;
       const cases = state.cases.map((c) => {
+        if (
+          holdTutorial &&
+          c.id === state.tutorialCaseId &&
+          !c.isTagged &&
+          (c.nameExpired ||
+            !tagWindowIsHeld(c.tagExpiresAt, TAG_WINDOW_MS, now))
+        ) {
+          changed = true;
+          return {
+            ...c,
+            nameExpired: false,
+            tagExpiresAt: now + TUTORIAL_TAG_HOLD_MS,
+          };
+        }
         if (!c.isTagged && !c.nameExpired && now >= c.tagExpiresAt) {
           changed = true;
           return { ...c, nameExpired: true };

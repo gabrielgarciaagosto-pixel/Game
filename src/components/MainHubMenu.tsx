@@ -10,7 +10,8 @@ import { gameNow } from '../utils/gameNow';
 import { getCremationTargets } from '../utils/mortuaryMath';
 import { retortProgress } from '../retort/retortTypes';
 import { directiveLabel, displayCaseName, type StationId } from '../types/game';
-import { useGameStore, type LastCaseNote } from '../store/useGameStore';
+import { TAG_WINDOW_MS, useGameStore, type LastCaseNote } from '../store/useGameStore';
+import { tagWindowIsHeld } from '../tutorial/steps';
 import { HubAtmosphere } from './hub/HubAtmosphere';
 import { NewsTicker } from './hub/NewsTicker';
 import type { DecedentCase } from '../types/game';
@@ -224,9 +225,14 @@ export const MainHubMenu: React.FC = () => {
   const [burst, setBurst] = useState<StationId | null>(null);
   const navTimer = useRef<number | null>(null);
 
-  const untaggedUrgentCount = coolerCases.filter(
-    (c) => !c.isTagged && gameNow() < c.tagExpiresAt
-  ).length;
+  const untaggedUrgentCount = coolerCases.filter((c) => {
+    const now = gameNow();
+    return (
+      !c.isTagged &&
+      now < c.tagExpiresAt &&
+      !tagWindowIsHeld(c.tagExpiresAt, TAG_WINDOW_MS, now)
+    );
+  }).length;
 
   const roster = retortMachines.length > 0 ? retortMachines : [retort];
   const burning = roster

@@ -52,6 +52,10 @@ function App() {
         return 'handled';
       }
       if (state.titleGate || !state.hasStartedGame) return 'exit';
+      if (state.tutorial === 'offer') {
+        state.skipTutorial();
+        return 'handled';
+      }
       if (state.bankForeclosed) {
         state.acknowledgeBankForeclosure();
         return 'handled';
