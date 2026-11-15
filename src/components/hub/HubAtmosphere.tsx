@@ -24,6 +24,7 @@ type Body = {
   min: number;
   max: number;
   clash: string | null;
+  clashHue: number | null;
   clashUntil: number;
 };
 
@@ -36,19 +37,15 @@ function hashId(id: string): number {
   return h >>> 0;
 }
 
-/** One hue for this contact. The same pair gets a different hue next time. */
-function clashColor(a: Body, b: Body, now: number): string {
-  const blend = (a.hue + b.hue) / 2;
-  const salt =
-    (Math.floor(now) ^ Math.imul(a.seed, 13) ^ Math.imul(b.seed, 29)) >>> 0;
-  let h = (blend + (salt % 160) - 70) % 360;
-  if (h < 0) h += 360;
-  const near = (base: number) => {
-    const d = Math.abs(h - base) % 360;
-    return Math.min(d, 360 - d) < 24;
-  };
-  if (near(a.hue) && near(b.hue)) h = (h + 86) % 360;
-  return `hsl(${h.toFixed(0)} 82% 66%)`;
+/** Shortest-arc mix. Blue 210 and yellow 48 meet at 129, which reads as green. */
+function mixHue(a: number, b: number): number {
+  let d = (((b - a) % 360) + 360) % 360;
+  if (d > 180) d -= 360;
+  return (((a + d / 2) % 360) + 360) % 360;
+}
+
+function clashColor(a: Body, b: Body): string {
+  return `hsl(${mixHue(a.hue, b.hue).toFixed(0)} 78% 62%)`;
 }
 
 function spawnBody(el: HTMLElement, width: number, height: number): Body {
@@ -76,6 +73,7 @@ function spawnBody(el: HTMLElement, width: number, height: number): Body {
     min: speed * 0.78,
     max: speed + 16,
     clash: null,
+    clashHue: null,
     clashUntil: 0,
   };
 }
@@ -225,10 +223,13 @@ export const HubAtmosphere: React.FC = () => {
 
             const key = a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`;
             if ((pairs.get(key) ?? 0) <= now) {
-              const color = clashColor(a, b, now);
+              const hue = mixHue(a.hue, b.hue);
+              const color = clashColor(a, b);
               const until = now + CLASH_MS;
               a.clash = color;
               b.clash = color;
+              a.clashHue = hue;
+              b.clashHue = hue;
               a.clashUntil = until;
               b.clashUntil = until;
               pairs.set(key, now + PAIR_COOLDOWN_MS);
@@ -244,30 +245,27 @@ export const HubAtmosphere: React.FC = () => {
         const body = bodies.get(el.dataset.roam || '');
         if (!body) continue;
         el.style.transform = `translate3d(${(body.x - body.hw).toFixed(1)}px, ${(body.y - body.hh).toFixed(1)}px, 0)`;
+        const speed = Math.hypot(body.vx, body.vy) || 1;
+        el.style.setProperty('--trail-x', `${((-body.vx / speed) * 18).toFixed(1)}px`);
+        el.style.setProperty('--trail-y', `${((-body.vy / speed) * 18).toFixed(1)}px`);
         const tint = el.querySelector<HTMLElement>(':scope > .hub-clash-tint');
-        const head = el.querySelector<HTMLElement>(':scope > .hub-spirit-head');
-        const robe = el.querySelector<HTMLElement>(':scope > .hub-spirit-body');
         const left = body.clashUntil - now;
-        if (left > 0 && body.clash) {
+        const mixing = left > 0 && body.clash != null && body.clashHue != null;
+        el.style.setProperty(
+          '--spirit-h',
+          (mixing && body.clashHue != null ? body.clashHue : body.hue).toFixed(0)
+        );
+        if (mixing && body.clash) {
           const alpha = Math.min(0.9, left / CLASH_MS);
           if (tint) {
             tint.style.opacity = alpha.toFixed(3);
-            tint.style.background = `radial-gradient(circle, ${body.clash} 0%, transparent 68%)`;
-          }
-          el.style.filter = `drop-shadow(0 0 10px ${body.clash})`;
-          if (head) {
-            head.style.background = `radial-gradient(circle at 40% 40%, ${body.clash}, transparent 74%)`;
-          }
-          if (robe) {
-            robe.style.background = `linear-gradient(180deg, ${body.clash}, transparent)`;
+            tint.style.background = `radial-gradient(circle, ${body.clash} 0%, transparent 70%)`;
           }
           if (alpha > 0.45) hot = true;
-        } else {
-          if (tint) tint.style.opacity = '0';
-          el.style.filter = '';
-          if (head) head.style.background = '';
-          if (robe) robe.style.background = '';
+        } else if (tint) {
+          tint.style.opacity = '0';
         }
+        el.dataset.placed = '1';
       }
       root.dataset.clashing = hot ? '1' : '0';
       if (!reduce) raf = requestAnimationFrame(frame);
@@ -306,11 +304,12 @@ export const HubAtmosphere: React.FC = () => {
     cases.length >= 3 ? Math.min(SPIRIT_CAP, cases.length) : 0;
   const spirits = cases.slice(0, spiritCount).map((c, i) => {
     const h = hashId(c.id);
+    const base = [210, 48, 280, 150, 330, 18][i] ?? 210;
     return {
       id: c.id,
-      alpha: 0.78 + (h % 4) * 0.04,
-      hue: 196 + (h % 18),
-      r: 40 + (i % 3),
+      alpha: 0.52 + (h % 4) * 0.05,
+      hue: (base + (h % 11) - 5 + 360) % 360,
+      r: 36 + (i % 3),
     };
   });
 
@@ -366,13 +365,18 @@ export const HubAtmosphere: React.FC = () => {
           data-roam={`spirit-${s.id}`}
           data-r={s.r}
           data-hue={s.hue}
-          data-w="68"
-          data-h="132"
-          style={{ ['--a' as string]: String(s.alpha) }}
+          data-w="84"
+          data-h="84"
+          style={{
+            ['--a' as string]: String(s.alpha),
+            ['--spirit-h' as string]: String(s.hue),
+          }}
         >
-          <span className="hub-spirit-wisp" />
-          <span className="hub-spirit-body" />
-          <span className="hub-spirit-head" />
+          <span className="hub-spirit-glow" />
+          <span className="hub-spirit-core" />
+          <span className="hub-spirit-mote" style={{ ['--m' as string]: '0.4' }} />
+          <span className="hub-spirit-mote" style={{ ['--m' as string]: '0.7' }} />
+          <span className="hub-spirit-mote" style={{ ['--m' as string]: '1' }} />
           <span className="hub-clash-tint" />
         </div>
       ))}
