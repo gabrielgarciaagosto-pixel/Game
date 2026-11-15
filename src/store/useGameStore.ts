@@ -32,6 +32,7 @@ import {
   machineIsBusy,
   retortCount,
 } from '../retort/retortRoster';
+import { audioManager } from '../utils/audioManager';
 import { playIntakeBell } from '../utils/soundEffects';
 import { getCremationTargets } from '../utils/mortuaryMath';
 import { getUrnById, URN_MATERIALS } from '../data/urnCatalog';
@@ -1347,6 +1348,11 @@ export const useGameStore = create<GameState>()(
     } else if (spawnSlot) {
       wire = wire.filter((item) => item !== spawnSlot);
     }
+    const chimeFor =
+      spawn && !(spawnSlot && coolerCount < cap)
+        ? result.landedEffects.filter((id) => id !== spawn.id)
+        : result.landedEffects;
+    if (chimeFor.length > 0) audioManager.playNewsChime();
     set({
       newsWire: wire,
       newsNextLiveAt: result.nextLiveAt,

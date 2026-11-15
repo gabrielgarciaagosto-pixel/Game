@@ -87,6 +87,7 @@ class AudioManager {
   /** One-shot SFX level (0–1). Mute gates SFX without stopping music beds. */
   private sfxVolume = 0.45;
   private lastPingAt = 0;
+  private lastChimeAt = 0;
   private lastClickAt = 0;
   private gestureInstalled = false;
   /** File beds that `decodeAudioData` rejected. HTMLAudioElement plays those. */
@@ -712,6 +713,67 @@ class AudioManager {
         g.connect(master);
         osc.start(t);
         osc.stop(t + 0.6);
+      }
+    } catch {
+      /* ignore WebAudio failures */
+    }
+  }
+
+  /**
+   * Soft airport-PA ding when an effect headline lands.
+   * Two falling tones plus a quiet third, synthesized in the shared context.
+   * Mute and sfxVolume apply. A second landing inside the window does not stack.
+   */
+  playNewsChime(debounceMs = 2400): void {
+    if (this.muted || this.sfxVolume <= 0.001) return;
+    const now = performance.now();
+    if (now - this.lastChimeAt < debounceMs) return;
+    this.lastChimeAt = now;
+
+    try {
+      const ctx = this.getOrCreateContext();
+      if (ctx.state === 'suspended' || ctx.state === 'interrupted') {
+        void ctx.resume();
+      }
+      const t = ctx.currentTime;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(1400, t);
+      filter.Q.setValueAtTime(0.5, t);
+      const master = ctx.createGain();
+      master.gain.setValueAtTime(Math.max(0.0001, this.sfxVolume * 0.08), t);
+      master.connect(filter);
+      filter.connect(ctx.destination);
+
+      const notes: ReadonlyArray<readonly [number, number, number, number]> = [
+        [659.25, 0, 0.48, 0.8],
+        [523.25, 0.32, 0.62, 1],
+        [392, 0.64, 0.78, 0.5],
+      ];
+      for (const [freq, at, dur, amp] of notes) {
+        const start = t + at;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, start);
+        g.gain.exponentialRampToValueAtTime(Math.max(0.0001, amp), start + 0.018);
+        g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+        g.connect(master);
+
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, start);
+        osc.connect(g);
+        osc.start(start);
+        osc.stop(start + dur + 0.02);
+
+        const partial = ctx.createOscillator();
+        const pg = ctx.createGain();
+        partial.type = 'sine';
+        partial.frequency.setValueAtTime(freq * 2, start);
+        pg.gain.setValueAtTime(0.12, start);
+        partial.connect(pg);
+        pg.connect(g);
+        partial.start(start);
+        partial.stop(start + dur + 0.02);
       }
     } catch {
       /* ignore WebAudio failures */

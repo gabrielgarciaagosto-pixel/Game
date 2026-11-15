@@ -57,6 +57,8 @@ export interface NewsTickResult {
   recent: string[];
   spawn: NewsHeadline | null;
   changed: boolean;
+  /** Volume, market, or case-spawn lines that just landed. Misc is never listed. */
+  landedEffects: string[];
 }
 
 /** How long a miscellaneous line stays on the crawl. Four family hours. */
@@ -192,6 +194,7 @@ export function advanceNewsWire(input: NewsTickInput): NewsTickResult {
   let celebGate = input.celebGate;
   let spawn: NewsHeadline | null = null;
   let changed = false;
+  const landedEffects: string[] = [];
 
   const wire: NewsWireItem[] = [];
   for (const item of input.wire) {
@@ -219,6 +222,7 @@ export function advanceNewsWire(input: NewsTickInput): NewsTickResult {
     if (h) {
       const item = makeItem(h, input.now, input.ownedListingId, true);
       wire.push(item);
+      landedEffects.push(h.id);
       nextLiveAt = item.endsAt + EFFECT_COOLDOWN_MS;
       changed = true;
     }
@@ -234,6 +238,7 @@ export function advanceNewsWire(input: NewsTickInput): NewsTickResult {
       if (h) {
         wire.push(makeItem(h, input.now, input.ownedListingId, true));
         spawn = h;
+        landedEffects.push(h.id);
       }
     }
   }
@@ -256,6 +261,7 @@ export function advanceNewsWire(input: NewsTickInput): NewsTickResult {
   if (spawn && !settled.some((item) => item.live && item.headlineId === spawn!.id)) {
     spawn = null;
   }
+  const kept = new Set(settled.map((item) => item.headlineId));
 
   return {
     wire: settled,
@@ -264,6 +270,7 @@ export function advanceNewsWire(input: NewsTickInput): NewsTickResult {
     recent,
     spawn,
     changed,
+    landedEffects: landedEffects.filter((id) => kept.has(id)),
   };
 }
 

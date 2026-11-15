@@ -83,6 +83,23 @@ const priceMoved = goods.some(
   (good) => quotedPrice(100, good, crowded.wire, now) !== quotedPrice(100, good, [], now)
 );
 check(priceMoved || intakeNewsFactor(crowded.wire, now) !== 1, 'the kept effect still changes price or volume');
+check(crowded.landedEffects.length === 1, 'a new price or volume line lands once');
+const landedHead = headlineById(crowded.landedEffects[0] ?? '');
+check(
+  landedHead?.group === 'EFFECT' &&
+    (landedHead.category === 'VOLUME' || landedHead.category === 'MARKET'),
+  'the landing is a price or volume effect'
+);
+const held = advanceNewsWire({
+  ...base,
+  wire: crowded.wire,
+  nextLiveAt: crowded.nextLiveAt,
+  celebGate: crowded.celebGate,
+  recent: crowded.recent,
+  now: now + 1000,
+  rng: () => 0.01,
+});
+check(held.landedEffects.length === 0, 'an effect already on the wire does not land again');
 
 const early = advanceNewsWire({
   ...base,
@@ -119,6 +136,7 @@ const opened = advanceNewsWire({
   rng: () => 0.99,
 });
 check(opened.spawn == null, 'the first look only arms the celebrity gate');
+check(opened.landedEffects.length === 0, 'miscellaneous lines do not chime');
 const spawned = advanceNewsWire({
   ...base,
   wire: opened.wire,
@@ -134,6 +152,14 @@ check(counts(spawned.wire).misc >= 4, 'misc lines fill the rest');
 check(
   spawned.wire.some((item) => item.live && item.headlineId === spawned.spawn?.id),
   'the case line stays on the wire'
+);
+check(
+  spawned.spawn != null && spawned.landedEffects.includes(spawned.spawn.id),
+  'a celebrity case landing is an effect chime'
+);
+check(
+  spawned.landedEffects.every((id) => headlineById(id)?.group === 'EFFECT'),
+  'only effect lines are listed for the chime'
 );
 
 const blocked = advanceNewsWire({
