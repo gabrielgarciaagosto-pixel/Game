@@ -10,7 +10,8 @@ export type FacilityUpgradeId =
   | 'cremulator'
   | 'crematory'
   | 'embalming'
-  | 'vault';
+  | 'vault'
+  | 'retort_bay';
 
 export type CollectionReq =
   | { kind: 'urn'; id: string; label: string }
@@ -254,6 +255,29 @@ export const FACILITY_UPGRADES: FacilityUpgradeDef[] = [
       },
     ],
   },
+  {
+    id: 'retort_bay',
+    name: 'Extra retort',
+    blurb: 'A second chamber, then a third. Each one burns on its own clock.',
+    tiers: [
+      {
+        tier: 1,
+        cost: 4800,
+        space: 8,
+        label: 'Twin bay',
+        effect: '2 retorts',
+        requires: [],
+      },
+      {
+        tier: 2,
+        cost: 9200,
+        space: 12,
+        label: 'Third chamber',
+        effect: '3 retorts',
+        requires: [],
+      },
+    ],
+  },
 ];
 
 export type FacilityUpgradeLevels = Record<FacilityUpgradeId, number>;
@@ -264,6 +288,7 @@ export const DEFAULT_FACILITY_LEVELS: FacilityUpgradeLevels = {
   crematory: 0,
   embalming: 0,
   vault: 0,
+  retort_bay: 0,
 };
 
 export function coolerBayCapacity(level: number): number {

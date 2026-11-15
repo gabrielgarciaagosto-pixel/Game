@@ -204,6 +204,7 @@ export const MainHubMenu: React.FC = () => {
     intermentScore,
     ossilegiumCommuneGrams,
     retort,
+    retortMachines,
     urnInventory,
     lastCase,
     ownedProperty,
@@ -216,7 +217,6 @@ export const MainHubMenu: React.FC = () => {
 
   const coolerCases = cases.filter((c) => c.location === 'COOLER');
   const vaultCount = cases.filter((c) => c.location === 'URN_VAULT').length;
-  const retortCase = cases.find((c) => c.id === retort.caseId);
   const urnOwned = Object.values(urnInventory).reduce((a, b) => a + b, 0);
   const [openStat, setOpenStat] = useState<StatId | null>(null);
   const [burst, setBurst] = useState<StationId | null>(null);
@@ -226,12 +226,21 @@ export const MainHubMenu: React.FC = () => {
     (c) => !c.isTagged && gameNow() < c.tagExpiresAt
   ).length;
 
+  const roster = retortMachines.length > 0 ? retortMachines : [retort];
+  const burning = roster
+    .map((m, i) => ({
+      m,
+      i,
+      c: cases.find((c) => c.id === m.caseId),
+    }))
+    .filter((x) => x.m.phase === 'BURN' && x.c);
+  const leadBurn = burning[0] ?? null;
   const burnPct =
-    retort.phase === 'BURN' && retortCase
+    leadBurn && leadBurn.c
       ? Math.round(
           retortProgress(
-            retort.elapsedSec,
-            getCremationTargets(retortCase.weightLbs).targetDurationSec
+            leadBurn.m.elapsedSec,
+            getCremationTargets(leadBurn.c.weightLbs).targetDurationSec
           ) * 100
         )
       : null;
@@ -261,7 +270,9 @@ export const MainHubMenu: React.FC = () => {
       title: 'CREMATORY',
       subtitle:
         burnPct != null
-          ? `Running · ${burnPct}% — tap to return`
+          ? roster.length > 1
+            ? `Retort ${String.fromCharCode(65 + (leadBurn?.i ?? 0))} · ${burnPct}%`
+            : `Running · ${burnPct}% — tap to return`
           : 'Millennium · door · tools · dial',
       badge: burnPct != null ? `BURN ${burnPct}%` : undefined,
       color: 'from-orange-950/75 via-slate-950/60 to-slate-950/78 border-orange-500/45',

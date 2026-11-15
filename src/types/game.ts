@@ -198,6 +198,8 @@ export interface DecedentCase {
   embalmTipMultiplier?: number;
   isCremated: boolean;
   cremationRank?: Rank;
+  /** 0–100 cremains score from the retort quality line. Feeds the service tip. */
+  cremainsQuality?: number;
   isUrnFilled: boolean;
   basePayout: number;
   arrivedAt: number;

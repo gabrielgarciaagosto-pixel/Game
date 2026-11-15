@@ -25,6 +25,13 @@ import {
   type RetortMachine,
 } from '../retort/retortTypes';
 import { stepRetortBurn, stepRetortDoor } from '../retort/tickRetort';
+import {
+  alignBays,
+  alignMachines,
+  freshLoad,
+  machineIsBusy,
+  retortCount,
+} from '../retort/retortRoster';
 import { playIntakeBell } from '../utils/soundEffects';
 import { getCremationTargets } from '../utils/mortuaryMath';
 import { getUrnById, URN_MATERIALS } from '../data/urnCatalog';
@@ -43,7 +50,6 @@ import {
 } from '../data/chapelDecor';
 import {
   coolerBayCapacity,
-  crematoryBurnSpeed,
   DEFAULT_FACILITY_LEVELS,
   missingCollectionReqs,
   nextFacilityTier,
@@ -52,6 +58,29 @@ import {
   type FacilityUpgradeLevels,
   vaultSlotCapacity,
 } from '../data/facilityUpgrades';
+import {
+  BRAND_OFFERS,
+  BUTTON_OFFERS,
+  DEFAULT_WARDROBE,
+  DOOR_OFFERS,
+  FUEL_TIERS,
+  PREHEAT_PRICE,
+  QUALITY_TIERS,
+  QUEUE_PRICE,
+  SPEED_TIERS,
+  brandLabel,
+  cremainsQualityScore,
+  defaultRetortBay,
+  fuelCostFor,
+  liftPoorRank,
+  normalizeWardrobe,
+  retortSpeedFactor,
+  type CrematoryWardrobe,
+  type RetortBay,
+  type RetortBrandId,
+  type RetortButtonStyleId,
+  type RetortDoorId,
+} from '../data/crematoryCatalog';
 import {
   STARTER_PROPERTY,
   earlyPayoffAmount,
@@ -221,8 +250,14 @@ interface GameState {
   cremationHeatNormalized: number;
   /** Latches once burn reaches 15% — stays frozen through sweep / burner stops */
   cremationDecayArrested: boolean;
-  /** Persistent Millennium retort — keeps burning while you leave the room */
+  /** Persistent Millennium retort — the chamber currently on screen */
   retort: RetortMachine;
+  /** Every owned chamber. Index 0 is the original retort. */
+  retortMachines: RetortMachine[];
+  activeRetortIndex: number;
+  /** Upgrades and cosmetics per chamber. */
+  retortBays: RetortBay[];
+  crematoryWardrobe: CrematoryWardrobe;
   startGame: () => void;
   /**
    * Wipe gameplay progress in memory (title screen). Pair with pausing
@@ -238,6 +273,16 @@ interface GameState {
   assignFleetVehicle: (fleetClass: FleetClass, id: string | null) => void;
   setBankOpenTab: (tab: 'overview' | 'loans' | 'listings' | null) => void;
   patchRetort: (partial: Partial<RetortMachine>) => void;
+  selectRetort: (index: number) => void;
+  chargeRetortFuel: () => void;
+  queueCaseOnRetort: (caseId: string) => void;
+  buyCrematoryTrack: (
+    track: 'speed' | 'quality' | 'fuel' | 'preheat' | 'queue'
+  ) => { ok: boolean; message: string };
+  buyCrematoryCosmetic: (
+    kind: 'brand' | 'door' | 'buttons',
+    id: string
+  ) => { ok: boolean; message: string };
   ensureRetortForCase: (caseId: string) => void;
   resetRetort: () => void;
   tickRetortDoor: () => void;
@@ -570,6 +615,7 @@ function normalizeCase(c: DecedentCase): DecedentCase {
         ? rollFamilyUrnDueAt(arrivedAt)
         : null),
     urnPourQuality: c.urnPourQuality ?? 0,
+    cremainsQuality: c.cremainsQuality ?? 0,
     urnAshReady: c.urnAshReady ?? false,
     ...vitals,
     cremationPermitStatus: permitStatus,
@@ -759,6 +805,14 @@ export function freshPersistedGameFields() {
     cremationHeatNormalized: 0,
     cremationDecayArrested: false,
     retort: { ...IDLE_RETORT },
+    retortMachines: [{ ...IDLE_RETORT }],
+    activeRetortIndex: 0,
+    retortBays: [defaultRetortBay()],
+    crematoryWardrobe: {
+      brands: [...DEFAULT_WARDROBE.brands],
+      doors: [...DEFAULT_WARDROBE.doors],
+      buttons: [...DEFAULT_WARDROBE.buttons],
+    },
     permitSubmissions: [] as PermitSubmissionRecord[],
     permitWrongStreak: 0,
     financeLedger: [] as FinanceLedgerEntry[],
@@ -802,6 +856,205 @@ export function resumeGamePersistWrites() {
   useGameStore.persist.setOptions({
     storage: createJSONStorage(() => localStorage),
   });
+}
+
+function focusMachines(
+  state: {
+    retortMachines?: RetortMachine[];
+    retortBays?: RetortBay[];
+    facilityLevels: FacilityUpgradeLevels;
+  },
+  active: RetortMachine,
+  index: number
+) {
+  const count = retortCount(state.facilityLevels);
+  const aligned = alignMachines(
+    state.retortMachines,
+    active,
+    index,
+    count
+  );
+  return {
+    retort: aligned.machines[aligned.index]!,
+    retortMachines: aligned.machines,
+    activeRetortIndex: aligned.index,
+    retortBays: alignBays(state.retortBays, count),
+  };
+}
+
+function retortForMove(
+  state: {
+    retort: RetortMachine;
+    retortMachines?: RetortMachine[];
+    retortBays?: RetortBay[];
+    facilityLevels: FacilityUpgradeLevels;
+    activeRetortIndex?: number;
+  },
+  caseId: string,
+  location: CaseLocation
+): { halt: Record<string, unknown> | null; extra: Record<string, unknown> } {
+  const count = retortCount(state.facilityLevels);
+  const aligned = alignMachines(
+    state.retortMachines,
+    state.retort,
+    state.activeRetortIndex ?? 0,
+    count
+  );
+  let bays = alignBays(state.retortBays, count);
+  if (location !== 'CREMATION') {
+    bays = bays.map((b) =>
+      b.queueCaseId === caseId ? { ...b, queueCaseId: null } : b
+    );
+    const hold = aligned.machines.findIndex((m) => m.caseId === caseId);
+    if (hold < 0) return { halt: null, extra: { retortBays: bays } };
+    const machines = aligned.machines.slice();
+    machines[hold] = { ...IDLE_RETORT };
+    const stillBurn = machines.some(
+      (m) => m.phase === 'BURN' && (m.primaryOn || m.secondaryOn)
+    );
+    return {
+      halt: null,
+      extra: {
+        retort: machines[aligned.index]!,
+        retortMachines: machines,
+        activeRetortIndex: aligned.index,
+        retortBays: bays,
+        cremationBurnActive: stillBurn,
+        ...(stillBurn
+          ? {}
+          : {
+              cremationBurnProgress: 0,
+              cremationHeatNormalized: 0,
+              cremationDecayArrested: false,
+            }),
+      },
+    };
+  }
+  const already = aligned.machines.findIndex(
+    (m) => m.caseId === caseId && machineIsBusy(m)
+  );
+  if (already >= 0) {
+    return {
+      halt: null,
+      extra: {
+        retort: aligned.machines[already]!,
+        retortMachines: aligned.machines,
+        activeRetortIndex: already,
+        retortBays: bays,
+      },
+    };
+  }
+  const free = aligned.machines.findIndex((m) => !machineIsBusy(m));
+  if (free >= 0) {
+    return {
+      halt: null,
+      extra: {
+        retort: aligned.machines[free]!,
+        retortMachines: aligned.machines,
+        activeRetortIndex: free,
+        retortBays: bays,
+      },
+    };
+  }
+  const queueAt = bays.findIndex((b) => b.queueSlot && !b.queueCaseId);
+  if (queueAt >= 0) {
+    const nextBays = bays.slice();
+    nextBays[queueAt] = { ...bays[queueAt]!, queueCaseId: caseId };
+    const hold = aligned.machines.find((m) => machineIsBusy(m));
+    return {
+      halt: {
+        intakeToast: `Queued on retort ${String.fromCharCode(65 + queueAt)} — loads when that chamber clears.`,
+        retortBays: nextBays,
+        activeStation: 'CREMATION',
+        activeCaseId: hold?.caseId ?? caseId,
+      },
+      extra: {},
+    };
+  }
+  const hold = aligned.machines.find((m) => machineIsBusy(m));
+  return {
+    halt: {
+      intakeToast:
+        'Retort occupied — finish the current cremation before loading another case.',
+      activeStation: 'CREMATION',
+      activeCaseId: hold?.caseId ?? state.retort.caseId,
+    },
+    extra: {},
+  };
+}
+
+function settleFinishedChamber(
+  state: {
+    retort: RetortMachine;
+    retortMachines?: RetortMachine[];
+    retortBays?: RetortBay[];
+    facilityLevels: FacilityUpgradeLevels;
+    activeRetortIndex?: number;
+  },
+  finishedId: string
+) {
+  const count = retortCount(state.facilityLevels);
+  const aligned = alignMachines(
+    state.retortMachines,
+    state.retort,
+    state.activeRetortIndex ?? 0,
+    count
+  );
+  const bays = alignBays(state.retortBays, count);
+  const hold = aligned.machines.findIndex((m) => m.caseId === finishedId);
+  const index = hold >= 0 ? hold : aligned.index;
+  const bay = bays[index] ?? defaultRetortBay();
+  const machines = aligned.machines.slice();
+  machines[index] = { ...IDLE_RETORT };
+  bays[index] = { ...bay, queueCaseId: null };
+  const stillBurn = machines.some(
+    (m) => m.phase === 'BURN' && (m.primaryOn || m.secondaryOn)
+  );
+  return {
+    index,
+    bay,
+    queuedId: bay.queueCaseId,
+    retort: machines[index]!,
+    retortMachines: machines,
+    activeRetortIndex: index,
+    retortBays: bays,
+    cremationBurnActive: stillBurn,
+  };
+}
+
+function stepOneRetort(
+  machine: RetortMachine,
+  cases: DecedentCase[],
+  speed: number
+): RetortMachine {
+  const cremationCase = cases.find(
+    (c) => c.id === machine.caseId && c.location === 'CREMATION'
+  );
+  if (!cremationCase && machine.phase !== 'IDLE') return { ...IDLE_RETORT };
+  if (machine.phase === 'IDLE' || machine.phase === 'DONE') return machine;
+  if (
+    !machine.blowerOn &&
+    !machine.secondaryOn &&
+    !machine.primaryOn &&
+    !machine.purging &&
+    machine.phase !== 'BURN'
+  ) {
+    return machine;
+  }
+  if (!cremationCase) return machine;
+  const targets = getCremationTargets(cremationCase.weightLbs);
+  const progress = Math.min(1, machine.elapsedSec / targets.targetDurationSec);
+  let next = stepRetortBurn(machine, targets.getMaxSafeTempF(progress));
+  if (
+    speed > 1 &&
+    next.phase === 'BURN' &&
+    next.primaryOn &&
+    next.elapsedSec > machine.elapsedSec
+  ) {
+    const delta = next.elapsedSec - machine.elapsedSec;
+    next = { ...next, elapsedSec: machine.elapsedSec + delta * speed };
+  }
+  return next;
 }
 
 export const useGameStore = create<GameState>()(
@@ -1006,136 +1259,323 @@ export const useGameStore = create<GameState>()(
     }),
 
   patchRetort: (partial) =>
-    set((state) => ({
-      retort: { ...state.retort, ...partial },
-    })),
-
-  ensureRetortForCase: (caseId) =>
     set((state) => {
-      const r = state.retort;
-      // Resume the same chamber session
-      if (r.caseId === caseId) {
-        if (r.phase === 'IDLE' || r.phase === 'DONE') {
-          return {
-            retort: { ...IDLE_RETORT, caseId, phase: 'LOAD' },
-            cremationBurnActive: false,
-            cremationBurnProgress: 0,
-            cremationHeatNormalized: 0,
-            cremationDecayArrested: false,
-          };
-        }
-        return state;
-      }
-      // Another case already occupies the retort — never wipe a live burn
-      if (
-        r.caseId != null &&
-        r.phase !== 'IDLE' &&
-        r.phase !== 'DONE'
-      ) {
-        return state;
-      }
+      const next = { ...state.retort, ...partial };
+      return focusMachines(state, next, state.activeRetortIndex ?? 0);
+    }),
+
+  selectRetort: (index) =>
+    set((state) => {
+      const count = retortCount(state.facilityLevels);
+      const aligned = alignMachines(
+        state.retortMachines,
+        state.retort,
+        state.activeRetortIndex ?? 0,
+        count
+      );
+      const i = Math.max(0, Math.min(aligned.machines.length - 1, index));
       return {
-        retort: { ...IDLE_RETORT, caseId, phase: 'LOAD' },
-        cremationBurnActive: false,
-        cremationBurnProgress: 0,
-        cremationHeatNormalized: 0,
-        cremationDecayArrested: false,
+        retort: aligned.machines[i]!,
+        retortMachines: aligned.machines,
+        activeRetortIndex: i,
+        retortBays: alignBays(state.retortBays, count),
       };
     }),
 
-  resetRetort: () =>
-    set({
-      retort: { ...IDLE_RETORT },
-      cremationBurnActive: false,
-      cremationBurnProgress: 0,
-      cremationHeatNormalized: 0,
-      cremationDecayArrested: false,
+  chargeRetortFuel: () =>
+    set((state) => {
+      if (state.retort.fuelCharged) return state;
+      const count = retortCount(state.facilityLevels);
+      const bays = alignBays(state.retortBays, count);
+      const bay = bays[state.activeRetortIndex ?? 0] ?? defaultRetortBay();
+      const cost = fuelCostFor(bay.fuelTier);
+      const note = {
+        id: `led_fuel_${gameNow()}`,
+        at: gameNow(),
+        amount: -cost,
+        label: `Retort fuel — ${brandLabel(bay.brand)}`,
+        kind: 'OTHER' as const,
+      };
+      return {
+        cash: state.cash - cost,
+        financeLedger: [note, ...state.financeLedger].slice(0, 80),
+        intakeToast: `Retort fuel $${cost}`,
+        ...focusMachines(
+          state,
+          { ...state.retort, fuelCharged: true },
+          state.activeRetortIndex ?? 0
+        ),
+      };
     }),
 
-  tickRetortDoor: () =>
+  queueCaseOnRetort: (caseId) =>
     set((state) => {
-      if (!state.retort.doorMoving) return state;
-      return { retort: stepRetortDoor(state.retort) };
-    }),
-
-  tickRetortBurn: () =>
-    set((state) => {
-      const r = state.retort;
-      if (
-        r.phase === 'IDLE' ||
-        r.phase === 'DONE' ||
-        (!r.blowerOn &&
-          !r.secondaryOn &&
-          !r.primaryOn &&
-          !r.purging &&
-          r.phase !== 'BURN')
-      ) {
-        // Still cool temps slowly if something was warm
-        if (
-          r.phase === 'LOAD' &&
-          !r.blowerOn &&
-          !r.secondaryOn &&
-          !r.primaryOn
-        ) {
-          return state;
-        }
-      }
-
-      const cremationCase = state.cases.find(
-        (c) => c.id === r.caseId && c.location === 'CREMATION'
+      const count = retortCount(state.facilityLevels);
+      const bays = alignBays(state.retortBays, count);
+      const i = Math.max(
+        0,
+        Math.min(count - 1, state.activeRetortIndex ?? 0)
       );
-      // Bound remains left the chamber — shut the machine down
-      if (!cremationCase && r.phase !== 'IDLE') {
+      const bay = bays[i]!;
+      if (!bay.queueSlot || bay.queueCaseId) return state;
+      const queued = state.cases.find(
+        (c) => c.id === caseId && c.location === 'COOLER'
+      );
+      if (!queued) return state;
+      bays[i] = { ...bay, queueCaseId: caseId };
+      return {
+        retortBays: bays,
+        intakeToast: `${queued.name} queued on retort ${String.fromCharCode(65 + i)}`,
+      };
+    }),
+
+  buyCrematoryTrack: (track) => {
+    const state = get();
+    const count = retortCount(state.facilityLevels);
+    const bays = alignBays(state.retortBays, count);
+    const i = Math.max(0, Math.min(count - 1, state.activeRetortIndex ?? 0));
+    const bay = bays[i]!;
+    let price = 0;
+    let label = '';
+    const next = { ...bay };
+    if (track === 'speed') {
+      const offer = SPEED_TIERS[bay.speedTier];
+      if (!offer) return { ok: false, message: 'Speed line is finished.' };
+      price = offer.price;
+      label = offer.name;
+      next.speedTier = offer.tier;
+    } else if (track === 'quality') {
+      const offer = QUALITY_TIERS[bay.qualityTier];
+      if (!offer) return { ok: false, message: 'Quality line is finished.' };
+      price = offer.price;
+      label = offer.name;
+      next.qualityTier = offer.tier;
+    } else if (track === 'fuel') {
+      const offer = FUEL_TIERS[bay.fuelTier];
+      if (!offer) return { ok: false, message: 'Fuel line is finished.' };
+      price = offer.price;
+      label = offer.name;
+      next.fuelTier = offer.tier;
+    } else if (track === 'preheat') {
+      if (bay.preheat) return { ok: false, message: 'Pre-heat is already fitted.' };
+      price = PREHEAT_PRICE;
+      label = 'Pre-heat';
+      next.preheat = true;
+    } else {
+      if (bay.queueSlot) return { ok: false, message: 'Queue slot is already fitted.' };
+      price = QUEUE_PRICE;
+      label = 'Queue slot';
+      next.queueSlot = true;
+    }
+    if (state.cash < price) return { ok: false, message: 'Not enough cash.' };
+    bays[i] = next;
+    const note = {
+      id: `led_retort_${gameNow()}`,
+      at: gameNow(),
+      amount: -price,
+      label: `Retort ${String.fromCharCode(65 + i)} — ${label}`,
+      kind: 'OTHER' as const,
+    };
+    set({
+      cash: state.cash - price,
+      retortBays: bays,
+      financeLedger: [note, ...state.financeLedger].slice(0, 80),
+      intakeToast: `Installed ${label}`,
+    });
+    return { ok: true, message: `Installed ${label}` };
+  },
+
+  buyCrematoryCosmetic: (kind, id) => {
+    const state = get();
+    const wardrobe = normalizeWardrobe(state.crematoryWardrobe);
+    const count = retortCount(state.facilityLevels);
+    const bays = alignBays(state.retortBays, count);
+    const i = Math.max(0, Math.min(count - 1, state.activeRetortIndex ?? 0));
+    const bay = { ...bays[i]! };
+    let price = 0;
+    let label = id;
+    let owned = false;
+    if (kind === 'brand') {
+      const brand = id as RetortBrandId;
+      owned = wardrobe.brands.includes(brand);
+      const offer = BRAND_OFFERS.find((o) => o.id === brand);
+      if (!offer && brand !== 'millennium') {
+        return { ok: false, message: 'Unknown plate.' };
+      }
+      price = owned || brand === 'millennium' ? 0 : (offer?.price ?? 0);
+      label = brand === 'millennium' ? 'Millennium' : (offer?.name ?? brand);
+      if (!owned && brand !== 'millennium') wardrobe.brands.push(brand);
+      bay.brand = brand;
+    } else if (kind === 'door') {
+      const door = id as RetortDoorId;
+      owned = wardrobe.doors.includes(door);
+      const offer = DOOR_OFFERS.find((o) => o.id === door);
+      if (!offer && door !== 'zinc') {
+        return { ok: false, message: 'Unknown finish.' };
+      }
+      price = owned || door === 'zinc' ? 0 : (offer?.price ?? 0);
+      label = door === 'zinc' ? 'Mill zinc' : (offer?.name ?? door);
+      if (!owned && door !== 'zinc') wardrobe.doors.push(door);
+      bay.door = door;
+    } else {
+      const buttons = id as RetortButtonStyleId;
+      owned = wardrobe.buttons.includes(buttons);
+      const offer = BUTTON_OFFERS.find((o) => o.id === buttons);
+      if (!offer && buttons !== 'millennium') {
+        return { ok: false, message: 'Unknown button style.' };
+      }
+      price = owned || buttons === 'millennium' ? 0 : (offer?.price ?? 0);
+      label = buttons === 'millennium' ? 'Millennium pushbuttons' : (offer?.name ?? buttons);
+      if (!owned && buttons !== 'millennium') wardrobe.buttons.push(buttons);
+      bay.buttons = buttons;
+    }
+    if (state.cash < price) return { ok: false, message: 'Not enough cash.' };
+    bays[i] = bay;
+    const note =
+      price > 0
+        ? [
+            {
+              id: `led_retort_trim_${gameNow()}`,
+              at: gameNow(),
+              amount: -price,
+              label: `Retort trim — ${label}`,
+              kind: 'OTHER' as const,
+            },
+          ]
+        : [];
+    set({
+      cash: state.cash - price,
+      retortBays: bays,
+      crematoryWardrobe: wardrobe,
+      financeLedger: [...note, ...state.financeLedger].slice(0, 80),
+      intakeToast: price > 0 ? `Fitted ${label}` : `Showing ${label}`,
+    });
+    return { ok: true, message: label };
+  },
+
+  ensureRetortForCase: (caseId) =>
+    set((state) => {
+      const count = retortCount(state.facilityLevels);
+      const aligned = alignMachines(
+        state.retortMachines,
+        state.retort,
+        state.activeRetortIndex ?? 0,
+        count
+      );
+      const bays = alignBays(state.retortBays, count);
+      const holding = aligned.machines.findIndex(
+        (m) => m.caseId === caseId && m.phase !== 'IDLE'
+      );
+      if (holding >= 0 && holding !== aligned.index) {
         return {
-          retort: { ...IDLE_RETORT },
+          retort: aligned.machines[holding]!,
+          retortMachines: aligned.machines,
+          activeRetortIndex: holding,
+          retortBays: bays,
+        };
+      }
+      const r = aligned.machines[aligned.index]!;
+      if (r.caseId === caseId && r.phase !== 'IDLE' && r.phase !== 'DONE') {
+        return state;
+      }
+      if (r.caseId === caseId && (r.phase === 'IDLE' || r.phase === 'DONE')) {
+        const loaded = freshLoad(caseId, bays[aligned.index]?.preheat === true);
+        return {
+          ...focusMachines(state, loaded, aligned.index),
           cremationBurnActive: false,
           cremationBurnProgress: 0,
           cremationHeatNormalized: 0,
           cremationDecayArrested: false,
         };
       }
-
-      const targets = cremationCase
-        ? getCremationTargets(cremationCase.weightLbs)
-        : null;
-      const speed = crematoryBurnSpeed(state.facilityLevels.crematory || 0);
-      const progress =
-        targets != null
-          ? Math.min(1, r.elapsedSec / targets.targetDurationSec)
-          : 0;
-      const maxSafe = targets?.getMaxSafeTempF(progress) ?? 1600;
-      let next = stepRetortBurn(r, maxSafe);
-      // Apply efficiency upgrade as extra elapsed time on burn ticks
-      if (
-        speed > 1 &&
-        next.phase === 'BURN' &&
-        next.primaryOn &&
-        next.elapsedSec > r.elapsedSec
-      ) {
-        const delta = next.elapsedSec - r.elapsedSec;
-        next = {
-          ...next,
-          elapsedSec: r.elapsedSec + delta * speed,
+      if (machineIsBusy(r) && r.caseId !== caseId) {
+        const free = aligned.machines.findIndex((m) => !machineIsBusy(m));
+        if (free < 0) return state;
+        const loaded = freshLoad(caseId, bays[free]?.preheat === true);
+        const machines = aligned.machines.slice();
+        machines[free] = loaded;
+        return {
+          retort: loaded,
+          retortMachines: machines,
+          activeRetortIndex: free,
+          retortBays: bays,
         };
       }
-
-      const heatNormalized = Math.min(
-        1,
-        Math.max(0, (next.primaryTemp - 200) / 1200)
-      );
-      const burnActive =
-        next.phase === 'BURN' && (next.primaryOn || next.secondaryOn);
-
+      const loaded = freshLoad(caseId, bays[aligned.index]?.preheat === true);
       return {
-        retort: next,
+        ...focusMachines(state, loaded, aligned.index),
+      };
+    }),
+
+  resetRetort: () =>
+    set((state) => ({
+      ...focusMachines(state, { ...IDLE_RETORT }, state.activeRetortIndex ?? 0),
+      cremationBurnActive: false,
+      cremationBurnProgress: 0,
+      cremationHeatNormalized: 0,
+      cremationDecayArrested: false,
+    })),
+
+  tickRetortDoor: () =>
+    set((state) => {
+      const count = retortCount(state.facilityLevels);
+      const aligned = alignMachines(
+        state.retortMachines,
+        state.retort,
+        state.activeRetortIndex ?? 0,
+        count
+      );
+      if (!aligned.machines.some((m) => m.doorMoving)) return state;
+      const machines = aligned.machines.map((m) =>
+        m.doorMoving ? stepRetortDoor(m) : m
+      );
+      return {
+        retortMachines: machines,
+        retort: machines[aligned.index]!,
+        activeRetortIndex: aligned.index,
+      };
+    }),
+
+  tickRetortBurn: () =>
+    set((state) => {
+      const count = retortCount(state.facilityLevels);
+      const aligned = alignMachines(
+        state.retortMachines,
+        state.retort,
+        state.activeRetortIndex ?? 0,
+        count
+      );
+      const bays = alignBays(state.retortBays, count);
+      const house = state.facilityLevels.crematory || 0;
+      const machines = aligned.machines.map((m, i) =>
+        stepOneRetort(m, state.cases, retortSpeedFactor(house, bays[i]?.speedTier ?? 0))
+      );
+      const active = machines[aligned.index] ?? { ...IDLE_RETORT };
+      let burnActive = false;
+      let bestProgress = 0;
+      let heatNormalized = 0;
+      for (const m of machines) {
+        const held = state.cases.find((c) => c.id === m.caseId);
+        const target = held
+          ? getCremationTargets(held.weightLbs).targetDurationSec
+          : 1;
+        const progress = Math.min(1, m.elapsedSec / target);
+        if (progress > bestProgress) {
+          bestProgress = progress;
+          heatNormalized = Math.min(1, Math.max(0, (m.primaryTemp - 200) / 1200));
+        }
+        if (m.phase === 'BURN' && (m.primaryOn || m.secondaryOn)) burnActive = true;
+      }
+      return {
+        retort: active,
+        retortMachines: machines,
+        activeRetortIndex: aligned.index,
+        retortBays: bays,
         cremationBurnActive: burnActive,
-        cremationBurnProgress: Math.max(
-          state.cremationBurnProgress,
-          progress
-        ),
+        cremationBurnProgress: Math.max(state.cremationBurnProgress, bestProgress),
         cremationHeatNormalized: heatNormalized,
         cremationDecayArrested:
-          state.cremationDecayArrested || progress >= 0.15,
+          state.cremationDecayArrested || bestProgress >= 0.15,
       };
     }),
 
@@ -1149,22 +1589,32 @@ export const useGameStore = create<GameState>()(
           return c;
         }
 
-        const inActiveRetort =
-          c.location === 'CREMATION' && c.id === state.retort.caseId;
+        const count = retortCount(state.facilityLevels);
+        const machines = alignMachines(
+          state.retortMachines,
+          state.retort,
+          state.activeRetortIndex ?? 0,
+          count
+        ).machines;
+        const holder = machines.find(
+          (m) => m.caseId === c.id && m.phase !== 'IDLE' && m.phase !== 'DONE'
+        );
+        const heldProgress = holder
+          ? Math.min(
+              1,
+              holder.elapsedSec /
+                getCremationTargets(c.weightLbs).targetDurationSec
+            )
+          : 0;
 
-        if (
-          inActiveRetort &&
-          (state.cremationDecayArrested ||
-            state.cremationBurnProgress >= 0.15)
-        ) {
+        if (holder && heldProgress >= 0.15) {
           return c;
         }
 
         let rate = DECAY_PER_SEC;
-        if (inActiveRetort && state.cremationBurnActive) {
-          rate =
-            DECAY_PER_SEC *
-            Math.max(0.08, 1 - state.cremationHeatNormalized * 0.92);
+        if (holder && holder.phase === 'BURN' && (holder.primaryOn || holder.secondaryOn)) {
+          const heat = Math.min(1, Math.max(0, (holder.primaryTemp - 200) / 1200));
+          rate = DECAY_PER_SEC * Math.max(0.08, 1 - heat * 0.92);
         }
 
         const nextDecay = Math.min(100, c.decayLevel + rate);
@@ -1472,42 +1922,17 @@ export const useGameStore = create<GameState>()(
           };
         }
       }
-      const r = state.retort;
-      const retortBusy =
-        r.caseId != null &&
-        r.phase !== 'IDLE' &&
-        r.phase !== 'DONE';
-      if (
-        location === 'CREMATION' &&
-        retortBusy &&
-        r.caseId !== caseId
-      ) {
-        return {
-          intakeToast:
-            'Retort occupied — finish the current cremation before loading another case.',
-          activeStation: 'CREMATION',
-          activeCaseId: r.caseId,
-        };
-      }
+      const gate = retortForMove(state, caseId, location);
+      if (gate.halt) return gate.halt as Partial<GameState>;
       const now = gameNow();
       const nextStation = stationForLocation(location);
-      const leavingRetort =
-        state.retort.caseId === caseId && location !== 'CREMATION';
       return {
         activeCaseId: caseId,
         cases: updateCaseById(state.cases, caseId, (c) =>
           relocateCase(c, location, now)
         ),
         activeStation: nextStation ?? state.activeStation,
-        ...(leavingRetort
-          ? {
-              retort: { ...IDLE_RETORT },
-              cremationBurnActive: false,
-              cremationBurnProgress: 0,
-              cremationHeatNormalized: 0,
-              cremationDecayArrested: false,
-            }
-          : {}),
+        ...(gate.extra as Partial<GameState>),
       };
     }),
 
@@ -1545,43 +1970,17 @@ export const useGameStore = create<GameState>()(
         }
       }
 
-      const r = state.retort;
-      const retortBusy =
-        r.caseId != null &&
-        r.phase !== 'IDLE' &&
-        r.phase !== 'DONE';
-      // Keep the second body refrigerated; open the running chamber instead
-      if (
-        location === 'CREMATION' &&
-        retortBusy &&
-        r.caseId !== caseId
-      ) {
-        return {
-          activeStation: 'CREMATION',
-          activeCaseId: r.caseId,
-          intakeToast:
-            'Retort occupied — finish the current cremation before loading another case.',
-        };
-      }
+      const gate = retortForMove(state, caseId, location);
+      if (gate.halt) return gate.halt as Partial<GameState>;
 
       const now = gameNow();
-      const leavingRetort =
-        state.retort.caseId === caseId && location !== 'CREMATION';
       return {
         activeCaseId: caseId,
         activeStation: station,
         cases: updateCaseById(state.cases, caseId, (c) =>
           relocateCase(c, location, now)
         ),
-        ...(leavingRetort
-          ? {
-              retort: { ...IDLE_RETORT },
-              cremationBurnActive: false,
-              cremationBurnProgress: 0,
-              cremationHeatNormalized: 0,
-              cremationDecayArrested: false,
-            }
-          : {}),
+        ...(gate.extra as Partial<GameState>),
       };
     }),
 
@@ -1662,6 +2061,7 @@ export const useGameStore = create<GameState>()(
         casketInv[active.offeredCasketId] =
           (casketInv[active.offeredCasketId] ?? 0) + 1;
       }
+      const settled = settleFinishedChamber(state, active.id);
       set({
         cash: state.cash - 2500,
         reputation: Math.max(0, state.reputation - 40),
@@ -1675,11 +2075,20 @@ export const useGameStore = create<GameState>()(
         placedFlowers: [],
         serviceRatingBonus: 0,
         activeStation: 'OVERVIEW',
-        cremationBurnActive: false,
-        cremationBurnProgress: 0,
-        cremationHeatNormalized: 0,
-        cremationDecayArrested: false,
-        retort: { ...IDLE_RETORT },
+        cremationBurnActive: settled.cremationBurnActive,
+        cremationBurnProgress: settled.cremationBurnActive
+          ? state.cremationBurnProgress
+          : 0,
+        cremationHeatNormalized: settled.cremationBurnActive
+          ? state.cremationHeatNormalized
+          : 0,
+        cremationDecayArrested: settled.cremationBurnActive
+          ? state.cremationDecayArrested
+          : false,
+        retort: settled.retort,
+        retortMachines: settled.retortMachines,
+        activeRetortIndex: settled.activeRetortIndex,
+        retortBays: settled.retortBays,
       });
       return;
     }
@@ -1687,16 +2096,37 @@ export const useGameStore = create<GameState>()(
     const needsPermit = directiveNeedsCremationPermit(active.directive);
     const unpermitted =
       needsPermit && active.cremationPermitStatus !== 'APPROVED';
+    const settled = settleFinishedChamber(state, caseId);
+    const lifted = liftPoorRank(rank, settled.bay.qualityTier);
+    const score = cremainsQualityScore(settled.bay.qualityTier);
+    let cases = updateCaseById(state.cases, caseId, (c) => ({
+      ...c,
+      isCremated: true,
+      cremationRank: lifted,
+      cremainsQuality: score,
+      location: 'URN_FILLING' as const,
+      unpermittedCremation: unpermitted || c.unpermittedCremation,
+    }));
+    let machines = settled.retortMachines;
+    let nextRetort = settled.retort;
+    const queued = settled.queuedId
+      ? state.cases.find(
+          (c) => c.id === settled.queuedId && c.location === 'COOLER'
+        )
+      : null;
+    if (queued) {
+      cases = updateCaseById(cases, queued.id, (c) =>
+        relocateCase(c, 'CREMATION', gameNow())
+      );
+      const loaded = freshLoad(queued.id, settled.bay.preheat);
+      machines = machines.slice();
+      machines[settled.index] = loaded;
+      nextRetort = loaded;
+    }
 
     set({
       activeCaseId: caseId,
-      cases: updateCaseById(state.cases, caseId, (c) => ({
-        ...c,
-        isCremated: true,
-        cremationRank: rank,
-        location: 'URN_FILLING',
-        unpermittedCremation: unpermitted || c.unpermittedCremation,
-      })),
+      cases,
       inboxFiles: unpermitted
         ? syncInboxPermit(state.inboxFiles, caseId, { isRead: false })
         : state.inboxFiles,
@@ -1712,11 +2142,23 @@ export const useGameStore = create<GameState>()(
       ossilegiumCommuneGrams:
         state.ossilegiumCommuneGrams + Math.round(boneAshGrams * 0.02),
       activeStation: 'URN_FILLING',
-      cremationBurnActive: false,
-      cremationBurnProgress: 0,
-      cremationHeatNormalized: 0,
-      cremationDecayArrested: false,
-      retort: { ...IDLE_RETORT },
+      cremationBurnActive: settled.cremationBurnActive,
+      cremationBurnProgress: settled.cremationBurnActive
+        ? state.cremationBurnProgress
+        : 0,
+      cremationHeatNormalized: settled.cremationBurnActive
+        ? state.cremationHeatNormalized
+        : 0,
+      cremationDecayArrested: settled.cremationBurnActive
+        ? state.cremationDecayArrested
+        : false,
+      retort: nextRetort,
+      retortMachines: machines,
+      activeRetortIndex: settled.activeRetortIndex,
+      retortBays: settled.retortBays,
+      intakeToast: queued
+        ? `${queued.name} loaded on retort ${String.fromCharCode(65 + settled.index)}`
+        : state.intakeToast,
     });
   },
 
@@ -1890,14 +2332,33 @@ export const useGameStore = create<GameState>()(
           'Needs more facility space — open Lychgate Realty to relocate.',
       };
     }
+    const nextLevels = {
+      ...state.facilityLevels,
+      [id]: level + 1,
+    };
+    const grown =
+      id === 'retort_bay'
+        ? focusMachines(state, state.retort, state.activeRetortIndex ?? 0)
+        : null;
+    const grownCount = retortCount(nextLevels);
     set({
       cash: state.cash - tier.cost,
-      facilityLevels: {
-        ...state.facilityLevels,
-        [id]: level + 1,
-      },
+      facilityLevels: nextLevels,
       reputation: state.reputation + 3 + level,
       intakeToast: `Upgraded ${id.replace('_', ' ')} (space ${used + tier.space}/${total})`,
+      ...(grown
+        ? {
+            retort: grown.retort,
+            retortMachines: alignMachines(
+              grown.retortMachines,
+              grown.retort,
+              grown.activeRetortIndex,
+              grownCount
+            ).machines,
+            activeRetortIndex: grown.activeRetortIndex,
+            retortBays: alignBays(grown.retortBays, grownCount),
+          }
+        : {}),
     });
     return { ok: true };
   },
@@ -2536,7 +2997,15 @@ export const useGameStore = create<GameState>()(
       const pourTip = serviceFailed
         ? 0
         : Math.round((c.urnPourQuality ?? 0) * 1.1);
-      const tipCash = serviceFailed ? 0 : chapelRewards.tipCash + pourTip;
+      const cremainsTip = serviceFailed
+        ? 0
+        : Math.round((c.cremainsQuality ?? 0) * 1.6);
+      const cremainsRep = serviceFailed
+        ? 0
+        : Math.floor((c.cremainsQuality ?? 0) / 28);
+      const tipCash = serviceFailed
+        ? 0
+        : chapelRewards.tipCash + pourTip + cremainsTip;
       const salesMult = Math.max(
         0.5,
         state.ownedProperty.salesMult ?? 1
@@ -2625,7 +3094,8 @@ export const useGameStore = create<GameState>()(
                 chapelRewards.reputationDelta +
                 urnRep +
                 casketRep +
-                fleetRep -
+                fleetRep +
+                cremainsRep -
                 decayRepHit
         ),
         intermentScore: intermentTotal,
@@ -2647,7 +3117,11 @@ export const useGameStore = create<GameState>()(
               tipCash,
               payoutBoostPct: chapelRewards.payoutBoostPct,
               reputationDelta:
-                chapelRewards.reputationDelta + urnRep + casketRep + fleetRep,
+                chapelRewards.reputationDelta +
+                urnRep +
+                casketRep +
+                fleetRep +
+                cremainsRep,
               fleetRecovery: cortege.recovery?.name ?? null,
               fleetEscort: cortege.escort?.name ?? null,
               fleetFlower: cortege.flower?.name ?? null,
@@ -2809,6 +3283,10 @@ export const useGameStore = create<GameState>()(
         cremationHeatNormalized: state.cremationHeatNormalized,
         cremationDecayArrested: state.cremationDecayArrested,
         retort: state.retort,
+        retortMachines: state.retortMachines,
+        activeRetortIndex: state.activeRetortIndex,
+        retortBays: state.retortBays,
+        crematoryWardrobe: state.crematoryWardrobe,
         permitSubmissions: state.permitSubmissions,
         permitWrongStreak: state.permitWrongStreak,
         financeLedger: state.financeLedger,
@@ -2910,6 +3388,32 @@ export const useGameStore = create<GameState>()(
             ...DEFAULT_FACILITY_LEVELS,
             ...(p.facilityLevels ?? {}),
           },
+          retortMachines: alignMachines(
+            Array.isArray(p.retortMachines) ? p.retortMachines : undefined,
+            { ...IDLE_RETORT, ...(p.retort ?? {}) },
+            typeof p.activeRetortIndex === 'number' ? p.activeRetortIndex : 0,
+            retortCount({
+              ...DEFAULT_FACILITY_LEVELS,
+              ...(p.facilityLevels ?? {}),
+            })
+          ).machines,
+          activeRetortIndex: alignMachines(
+            Array.isArray(p.retortMachines) ? p.retortMachines : undefined,
+            { ...IDLE_RETORT, ...(p.retort ?? {}) },
+            typeof p.activeRetortIndex === 'number' ? p.activeRetortIndex : 0,
+            retortCount({
+              ...DEFAULT_FACILITY_LEVELS,
+              ...(p.facilityLevels ?? {}),
+            })
+          ).index,
+          retortBays: alignBays(
+            Array.isArray(p.retortBays) ? p.retortBays : undefined,
+            retortCount({
+              ...DEFAULT_FACILITY_LEVELS,
+              ...(p.facilityLevels ?? {}),
+            })
+          ),
+          crematoryWardrobe: normalizeWardrobe(p.crematoryWardrobe),
           shopRotation: p.shopRotation ?? current.shopRotation,
           showroomInventory: p.showroomInventory ?? current.showroomInventory,
           permitSubmissions: p.permitSubmissions ?? current.permitSubmissions,

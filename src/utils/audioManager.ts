@@ -60,6 +60,7 @@ class AudioManager {
   /** One-shot SFX level (0–1). Mute gates SFX without stopping music beds. */
   private sfxVolume = 0.45;
   private lastPingAt = 0;
+  private lastClickAt = 0;
 
   /** Tunable crossfade length in milliseconds. */
   crossfadeMs = CROSSFADE_MS;
@@ -492,6 +493,57 @@ class AudioManager {
         g.connect(master);
         osc.start(t);
         osc.stop(t + 0.6);
+      }
+    } catch {
+      /* ignore WebAudio failures */
+    }
+  }
+
+  /**
+   * Short UI click. Generated in this AudioContext — no sample file.
+   * Tick is a menu button. Clunk is a retort control.
+   * Respects mute and sfxVolume. Starts on currentTime so Android stays tight.
+   */
+  playUiClick(kind: 'tick' | 'clunk' = 'tick'): void {
+    if (this.muted || this.sfxVolume <= 0.001) return;
+    const now = performance.now();
+    if (now - this.lastClickAt < 32) return;
+    this.lastClickAt = now;
+    try {
+      const ctx = this.getOrCreateContext();
+      if (ctx.state === 'suspended') void ctx.resume();
+      const t = ctx.currentTime;
+      const master = ctx.createGain();
+      const peak =
+        kind === 'clunk'
+          ? Math.max(0.0001, this.sfxVolume * 0.34)
+          : Math.max(0.0001, this.sfxVolume * 0.18);
+      const dur = kind === 'clunk' ? 0.07 : 0.034;
+      master.gain.setValueAtTime(peak, t);
+      master.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      master.connect(ctx.destination);
+
+      const osc = ctx.createOscillator();
+      osc.type = kind === 'clunk' ? 'triangle' : 'square';
+      osc.frequency.setValueAtTime(kind === 'clunk' ? 180 : 1400, t);
+      osc.frequency.exponentialRampToValueAtTime(
+        kind === 'clunk' ? 70 : 420,
+        t + dur
+      );
+      osc.connect(master);
+      osc.start(t);
+      osc.stop(t + dur + 0.02);
+
+      if (kind === 'clunk') {
+        const body = ctx.createOscillator();
+        const g = ctx.createGain();
+        body.type = 'sine';
+        body.frequency.setValueAtTime(90, t);
+        g.gain.setValueAtTime(0.55, t);
+        body.connect(g);
+        g.connect(master);
+        body.start(t);
+        body.stop(t + dur + 0.02);
       }
     } catch {
       /* ignore WebAudio failures */

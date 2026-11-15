@@ -491,8 +491,9 @@ export const UrnFillingMiniGame: React.FC = () => {
     stopAshPourSfx();
     const pourBonus =
       pourQuality >= 90 ? 140 : pourQuality >= 70 ? 90 : pourQuality >= 50 ? 50 : 20;
+    const ashBonus = Math.round((currentCase.cremainsQuality ?? 0) * 0.8);
     completeUrnFilling(
-      collectedBonus + pourBonus,
+      collectedBonus + pourBonus + ashBonus,
       currentCase.id,
       pourQuality
     );

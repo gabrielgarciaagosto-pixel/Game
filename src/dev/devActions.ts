@@ -438,6 +438,12 @@ export function clearCooler() {
       inboxFiles: s.inboxFiles.filter((f) => keep.some((c) => c.id === f.id)),
       activeCaseId: activeStill?.id ?? keep[0]?.id ?? null,
       intakeToast: `[DEV] Cleared cooler (−${removed})`,
+      retortMachines: (s.retortMachines?.length ? s.retortMachines : [s.retort]).map(
+        (m) =>
+          m.caseId && keep.some((c) => c.id === m.caseId)
+            ? m
+            : { ...IDLE_RETORT }
+      ),
       retort:
         s.retort.caseId && keep.some((c) => c.id === s.retort.caseId)
           ? s.retort

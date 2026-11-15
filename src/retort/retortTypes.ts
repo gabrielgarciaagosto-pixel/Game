@@ -30,6 +30,8 @@ export interface RetortMachine {
   /** Operator-calibrated Honeywell set points, °F */
   primarySetPoint: number;
   secondarySetPoint: number;
+  /** Gas for this firing has already been billed. */
+  fuelCharged: boolean;
 }
 
 export const SECONDARY_SP = 1700;
@@ -66,6 +68,7 @@ export const IDLE_RETORT: RetortMachine = {
   activeTool: null,
   primarySetPoint: PRIMARY_SP,
   secondarySetPoint: SECONDARY_SP,
+  fuelCharged: false,
 };
 
 export function randomPurgeMs(): number {

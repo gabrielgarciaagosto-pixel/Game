@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { audioManager } from '../utils/audioManager';
 
 type TapOptions = {
   /** Cancel tap if pointer moves farther than this (px). Default 10. */
@@ -59,6 +60,7 @@ export function useTapAction(onTap: () => void, options?: TapOptions) {
       const dy = e.clientY - s.y;
       if (dx * dx + dy * dy > moveThresholdPx * moveThresholdPx) return;
       suppressClickRef.current = true;
+      audioManager.playUiClick('tick');
       onTapRef.current();
     },
     [maxDurationMs, moveThresholdPx]
@@ -81,6 +83,7 @@ export function useTapAction(onTap: () => void, options?: TapOptions) {
       return;
     }
     // Keyboard / accessibility activation (no prior pointer sequence).
+    audioManager.playUiClick('tick');
     onTapRef.current();
   }, []);
 

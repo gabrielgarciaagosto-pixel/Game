@@ -18,6 +18,7 @@ import {
 } from '../data/familyChapelPrefs';
 import { getUrnById } from '../data/urnCatalog';
 import { gameNow } from '../utils/gameNow';
+import { audioManager } from '../utils/audioManager';
 import { DEV_TOOLS } from '../dev';
 import { UrnVessel } from './urns/UrnVessel';
 
@@ -89,7 +90,10 @@ export const CaseInboxWidget: React.FC = () => {
     <>
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          audioManager.playUiClick('tick');
+          setIsOpen(!isOpen);
+        }}
         style={{
           bottom: 'var(--files-fab-bottom)',
           right: 'var(--safe-right)',

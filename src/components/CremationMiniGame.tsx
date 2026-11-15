@@ -1,10 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { audioManager } from '../utils/audioManager';
+import {
+  brandLabel,
+  defaultRetortBay,
+  doorFace,
+  panelChrome,
+  purgeMsFor,
+  type RetortButtonStyleId,
+} from '../data/crematoryCatalog';
+import { CrematoryCatalog } from './crematory/CrematoryCatalog';
 import { CaseTransferBar } from './CaseTransferBar';
 import { directiveNeedsCremationPermit } from '../data/cremationPermits';
 import { permitStatusLabel } from '../data/decedentVitals';
 import type { Rank, SweepTool } from '../types/game';
 import { displayCaseName } from '../types/game';
-import { caseAtLocation, useGameStore } from '../store/useGameStore';
+import { useGameStore } from '../store/useGameStore';
 import { hapticBoneContact, hapticIronRake } from '../utils/haptics';
 import { getCremationTargets } from '../utils/mortuaryMath';
 import {
@@ -77,6 +87,8 @@ function HoneywellReadout({
   );
 }
 
+const ButtonLookContext = React.createContext<RetortButtonStyleId>('millennium');
+
 function buttonShell(
   color: 'green' | 'red' | 'silver',
   size: 'sm' | 'md'
@@ -89,6 +101,34 @@ function buttonShell(
         : 'bg-zinc-300 border-zinc-100 text-zinc-900 shadow-zinc-900/40';
   const dim = size === 'sm' ? 'w-10 h-10 text-[8px]' : 'w-14 h-14 text-[10px]';
   return `${dim} rounded-full border-4 ${bg} shadow-inner font-black leading-tight active:scale-95 disabled:opacity-35 disabled:active:scale-100`;
+}
+
+function buttonLookShell(
+  color: 'green' | 'red' | 'silver',
+  size: 'sm' | 'md',
+  look: RetortButtonStyleId
+) {
+  if (look === 'millennium') return buttonShell(color, size);
+  const dim = size === 'sm' ? 'w-10 h-10 text-[8px]' : 'w-14 h-14 text-[10px]';
+  if (look === 'brass') {
+    const bg =
+      color === 'green'
+        ? 'bg-[#c4a574] text-[#1a140c]'
+        : color === 'red'
+          ? 'bg-[#8a3b16] text-[#f6e7c1]'
+          : 'bg-[#e6d3a1] text-[#1a140c]';
+    return `${dim} rounded-sm border-2 border-[#5c4318] ${bg} font-black shadow-[inset_0_2px_0_rgba(255,255,255,0.45)] active:translate-y-px`;
+  }
+  if (look === 'touch') {
+    const bg =
+      color === 'green'
+        ? 'bg-emerald-400 text-slate-950'
+        : color === 'red'
+          ? 'bg-rose-500 text-white'
+          : 'bg-slate-100 text-slate-900';
+    return `${dim} rounded-md border border-cyan-200/50 ${bg} font-semibold tracking-wide shadow-[inset_0_0_12px_rgba(255,255,255,0.25)]`;
+  }
+  return `${dim} rounded-full border-[5px] border-[#1a120c] bg-[#f3e6c8] text-[#1a120c] font-black shadow-[inset_0_0_0_3px_#8a7048]`;
 }
 
 function PushButton({
@@ -104,6 +144,7 @@ function PushButton({
   disabled?: boolean;
   size?: 'sm' | 'md';
 }) {
+  const look = React.useContext(ButtonLookContext);
   return (
     <button
       type="button"
@@ -112,7 +153,7 @@ function PushButton({
         e.stopPropagation();
         onPress();
       }}
-      className={buttonShell(color, size)}
+      className={buttonLookShell(color, size, look)}
     >
       {label}
     </button>
@@ -135,6 +176,7 @@ function HoldButton({
   disabled?: boolean;
   size?: 'sm' | 'md';
 }) {
+  const look = React.useContext(ButtonLookContext);
   const startRef = useRef(onHoldStart);
   const endRef = useRef(onHoldEnd);
   startRef.current = onHoldStart;
@@ -164,7 +206,7 @@ function HoldButton({
         window.addEventListener('pointerup', end);
         window.addEventListener('pointercancel', end);
       }}
-      className={buttonShell(color, size)}
+      className={buttonLookShell(color, size, look)}
     >
       {label}
     </button>
@@ -202,6 +244,14 @@ function StatusLamp({
   );
 }
 
+function playControlClick(e: React.PointerEvent) {
+  const btn = (e.target as HTMLElement | null)?.closest?.('button');
+  if (!btn || (btn as HTMLButtonElement).disabled) return;
+  audioManager.playUiClick(
+    btn.getAttribute('data-click') === 'tick' ? 'tick' : 'clunk'
+  );
+}
+
 export const CremationMiniGame: React.FC = () => {
   const {
     cases,
@@ -211,12 +261,28 @@ export const CremationMiniGame: React.FC = () => {
     takeCaseToStation,
     focusCase,
     retort,
+    retortMachines,
+    activeRetortIndex,
+    retortBays,
     patchRetort,
     ensureRetortForCase,
-    resetRetort,
+    selectRetort,
+    chargeRetortFuel,
+    queueCaseOnRetort,
   } = useGameStore();
 
-  // Prefer the case already locked in the retort so a second intake can't wipe it
+  const bayCount = Math.max(1, retortMachines.length || 1);
+  const bayIndex = Math.max(0, Math.min(bayCount - 1, activeRetortIndex || 0));
+  const bay = retortBays[bayIndex] ?? defaultRetortBay();
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const swipeRef = useRef<{ x: number; y: number } | null>(null);
+
+  const otherCaseIds = new Set(
+    retortMachines
+      .filter((_, i) => i !== bayIndex)
+      .map((m) => m.caseId)
+      .filter((id): id is string => !!id)
+  );
   const retortBoundCase =
     retort.caseId != null
       ? (cases.find(
@@ -224,7 +290,12 @@ export const CremationMiniGame: React.FC = () => {
         ) ?? null)
       : null;
   const currentCase =
-    retortBoundCase ?? caseAtLocation(cases, 'CREMATION', activeCaseId);
+    retortBoundCase ??
+    (retort.caseId == null || retort.phase === 'IDLE' || retort.phase === 'DONE'
+      ? (cases.find(
+          (c) => c.location === 'CREMATION' && !otherCaseIds.has(c.id)
+        ) ?? null)
+      : null);
 
   useEffect(() => {
     if (currentCase && currentCase.id !== activeCaseId) {
@@ -327,7 +398,7 @@ export const CremationMiniGame: React.FC = () => {
       blowerOn: true,
       purging: true,
       heated: false,
-      purgeEndsAt: Date.now() + randomPurgeMs(),
+      purgeEndsAt: Date.now() + purgeMsFor(randomPurgeMs(), bay.preheat),
       phase: phase === 'IDLE' ? 'LOAD' : phase,
     });
   };
@@ -359,6 +430,7 @@ export const CremationMiniGame: React.FC = () => {
 
   const startPrimary = () => {
     if (!canStartPrimary) return;
+    if (!retort.fuelCharged) chargeRetortFuel();
     patchRetort({
       primaryOn: true,
       earlyPrimaryStarts:
@@ -632,12 +704,59 @@ export const CremationMiniGame: React.FC = () => {
       rank = rank === 'S+' || rank === 'S' ? 'B' : rank === 'A' ? 'C' : 'F';
     }
     completeCremation(rank, currentCase.weightLbs * 15, currentCase.id);
-    resetRetort();
   };
+
+  const pager =
+    bayCount < 2 ? null : (
+      <div className="shrink-0 flex items-center justify-center gap-4 py-2">
+        <button
+          type="button"
+          aria-label="Previous retort"
+          onPointerDown={() =>
+            selectRetort((bayIndex + bayCount - 1) % bayCount)
+          }
+          className="w-10 h-10 rounded-full border border-stone-500 text-lg leading-none"
+        >
+          ‹
+        </button>
+        <div className="flex items-center gap-2">
+          {Array.from({ length: bayCount }).map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              aria-label={`Retort ${String.fromCharCode(65 + i)}`}
+              onPointerDown={() => selectRetort(i)}
+              className={`w-2.5 h-2.5 rounded-full ${
+                i === bayIndex ? 'bg-orange-300' : 'bg-stone-600'
+              }`}
+            />
+          ))}
+        </div>
+        <button
+          type="button"
+          aria-label="Next retort"
+          onPointerDown={() => selectRetort((bayIndex + 1) % bayCount)}
+          className="w-10 h-10 rounded-full border border-stone-500 text-lg leading-none"
+        >
+          ›
+        </button>
+      </div>
+    );
+
+  const catalog = catalogOpen ? (
+    <CrematoryCatalog
+      bay={bay}
+      bayIndex={bayIndex}
+      onClose={() => setCatalogOpen(false)}
+    />
+  ) : null;
 
   if (!currentCase || !targets) {
     return (
-      <div className="fixed inset-0 z-50 bg-stone-950/95 text-stone-100 flex flex-col items-center justify-center gap-4 p-6 pb-28">
+      <div
+        className="fixed inset-0 z-50 bg-stone-950/95 text-stone-100 flex flex-col items-center justify-center gap-4 p-6 pb-28"
+        onPointerDownCapture={playControlClick}
+      >
         <p className="text-center max-w-sm text-sm">
           No case loaded in the crematory. Move remains here from the Cooler
           (Cremate).
@@ -649,13 +768,26 @@ export const CremationMiniGame: React.FC = () => {
         >
           Open Cooler
         </button>
+        <button
+          type="button"
+          data-click="tick"
+          onPointerDown={() => setCatalogOpen(true)}
+          className="px-4 py-2 bg-stone-800 rounded text-sm"
+        >
+          Upgrades
+        </button>
+        {pager}
+        {catalog}
       </div>
     );
   }
 
   if (currentCase.isCremated || phase === 'DONE') {
     return (
-      <div className="safe-screen fixed inset-0 z-50 bg-stone-950/95 text-stone-100 flex flex-col select-none">
+      <div
+        className="safe-screen fixed inset-0 z-50 bg-stone-950/95 text-stone-100 flex flex-col select-none"
+        onPointerDownCapture={playControlClick}
+      >
         <div className="flex justify-between border-b border-stone-800 pb-3 gap-2">
           <h2 className="text-base font-bold text-orange-400">
             CREMATION COMPLETE — {displayCaseName(currentCase)}
@@ -683,6 +815,8 @@ export const CremationMiniGame: React.FC = () => {
           </button>
           <CaseTransferBar currentCase={currentCase} />
         </div>
+        {pager}
+        {catalog}
       </div>
     );
   }
@@ -692,9 +826,14 @@ export const CremationMiniGame: React.FC = () => {
       ? Math.max(0, Math.ceil((purgeEndsAt - Date.now()) / 1000))
       : 0;
 
+  const stockPanel =
+    bay.buttons === 'millennium'
+      ? 'bg-gradient-to-b from-zinc-300 via-zinc-400 to-zinc-500 border-2 border-zinc-600 shadow-xl text-zinc-900'
+      : (panelChrome(bay.buttons) ??
+        'bg-gradient-to-b from-zinc-300 via-zinc-400 to-zinc-500 border-2 border-zinc-600 shadow-xl text-zinc-900');
   const controlPanel = (zoomed: boolean) => (
     <div
-      className={`bg-gradient-to-b from-zinc-300 via-zinc-400 to-zinc-500 border-2 border-zinc-600 shadow-xl text-zinc-900 overflow-y-auto ${
+      className={`${stockPanel} overflow-y-auto ${
         zoomed ? 'flex-1 p-4 rounded-xl' : 'w-[30%] max-w-[120px] p-1.5 rounded-lg'
       }`}
       onPointerDown={(e) => {
@@ -920,13 +1059,31 @@ export const CremationMiniGame: React.FC = () => {
     </div>
   );
 
+  const queuedName = bay.queueCaseId
+    ? cases.find((c) => c.id === bay.queueCaseId)?.name
+    : null;
+  const queueChoices = cases.filter(
+    (c) =>
+      c.location === 'COOLER' &&
+      (c.directive === 'CREMATION_DIRECT' ||
+        c.directive === 'VIEWING_THEN_CREMATION' ||
+        c.directive === 'CREMATION_THEN_VIEWING')
+  );
+
   return (
-    <div className="safe-screen fixed inset-0 z-50 bg-[#1a2e1a] text-stone-100 flex flex-col select-none overflow-hidden">
+    <ButtonLookContext.Provider value={bay.buttons}>
+    <div
+      className="safe-screen fixed inset-0 z-50 bg-[#1a2e1a] text-stone-100 flex flex-col select-none overflow-hidden"
+      onPointerDownCapture={playControlClick}
+    >
       <div className="shrink-0 px-1 pb-2 border-b border-stone-800/80">
         <div className="flex justify-between items-start gap-2">
           <div className="min-w-0">
             <h2 className="text-sm font-bold text-orange-300 tracking-wide truncate">
-              MILLENNIUM — {displayCaseName(currentCase)}
+              {bay.brand === 'millennium'
+                ? 'MILLENNIUM'
+                : brandLabel(bay.brand).toUpperCase()}{' '}
+              — {displayCaseName(currentCase)}
             </h2>
             <p className="text-[10px] text-stone-400">
               {Math.round(progress * 100)}% · {bonePhase} · Door{' '}
@@ -938,14 +1095,43 @@ export const CremationMiniGame: React.FC = () => {
             </p>
             <CaseTransferBar currentCase={currentCase} />
           </div>
-          <button
-            type="button"
-            onPointerDown={() => setActiveStation('OVERVIEW')}
-            className="px-2.5 py-1.5 bg-stone-800 rounded text-[10px] shrink-0"
-          >
-            Back
-          </button>
+          <div className="flex flex-col gap-1 shrink-0">
+            <button
+              type="button"
+              data-click="tick"
+              onPointerDown={() => setCatalogOpen(true)}
+              className="px-2.5 py-1.5 bg-stone-800 rounded text-[10px]"
+            >
+              Upgrades
+            </button>
+            <button
+              type="button"
+              onPointerDown={() => setActiveStation('OVERVIEW')}
+              className="px-2.5 py-1.5 bg-stone-800 rounded text-[10px]"
+            >
+              Back
+            </button>
+          </div>
         </div>
+        {bay.queueSlot && (
+          <div className="mt-1 flex items-center gap-1 overflow-x-auto text-[10px]">
+            <span className="text-stone-400 shrink-0">
+              {queuedName ? `Next: ${queuedName}` : 'Queue'}
+            </span>
+            {!bay.queueCaseId &&
+              queueChoices.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  data-click="tick"
+                  onPointerDown={() => queueCaseOnRetort(c.id)}
+                  className="px-2 py-1 rounded bg-stone-800 shrink-0"
+                >
+                  {displayCaseName(c)}
+                </button>
+              ))}
+          </div>
+        )}
         {directiveNeedsCremationPermit(currentCase.directive) &&
           currentCase.cremationPermitStatus !== 'APPROVED' && (
             <div className="mt-2 px-2 py-1.5 rounded border border-amber-700/70 bg-amber-950/50 text-[10px] text-amber-100 leading-snug">
@@ -969,6 +1155,20 @@ export const CremationMiniGame: React.FC = () => {
             <div
               ref={chamberRef}
               className="retort-brick relative flex-1 min-w-0 rounded-lg border-4 border-zinc-600 shadow-[inset_0_0_40px_rgba(0,0,0,0.65)] overflow-hidden"
+              onPointerDown={(e) => {
+                swipeRef.current = { x: e.clientX, y: e.clientY };
+              }}
+              onPointerUp={(e) => {
+                const start = swipeRef.current;
+                swipeRef.current = null;
+                if (!start || bayCount < 2) return;
+                const dx = e.clientX - start.x;
+                const dy = e.clientY - start.y;
+                if (Math.abs(dx) < 56 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+                selectRetort(
+                  (bayIndex + (dx < 0 ? 1 : bayCount - 1)) % bayCount
+                );
+              }}
             >
               <div className="absolute top-1 left-2 z-20 text-[8px] tracking-[0.22em] text-zinc-400 font-black pointer-events-none">
                 HEARTH
@@ -980,6 +1180,7 @@ export const CremationMiniGame: React.FC = () => {
                   height: `${Math.max(0, (1 - doorOpen) * 100)}%`,
                   transition: doorMoving ? 'none' : 'height 0.05s linear',
                   background:
+                    doorFace(bay.door) ??
                     'linear-gradient(90deg, #3f3f46 0%, #a1a1aa 8%, #d4d4d8 18%, #71717a 46%, #e4e4e7 52%, #52525b 78%, #27272a 100%)',
                 }}
               >
@@ -994,9 +1195,13 @@ export const CremationMiniGame: React.FC = () => {
                 <div className="absolute right-2 top-2 bottom-2 w-1.5 rounded-full bg-black/40" />
                 <div className="absolute left-1/2 top-[18%] -translate-x-1/2 w-24 h-14 rounded-md border border-zinc-200/40 bg-zinc-900/35 flex flex-col items-center justify-center">
                   <span className="text-[8px] font-black tracking-[0.2em] text-zinc-100">
-                    MILLENNIUM
+                    {bay.brand === 'millennium'
+                      ? 'MILLENNIUM'
+                      : brandLabel(bay.brand).toUpperCase()}
                   </span>
-                  <span className="text-[7px] text-zinc-300">REFRACTORY</span>
+                  <span className="text-[7px] text-zinc-300">
+                    {bay.brand === 'millennium' ? 'REFRACTORY' : 'PLATE'}
+                  </span>
                 </div>
                 {Array.from({ length: 4 }).map((_, i) => (
                   <div
@@ -1229,6 +1434,9 @@ export const CremationMiniGame: React.FC = () => {
           />
         </div>
       </div>
+      {pager}
+      {catalog}
     </div>
+    </ButtonLookContext.Provider>
   );
 };

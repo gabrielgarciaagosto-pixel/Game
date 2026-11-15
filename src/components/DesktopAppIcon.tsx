@@ -1,4 +1,5 @@
 import React from 'react';
+import { audioManager } from '../utils/audioManager';
 
 export type DesktopIconKind = 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS';
 
@@ -22,7 +23,10 @@ export const DesktopAppIcon: React.FC<{
   return (
     <button
       type="button"
-      onClick={onOpen}
+      onClick={() => {
+        audioManager.playUiClick('tick');
+        onOpen();
+      }}
       style={{ touchAction: 'manipulation' }}
       className="desktop-app-icon flex flex-col items-center gap-1.5 p-1.5 rounded active:bg-white/10 group min-w-0"
     >
