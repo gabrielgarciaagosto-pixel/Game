@@ -28,7 +28,8 @@ import {
 } from '../data/urnCatalog';
 import { useGameStore } from '../store/useGameStore';
 import { friendlyToken } from '../types/game';
-import { gameDate, subscribeClock } from '../utils/gameNow';
+import { gameDate, gameNow, subscribeClock } from '../utils/gameNow';
+import { activeMarket, quotedPrice } from '../news/newsWire';
 import { CasketVessel } from './caskets/CasketVessel';
 import { UrnVessel } from './urns/UrnVessel';
 import { TapButton } from './TapButton';
@@ -123,6 +124,8 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
 
   const spaceUsed = totalFacilitySpaceUsed(facilityLevels);
   const spaceTotal = ownedProperty?.spaceTotal ?? 20;
+  const newsWire = useGameStore((s) => s.newsWire);
+  const market = activeMarket(newsWire, now.getTime());
 
   const requestBuy = (title: string, body: string, run: () => void) => {
     setConfirmBuy({ title, body, run });
@@ -316,6 +319,24 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
           ))}
         </div>
       </div>
+
+      {market && (
+        <div
+          data-shop-news
+          className="mx-2 mt-2 flex items-start gap-1.5 rounded-lg border border-amber-700/50 bg-amber-950/50 px-2 py-1.5 text-[11px] leading-snug text-amber-50"
+        >
+          <span
+            aria-label={market.dir === 'up' ? 'Prices up' : 'Prices down'}
+            className={market.dir === 'up' ? 'text-emerald-300' : 'text-rose-300'}
+          >
+            {market.dir === 'up' ? '▲' : '▼'}
+          </span>
+          <span>
+            {market.goodLabel} {market.dir === 'up' ? '+' : '−'}
+            {market.pct}% · {market.text}
+          </span>
+        </div>
+      )}
 
       <div className="relative flex-1 min-h-0 overflow-y-auto p-2 pb-24">
         {tab === 'URNS' && (
@@ -647,7 +668,12 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
         {tab === 'MERCH' && (
           <div className="space-y-2">
             <SectionLabel>Showroom merch</SectionLabel>
-            {merch.map((item) => (
+            {merch.map((item) => {
+              const ask =
+                item.category === 'FLOWER'
+                  ? quotedPrice(item.cost, 'FLOWERS', newsWire, now.getTime())
+                  : item.cost;
+              return (
               <div
                 key={item.id}
                 className="rounded-xl border border-amber-900/50 bg-gradient-to-r from-stone-900 to-stone-950 p-3 flex items-center justify-between gap-3"
@@ -660,26 +686,27 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                   </div>
                 </div>
                 <TapButton
-                  disabled={cash < item.cost}
+                  disabled={cash < ask}
                   onTap={() =>
                     requestBuy(
                       'Confirm merch',
-                      `Buy ${item.name} for $${item.cost}?`,
+                      `Buy ${item.name} for $${ask}?`,
                       () => {
                         buyShowroomItem(item.id);
                       }
                     )
                   }
                   className={`px-3 py-2 rounded font-bold text-xs shrink-0 ${
-                    cash >= item.cost
+                    cash >= ask
                       ? 'bg-amber-500 text-stone-950'
                       : 'bg-stone-800 text-stone-500'
                   }`}
                 >
-                  Buy ${item.cost}
+                  Buy <PriceAsk base={item.cost} ask={ask} />
                 </TapButton>
               </div>
-            ))}
+              );
+            })}
             {merch.length === 0 && (
               <p className="text-[11px] text-stone-500 text-center py-8">
                 No merch in stock.
@@ -836,6 +863,22 @@ function RarityBadge({ rarity }: { rarity: ItemRarity }) {
   );
 }
 
+function PriceAsk({ base, ask }: { base: number; ask: number }) {
+  const up = ask > base;
+  const down = ask < base;
+  return (
+    <span>
+      ${ask}
+      {up || down ? (
+        <span className={up ? 'text-emerald-200' : 'text-rose-200'}>
+          {' '}
+          {up ? '▲' : '▼'}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 function UrnCard({
   urn,
   owned,
@@ -855,10 +898,12 @@ function UrnCard({
   onInspect: () => void;
   onBuy: () => void;
 }) {
+  const newsWire = useGameStore((s) => s.newsWire);
+  const ask = quotedPrice(urn.cost, 'URNS', newsWire, gameNow());
   const locked = reputation < (urn.reputationRequired ?? 0);
   const canBuy = canPurchase({
     cash,
-    cost: urn.cost,
+    cost: ask,
     reputation,
     reputationRequired: urn.reputationRequired ?? 0,
     stock,
@@ -906,7 +951,7 @@ function UrnCard({
               : 'bg-stone-800 text-stone-500'
           }`}
         >
-          {locked ? `Rep ${urn.reputationRequired}` : `$${urn.cost}`}
+          {locked ? `Rep ${urn.reputationRequired}` : <PriceAsk base={urn.cost} ask={ask} />}
         </button>
       </div>
     </div>
@@ -932,10 +977,12 @@ function CasketCard({
   onInspect: () => void;
   onBuy: () => void;
 }) {
+  const newsWire = useGameStore((s) => s.newsWire);
+  const ask = quotedPrice(casket.cost, 'CASKETS', newsWire, gameNow());
   const locked = reputation < (casket.reputationRequired ?? 0);
   const canBuy = canPurchase({
     cash,
-    cost: casket.cost,
+    cost: ask,
     reputation,
     reputationRequired: casket.reputationRequired ?? 0,
     stock,
@@ -983,7 +1030,7 @@ function CasketCard({
               : 'bg-stone-800 text-stone-500'
           }`}
         >
-          {locked ? `Rep ${casket.reputationRequired}` : `$${casket.cost}`}
+          {locked ? `Rep ${casket.reputationRequired}` : <PriceAsk base={casket.cost} ask={ask} />}
         </button>
       </div>
     </div>
@@ -1009,10 +1056,12 @@ function UrnInspectModal({
   onClose: () => void;
   onBuy: () => void;
 }) {
+  const newsWire = useGameStore((s) => s.newsWire);
+  const ask = quotedPrice(urn.cost, 'URNS', newsWire, gameNow());
   const locked = reputation < (urn.reputationRequired ?? 0);
   const canBuy = canPurchase({
     cash,
-    cost: urn.cost,
+    cost: ask,
     reputation,
     reputationRequired: urn.reputationRequired ?? 0,
     stock: rare ? stock : undefined,
@@ -1082,7 +1131,7 @@ function UrnInspectModal({
           {locked
             ? `Locked · Rep ${urn.reputationRequired}`
             : canBuy
-              ? `Purchase for $${urn.cost}`
+              ? <>Purchase for <PriceAsk base={urn.cost} ask={ask} /></>
               : rare && (stock ?? 0) <= 0
                 ? 'Sold out this window'
                 : 'Insufficient cash'}
@@ -1111,10 +1160,12 @@ function CasketInspectModal({
   onClose: () => void;
   onBuy: () => void;
 }) {
+  const newsWire = useGameStore((s) => s.newsWire);
+  const ask = quotedPrice(casket.cost, 'CASKETS', newsWire, gameNow());
   const locked = reputation < (casket.reputationRequired ?? 0);
   const canBuy = canPurchase({
     cash,
-    cost: casket.cost,
+    cost: ask,
     reputation,
     reputationRequired: casket.reputationRequired ?? 0,
     stock: rare ? stock : undefined,
@@ -1214,7 +1265,7 @@ function CasketInspectModal({
           {locked
             ? `Locked · Rep ${casket.reputationRequired}`
             : canBuy
-              ? `Purchase for $${casket.cost}`
+              ? <>Purchase for <PriceAsk base={casket.cost} ask={ask} /></>
               : rare && (stock ?? 0) <= 0
                 ? 'Sold out this window'
                 : 'Insufficient cash'}

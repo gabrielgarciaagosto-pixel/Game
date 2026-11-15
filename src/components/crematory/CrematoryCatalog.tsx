@@ -17,8 +17,10 @@ import {
   speedTimeFraction,
 } from '../../data/crematoryCatalog';
 import { nextFacilityTier } from '../../data/facilityUpgrades';
-import { retortCount } from '../../retort/retortRoster';
+import { quotedPrice } from '../../news/newsWire';
+import { gameNow } from '../../utils/gameNow';
 import { useGameStore } from '../../store/useGameStore';
+import { retortCount } from '../../retort/retortRoster';
 import { audioManager } from '../../utils/audioManager';
 
 /**
@@ -53,9 +55,12 @@ export const CrematoryCatalog: React.FC = () => {
   const qualityAfter = qualityOffer
     ? cremainsQualityScore(qualityOffer.tier)
     : qualityNow;
-  const fuelNow = fuelCostFor(bay.fuelTier);
+  const newsWire = useGameStore((s) => s.newsWire);
+  const fuelAsk = (tier: number) =>
+    quotedPrice(fuelCostFor(tier), 'FUEL', newsWire, gameNow());
+  const fuelNow = fuelAsk(bay.fuelTier);
   const fuelOffer = FUEL_TIERS[bay.fuelTier];
-  const fuelAfter = fuelOffer ? fuelCostFor(fuelOffer.tier) : fuelNow;
+  const fuelAfter = fuelOffer ? fuelAsk(fuelOffer.tier) : fuelNow;
   const chamber = nextFacilityTier('retort_bay', levels.retort_bay ?? 0);
   const house = levels.crematory ?? 0;
 

@@ -9,6 +9,9 @@ import {
   evaluateEmbalmingRank,
 } from '../utils/mortuaryMath';
 import { PourStage } from './embalming/EmbalmingPourVisuals';
+import { EMBALMING_SUPPLY_BASE } from '../data/newsHeadlines';
+import { quotedPrice } from '../news/newsWire';
+import { gameNow } from '../utils/gameNow';
 
 type FluidType = 'WATER' | 'FORMALDEHYDE' | 'SOFTENER';
 
@@ -35,7 +38,14 @@ export const EmbalmingMiniGame: React.FC = () => {
     setActiveStation,
     takeCaseToStation,
     focusCase,
+    newsWire,
   } = useGameStore();
+  const supplyAsk = quotedPrice(
+    EMBALMING_SUPPLY_BASE,
+    'EMBALMING',
+    newsWire,
+    gameNow()
+  );
   const currentCase = caseAtLocation(cases, 'EMBALMING', activeCaseId);
 
   useEffect(() => {
@@ -224,6 +234,15 @@ export const EmbalmingMiniGame: React.FC = () => {
           <h2 className="text-lg md:text-xl font-bold text-emerald-400">
             EMBALMING FLUID MIXER — {label}
           </h2>
+          <p className="text-[11px] text-slate-500">
+            Supplies ${supplyAsk}
+            {supplyAsk > EMBALMING_SUPPLY_BASE
+              ? ' ▲'
+              : supplyAsk < EMBALMING_SUPPLY_BASE
+                ? ' ▼'
+                : ''}{' '}
+            this prep
+          </p>
           <p className="text-sm text-slate-400">
             Weight:{' '}
             <span className="text-white font-semibold">

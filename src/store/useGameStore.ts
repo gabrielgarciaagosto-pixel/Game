@@ -157,6 +157,13 @@ import {
   pickFamilyUrnRequest,
 } from '../data/familyUrnPick';
 import { gameNow } from '../utils/gameNow';
+import { EMBALMING_SUPPLY_BASE, type NewsHeadline } from '../data/newsHeadlines';
+import {
+  advanceNewsWire,
+  headlineFeeDelta,
+  quotedPrice,
+  type NewsWireItem,
+} from '../news/newsWire';
 
 const TAG_WINDOW_MS = 60_000;
 const INTAKE_MIN_MS = 180_000;
@@ -248,6 +255,15 @@ interface GameState {
   intermentScore: number;
   /** Newest intake or last finished service (persisted). */
   lastCase: LastCaseNote | null;
+  /** Headlines currently on the hub wire. */
+  newsWire: NewsWireItem[];
+  /** Earliest gameNow() for the next volume or price effect. */
+  newsNextLiveAt: number;
+  /** Earliest gameNow() for the next celebrity roll. */
+  newsCelebGate: number;
+  /** Headline ids that just left the wire, so they do not repeat at once. */
+  newsRecent: string[];
+  tickNews: () => void;
   /**
    * Wall-clock when the player left the embalming table.
    * Fumes linger on the hub. Not persisted.
@@ -555,6 +571,7 @@ export function generateRandomCase(now = gameNow()): DecedentCase {
     cremationPermitEvaluatesAt: null,
     cremationPermitRejectReason: null,
     unpermittedCremation: false,
+    headlineCase: null,
   };
 }
 
@@ -570,6 +587,22 @@ export function basePayoutFor(directive: DecedentCase['directive']): number {
     case 'CREMATION_THEN_VIEWING':
       return 2500;
   }
+}
+
+function generateHeadlineCase(h: NewsHeadline, now = gameNow()): DecedentCase {
+  const base = generateRandomCase(now);
+  const directive = 'BURIAL_VIEWING' as const;
+  const stageName = h.celeb ?? base.name;
+  return {
+    ...base,
+    name: stageName,
+    directive,
+    basePayout: basePayoutFor(directive),
+    familyUrnDueAt: directiveNeedsUrn(directive) ? base.familyUrnDueAt : null,
+    cremationPermitStatus: initialPermitStatus(directive),
+    cremationPermitRejectReason: null,
+    headlineCase: { headlineId: h.id, stageName },
+  };
 }
 
 export function toInboxFile(c: DecedentCase): CaseInboxFile {
@@ -592,6 +625,9 @@ export function toInboxFile(c: DecedentCase): CaseInboxFile {
     placeOfBirth: c.placeOfBirth,
     cremationPermitStatus: c.cremationPermitStatus,
     cremationPermitRejectReason: c.cremationPermitRejectReason,
+    headlineNote: c.headlineCase
+      ? 'Headline case. Tag the body, keep it fresh, embalm, and set a chapel the family would know. Careful work pays about 2.4× the fee. A sloppy service pays less than the ordinary fee.'
+      : null,
   };
 }
 
@@ -650,6 +686,7 @@ function normalizeCase(c: DecedentCase): DecedentCase {
     cremationPermitEvaluatesAt: c.cremationPermitEvaluatesAt ?? null,
     cremationPermitRejectReason: c.cremationPermitRejectReason ?? null,
     unpermittedCremation: c.unpermittedCremation ?? false,
+    headlineCase: c.headlineCase ?? null,
   };
 }
 
@@ -852,6 +889,10 @@ export function freshPersistedGameFields() {
     fleetAssignment: { ...EMPTY_FLEET_ASSIGNMENT },
     intermentScore: 0,
     lastCase: null as LastCaseNote | null,
+    newsWire: [] as NewsWireItem[],
+    newsNextLiveAt: 0,
+    newsCelebGate: 0,
+    newsRecent: [] as string[],
   };
 }
 
@@ -1251,6 +1292,61 @@ export const useGameStore = create<GameState>()(
     return true;
   },
 
+  tickNews: () => {
+    const state = get();
+    if (!state.hasStartedGame || state.bankForeclosed) return;
+    const now = gameNow();
+    const coolerCount = state.cases.filter((c) => c.location === 'COOLER').length;
+    const cap = coolerBayCapacity(state.facilityLevels.cooler_bays || 0);
+    const result = advanceNewsWire({
+      wire: state.newsWire,
+      nextLiveAt: state.newsNextLiveAt,
+      celebGate: state.newsCelebGate,
+      recent: state.newsRecent,
+      now,
+      ownedListingId: state.ownedProperty?.listingId ?? '',
+      openCaseIds: new Set(state.cases.map((c) => c.id)),
+      coolerFull: coolerCount >= cap,
+    });
+    if (!result.changed && !result.spawn) return;
+
+    let cases = state.cases;
+    let inboxFiles = state.inboxFiles;
+    let wire = result.wire;
+    let intakeToast = state.intakeToast;
+    let lastCase = state.lastCase;
+    let activeCaseId = state.activeCaseId;
+    const spawn = result.spawn;
+    if (spawn && coolerCount < cap) {
+      const next = generateHeadlineCase(spawn, now);
+      playIntakeBell();
+      cases = [...cases, next];
+      inboxFiles = [toInboxFile(next), ...inboxFiles];
+      wire = wire.map((item) =>
+        item.live && item.headlineId === spawn.id ? { ...item, caseId: next.id } : item
+      );
+      intakeToast = `${next.name} — headline intake`;
+      activeCaseId = activeCaseId ?? next.id;
+      lastCase = {
+        id: next.id,
+        name: displayCaseName(next),
+        service: directiveLabel(next.directive),
+        at: next.arrivedAt,
+      };
+    }
+    set({
+      newsWire: wire,
+      newsNextLiveAt: result.nextLiveAt,
+      newsCelebGate: result.celebGate,
+      newsRecent: result.recent,
+      cases,
+      inboxFiles,
+      intakeToast,
+      activeCaseId,
+      lastCase,
+    });
+  },
+
   expireUntaggedNames: () =>
     set((state) => {
       const now = gameNow();
@@ -1315,7 +1411,12 @@ export const useGameStore = create<GameState>()(
       const count = retortCount(state.facilityLevels);
       const bays = alignBays(state.retortBays, count);
       const bay = bays[state.activeRetortIndex ?? 0] ?? defaultRetortBay();
-      const cost = fuelCostFor(bay.fuelTier);
+      const cost = quotedPrice(
+        fuelCostFor(bay.fuelTier),
+        'FUEL',
+        state.newsWire,
+        gameNow()
+      );
       const note = {
         id: `led_fuel_${gameNow()}`,
         at: gameNow(),
@@ -2052,7 +2153,11 @@ export const useGameStore = create<GameState>()(
           embalmTipMultiplier: tip,
           decayLevel: c.decayLevel,
         })),
-        cash: Math.round(state.cash + 350 * tip),
+        cash: Math.round(
+          state.cash +
+            350 * tip -
+            quotedPrice(EMBALMING_SUPPLY_BASE, 'EMBALMING', state.newsWire, gameNow())
+        ),
         reputation:
           state.reputation +
           (savedRank === 'S+'
@@ -2254,9 +2359,14 @@ export const useGameStore = create<GameState>()(
   buyShowroomItem: (itemId) =>
     set((state) => {
       const item = state.showroomInventory.find((i) => i.id === itemId);
-      if (!item || state.cash < item.cost) return state;
+      if (!item) return state;
+      const cost =
+        item.category === 'FLOWER'
+          ? quotedPrice(item.cost, 'FLOWERS', state.newsWire, gameNow())
+          : item.cost;
+      if (state.cash < cost) return state;
       return {
-        cash: state.cash - item.cost,
+        cash: state.cash - cost,
         reputation: state.reputation + Math.min(8, item.prestigeBonus),
         showroomInventory: state.showroomInventory.map((i) =>
           i.id === itemId ? { ...i, ownedCount: i.ownedCount + 1 } : i
@@ -2267,7 +2377,10 @@ export const useGameStore = create<GameState>()(
   buyUrn: (urnId) => {
     const state = get();
     const urn = getUrnById(urnId);
-    if (!urn || state.cash < urn.cost) return false;
+    const ask = urn
+      ? quotedPrice(urn.cost, 'URNS', state.newsWire, gameNow())
+      : 0;
+    if (!urn || state.cash < ask) return false;
     if (state.reputation < (urn.reputationRequired ?? 0)) return false;
 
     let shopRotation = state.shopRotation;
@@ -2282,7 +2395,7 @@ export const useGameStore = create<GameState>()(
     }
 
     set({
-      cash: state.cash - urn.cost,
+      cash: state.cash - ask,
       reputation: state.reputation + Math.min(10, urn.prestigeBonus),
       urnInventory: {
         ...state.urnInventory,
@@ -2296,7 +2409,10 @@ export const useGameStore = create<GameState>()(
   buyCasket: (casketId) => {
     const state = get();
     const casket = getCasketById(casketId);
-    if (!casket || state.cash < casket.cost) return false;
+    const ask = casket
+      ? quotedPrice(casket.cost, 'CASKETS', state.newsWire, gameNow())
+      : 0;
+    if (!casket || state.cash < ask) return false;
     if (state.reputation < (casket.reputationRequired ?? 0)) return false;
 
     let shopRotation = state.shopRotation;
@@ -2311,7 +2427,7 @@ export const useGameStore = create<GameState>()(
     }
 
     set({
-      cash: state.cash - casket.cost,
+      cash: state.cash - ask,
       reputation: state.reputation + Math.min(10, casket.prestigeBonus),
       casketInventory: {
         ...state.casketInventory,
@@ -3084,7 +3200,24 @@ export const useGameStore = create<GameState>()(
       const bayPay = burned
         ? retortBayCaseBonus(retortCount(state.facilityLevels))
         : 0;
-      const fuelMetered = burned ? fuelCostFor(c.retortFuelTier ?? 0) : 0;
+      const fuelMetered = burned
+        ? quotedPrice(fuelCostFor(c.retortFuelTier ?? 0), 'FUEL', state.newsWire, gameNow())
+        : 0;
+      const headlineAdjust =
+        c.headlineCase && !serviceFailed
+          ? headlineFeeDelta({
+              baseFee: c.basePayout,
+              failed: serviceFailed,
+              tagged: c.isTagged,
+              nameExpired: c.nameExpired,
+              decay: c.decayLevel,
+              embalmed: c.isEmbalmed,
+              chapelTotal: chapelScore.total,
+              needsEmbalm:
+                c.directive === 'BURIAL_VIEWING' ||
+                c.directive === 'VIEWING_THEN_CREMATION',
+            })
+          : 0;
       const sealedPay = !serviceFailed && c.isUrnFilled ? 240 : 0;
       const standing = serviceFailed
         ? 0
@@ -3106,7 +3239,8 @@ export const useGameStore = create<GameState>()(
         preheatPay +
         queuePay +
         bayPay +
-        standing -
+        standing +
+        headlineAdjust -
         decayPenalty;
       const housePaid = serviceFailed
         ? 0
@@ -3127,6 +3261,7 @@ export const useGameStore = create<GameState>()(
       const payoutLines: { label: string; amount: number }[] = [];
       if (!serviceFailed) {
         pushLine(payoutLines, 'Service fee', c.basePayout);
+        pushLine(payoutLines, 'Headline', headlineAdjust);
         pushLine(payoutLines, 'Chapel', flowerBonus);
         pushLine(payoutLines, 'Tip', chapelTip);
         pushLine(payoutLines, 'Urn', urnSale + urnTasteBonus);
@@ -3405,6 +3540,10 @@ export const useGameStore = create<GameState>()(
         fleetAssignment: state.fleetAssignment,
         intermentScore: state.intermentScore,
         lastCase: state.lastCase,
+        newsWire: state.newsWire,
+        newsNextLiveAt: state.newsNextLiveAt,
+        newsCelebGate: state.newsCelebGate,
+        newsRecent: state.newsRecent,
       }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<GameState>;
@@ -3560,3 +3699,7 @@ export const useGameStore = create<GameState>()(
     }
   )
 );
+
+if (import.meta.env.DEV) {
+  Object.assign(globalThis, { __ossuarian: useGameStore });
+}

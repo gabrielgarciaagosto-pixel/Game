@@ -193,6 +193,14 @@ export const CaseInboxWidget: React.FC = () => {
                       Case ID #{activeFile.id} ·{' '}
                       {new Date(activeFile.intakeTimestamp).toLocaleTimeString()}
                     </span>
+                    {activeFile.headlineNote && (
+                      <p
+                        data-headline-case
+                        className="mt-1 text-[11px] leading-snug text-amber-200"
+                      >
+                        {activeFile.headlineNote}
+                      </p>
+                    )}
                   </div>
                   <button
                     type="button"

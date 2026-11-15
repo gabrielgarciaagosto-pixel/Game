@@ -12,6 +12,7 @@ import { retortProgress } from '../retort/retortTypes';
 import { directiveLabel, displayCaseName, type StationId } from '../types/game';
 import { useGameStore, type LastCaseNote } from '../store/useGameStore';
 import { HubAtmosphere } from './hub/HubAtmosphere';
+import { NewsTicker } from './hub/NewsTicker';
 import type { DecedentCase } from '../types/game';
 
 type StatId = 'cash' | 'rep' | 'int' | 'oss' | 'urns';
@@ -381,13 +382,8 @@ export const MainHubMenu: React.FC = () => {
       )}
 
       <div className="relative z-40 shrink-0 border-b border-slate-800/90 pb-2 space-y-2 px-1">
-        <div>
-          <h1 className="text-lg font-black tracking-[0.08em] text-slate-50 leading-tight">
-            OSSUARIAN
-            <span className="block text-sm font-semibold tracking-[0.22em] text-amber-200/90">
-              FIRST URN
-            </span>
-          </h1>
+        <div className="space-y-1">
+          <NewsTicker />
           <p className="text-[11px] text-slate-400 leading-snug" data-hub-last-case>
             Last case:{' '}
             <span className="text-amber-300 font-semibold">{lastCaseLine(lastCase, cases)}</span>

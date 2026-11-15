@@ -237,6 +237,14 @@ export interface DecedentCase {
   cremationPermitRejectReason: string | null;
   /** True if this case was cremated without an approved permit */
   unpermittedCremation: boolean;
+  /**
+   * Set when the county wire sends this person to the parlor.
+   * A careful service pays well above the card. A sloppy one pays less.
+   */
+  headlineCase?: {
+    headlineId: string;
+    stageName: string;
+  } | null;
 }
 
 export interface CaseInboxFile {
@@ -264,6 +272,8 @@ export interface CaseInboxFile {
     | 'APPROVED'
     | 'REJECTED';
   cremationPermitRejectReason: string | null;
+  /** County-wire note. Null on an ordinary file. */
+  headlineNote?: string | null;
 }
 
 export interface ShowroomItem {

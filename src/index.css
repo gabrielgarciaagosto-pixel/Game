@@ -911,3 +911,28 @@ canvas {
   from { opacity: 0.9; transform: translate(-50%, -50%) scale(1); }
   to { opacity: 0; transform: translate(-50%, -120%) scale(0.4); }
 }
+
+@keyframes news-swap {
+  from { transform: translateY(70%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.news-swap {
+  animation: news-swap 0.45s ease;
+}
+.news-track {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(251, 191, 36, 0.85), transparent);
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  animation: news-track 2.8s linear infinite;
+}
+@keyframes news-track {
+  from { background-position: -40% 0; }
+  to { background-position: 140% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .news-swap,
+  .news-track {
+    animation: none;
+  }
+}
