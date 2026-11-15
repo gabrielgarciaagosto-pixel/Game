@@ -61,6 +61,29 @@ function HoneywellReadout({
   sp: number;
   compact?: boolean;
 }) {
+  if (compact) {
+    return (
+      <div className="w-full mb-1 bg-black border border-zinc-500 rounded px-1 py-0.5 font-mono text-left">
+        <div className="text-[6px] uppercase tracking-wide text-zinc-400 leading-none truncate">
+          {label}
+        </div>
+        <div className="mt-0.5 flex items-end justify-between gap-1">
+          <div className="min-w-0">
+            <div className="text-[6px] text-sky-400 leading-none">PV</div>
+            <div className="text-[12px] text-sky-300 leading-none tabular-nums">
+              {Math.round(pv)}
+            </div>
+          </div>
+          <div className="min-w-0 text-right">
+            <div className="text-[6px] text-amber-300 leading-none">SP</div>
+            <div className="text-[11px] text-amber-200 leading-none tabular-nums">
+              {Math.round(sp)}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="bg-zinc-950 border border-zinc-600 rounded p-2 font-mono">
       <div className="text-[9px] uppercase tracking-wider text-zinc-500 mb-1">
@@ -69,9 +92,7 @@ function HoneywellReadout({
       <div className="flex items-end gap-2">
         <div>
           <div className="text-[8px] text-sky-400">PV</div>
-          <div
-            className={`${compact ? 'text-xl' : 'text-3xl'} text-sky-300 leading-none tabular-nums`}
-          >
+          <div className="text-3xl text-sky-300 leading-none tabular-nums">
             {Math.round(pv)}
           </div>
         </div>
@@ -83,6 +104,52 @@ function HoneywellReadout({
         </div>
       </div>
       <div className="text-[8px] text-zinc-600 mt-1">Honeywell · Millennium</div>
+    </div>
+  );
+}
+
+function DoorPlate({ title, subtitle }: { title: string; subtitle: string }) {
+  const words = title.split(' ');
+  const stacked = title.length > 12 && words.length > 1;
+  return (
+    <div className="absolute left-1/2 top-[15%] -translate-x-1/2 w-[min(10.75rem,86%)] px-2.5 py-1.5 rounded-md border border-zinc-200/40 bg-zinc-900/55 flex flex-col items-center justify-center text-center overflow-hidden">
+      {stacked ? (
+        words.map((word) => (
+          <span
+            key={word}
+            className="block max-w-full text-[8px] font-black tracking-[0.08em] text-zinc-100 leading-tight"
+          >
+            {word}
+          </span>
+        ))
+      ) : (
+        <span className="block max-w-full text-[8px] font-black tracking-[0.12em] text-zinc-100 leading-tight">
+          {title}
+        </span>
+      )}
+      <span className="text-[7px] text-zinc-300 tracking-[0.14em] mt-0.5">
+        {subtitle}
+      </span>
+    </div>
+  );
+}
+
+function PanelHeading({
+  zoomed,
+  children,
+}: {
+  zoomed: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`text-center font-black uppercase leading-tight text-current ${
+        zoomed
+          ? 'text-[11px] tracking-[0.14em] mb-2'
+          : 'text-[7px] tracking-[0.04em] mb-0.5'
+      }`}
+    >
+      {children}
     </div>
   );
 }
@@ -213,15 +280,25 @@ function HoldButton({
   );
 }
 
+function lampInk(look: RetortButtonStyleId): string {
+  if (look === 'touch') return 'text-cyan-50';
+  if (look === 'dial') return 'text-[#f6efe2]';
+  if (look === 'brass') return 'text-[#1a1208]';
+  return 'text-zinc-800';
+}
+
 function StatusLamp({
   on,
   color,
   label,
+  compact,
 }: {
   on: boolean;
   color: 'white' | 'amber' | 'green' | 'red';
   label: string;
+  compact?: boolean;
 }) {
+  const look = React.useContext(ButtonLookContext);
   const lit =
     color === 'amber'
       ? 'bg-amber-400 shadow-[0_0_12px_#fbbf24]'
@@ -231,13 +308,17 @@ function StatusLamp({
           ? 'bg-red-500 shadow-[0_0_12px_#ef4444]'
           : 'bg-zinc-100 shadow-[0_0_10px_#f4f4f5]';
   return (
-    <div className="flex flex-col items-center gap-1 min-w-0">
+    <div className="flex flex-col items-center gap-0.5 min-w-0 w-full">
       <div
-        className={`w-4 h-4 rounded-full border border-zinc-700 transition-all ${
+        className={`w-4 h-4 rounded-full border border-zinc-700 transition-all shrink-0 ${
           on ? lit : 'bg-zinc-800'
         } ${on && (color === 'amber' || color === 'red') ? 'animate-pulse' : ''}`}
       />
-      <span className="text-[8px] uppercase tracking-wide text-zinc-500 text-center leading-tight">
+      <span
+        className={`block w-full text-center font-bold uppercase leading-tight whitespace-normal ${lampInk(look)} ${
+          compact ? 'text-[7px]' : 'text-[10px]'
+        }`}
+      >
         {label}
       </span>
     </div>
@@ -834,7 +915,7 @@ export const CremationMiniGame: React.FC = () => {
   const controlPanel = (zoomed: boolean) => (
     <div
       className={`${stockPanel} overflow-y-auto ${
-        zoomed ? 'flex-1 p-4 rounded-xl' : 'w-[30%] max-w-[120px] p-1.5 rounded-lg'
+        zoomed ? 'flex-1 p-4 rounded-xl' : 'w-[38%] max-w-[152px] p-1 rounded-lg'
       }`}
       onPointerDown={(e) => {
         if (!zoomed) {
@@ -856,16 +937,12 @@ export const CremationMiniGame: React.FC = () => {
         </button>
       )}
       {!zoomed && (
-        <div className="text-[7px] font-black text-center text-zinc-700 mb-1 leading-tight">
+        <div className="text-[7px] font-black text-center text-current mb-1 leading-tight">
           TAP TO OPERATE
         </div>
       )}
 
-      <div
-        className={`text-center font-black tracking-[0.15em] text-zinc-700 ${zoomed ? 'text-[11px] mb-2' : 'text-[7px] mb-1'}`}
-      >
-        BLOWER
-      </div>
+      <PanelHeading zoomed={zoomed}>Blower</PanelHeading>
       <div className={`flex justify-center ${zoomed ? 'gap-4 mb-2' : 'gap-1 mb-1'}`}>
         <PushButton
           color="green"
@@ -880,23 +957,32 @@ export const CremationMiniGame: React.FC = () => {
           size={zoomed ? 'md' : 'sm'}
         />
       </div>
-      <div className={`flex justify-center ${zoomed ? 'gap-5 mb-3' : 'gap-1 mb-1'}`}>
-        <StatusLamp on={blowerOn && !purging} color="white" label="Ready" />
+      <div
+        className={`grid grid-cols-3 w-full ${zoomed ? 'gap-3 mb-3 px-2' : 'gap-1 mb-1'}`}
+      >
         <StatusLamp
+          compact={!zoomed}
+          on={blowerOn && !purging}
+          color="white"
+          label="Ready"
+        />
+        <StatusLamp
+          compact={!zoomed}
           on={purging}
           color="amber"
           label={purging ? `Purging ${purgeSecLeft}s` : 'Purging'}
         />
-        <StatusLamp on={heated && !purging} color="green" label="Heated" />
+        <StatusLamp
+          compact={!zoomed}
+          on={heated && !purging}
+          color="green"
+          label="Heated"
+        />
       </div>
 
       {zoomed && <div className="h-px bg-zinc-600/50 my-2" />}
 
-      <div
-        className={`text-center font-black tracking-wider text-zinc-700 ${zoomed ? 'text-[9px] mb-1' : 'text-[6px] mb-0.5 leading-tight'}`}
-      >
-        {zoomed ? 'SECONDARY CHAMBER' : 'SEC'}
-      </div>
+      <PanelHeading zoomed={zoomed}>Secondary Chamber</PanelHeading>
       <div className={`flex justify-center ${zoomed ? 'gap-3 mb-1' : 'gap-1 mb-1'}`}>
         <PushButton
           color="green"
@@ -918,31 +1004,21 @@ export const CremationMiniGame: React.FC = () => {
           size={zoomed ? 'md' : 'sm'}
         />
       </div>
+      <HoneywellReadout
+        compact={!zoomed}
+        label="Afterburner"
+        pv={secondaryTemp}
+        sp={secondarySp}
+      />
       {zoomed && (
-        <>
-          <HoneywellReadout
-            label="Afterburner"
-            pv={secondaryTemp}
-            sp={secondarySp}
-          />
-          <p className="text-[8px] text-center text-zinc-700 mt-1 mb-2">
-            Reach ~800°F before primary. Ideal ≥850°F.
-          </p>
-        </>
-      )}
-      {!zoomed && (
-        <div className="text-[8px] font-mono text-center text-sky-800 tabular-nums mb-1">
-          {Math.round(secondaryTemp)}°
-        </div>
+        <p className="text-[8px] text-center text-current mt-1 mb-2">
+          Reach ~800°F before primary. Ideal ≥850°F.
+        </p>
       )}
 
       {zoomed && <div className="h-px bg-zinc-600/50 my-2" />}
 
-      <div
-        className={`text-center font-black tracking-wider text-zinc-700 ${zoomed ? 'text-[9px] mb-1' : 'text-[6px] mb-0.5'}`}
-      >
-        {zoomed ? 'PRIMARY CHAMBER' : 'PRI'}
-      </div>
+      <PanelHeading zoomed={zoomed}>Primary Chamber</PanelHeading>
       <div className={`flex justify-center ${zoomed ? 'gap-3 mb-1' : 'gap-1 mb-1'}`}>
         <PushButton
           color="green"
@@ -960,37 +1036,25 @@ export const CremationMiniGame: React.FC = () => {
           size={zoomed ? 'md' : 'sm'}
         />
       </div>
+      <HoneywellReadout
+        compact={!zoomed}
+        label="Main Chamber"
+        pv={primaryTemp}
+        sp={primarySp}
+      />
       {zoomed && (
-        <>
-          <HoneywellReadout
-            label="Main Chamber"
-            pv={primaryTemp}
-            sp={primarySp}
-          />
-          <p className="text-[8px] text-center text-zinc-700 mt-1 mb-2">
-            Dial at the foot of the retort sets this SP. Stirs {stirCount}/
-            {targets.requiredStirs} · Runaways {thermalWarnings}
-            {secondaryTemp < 850 && secondaryOn && (
-              <span className="block text-amber-800 font-bold">
-                Below 850°F — quality risk
-              </span>
-            )}
-          </p>
-        </>
-      )}
-      {!zoomed && (
-        <div className="text-[8px] font-mono text-center text-orange-800 tabular-nums mb-1">
-          {Math.round(primaryTemp)}°
-        </div>
+        <p className="text-[8px] text-center text-current mt-1 mb-2">
+          Dial at the foot of the retort sets this SP. Stirs {stirCount}/
+          {targets.requiredStirs} · Runaways {thermalWarnings}
+          {secondaryTemp < 850 && secondaryOn && (
+            <span className="block font-bold">Below 850°F — quality risk</span>
+          )}
+        </p>
       )}
 
       {zoomed && <div className="h-px bg-zinc-600/50 my-2" />}
 
-      <div
-        className={`text-center font-black tracking-[0.15em] text-zinc-700 ${zoomed ? 'text-[11px] mb-2' : 'text-[7px] mb-1'}`}
-      >
-        DOOR
-      </div>
+      <PanelHeading zoomed={zoomed}>Door</PanelHeading>
       <div className={`flex justify-center ${zoomed ? 'gap-4 mb-1' : 'gap-1 mb-1'}`}>
         <HoldButton
           color="silver"
@@ -1193,16 +1257,14 @@ export const CremationMiniGame: React.FC = () => {
                 />
                 <div className="absolute left-2 top-2 bottom-2 w-1.5 rounded-full bg-black/40" />
                 <div className="absolute right-2 top-2 bottom-2 w-1.5 rounded-full bg-black/40" />
-                <div className="absolute left-1/2 top-[18%] -translate-x-1/2 w-24 h-14 rounded-md border border-zinc-200/40 bg-zinc-900/35 flex flex-col items-center justify-center">
-                  <span className="text-[8px] font-black tracking-[0.2em] text-zinc-100">
-                    {bay.brand === 'millennium'
+                <DoorPlate
+                  title={
+                    bay.brand === 'millennium'
                       ? 'MILLENNIUM'
-                      : brandLabel(bay.brand).toUpperCase()}
-                  </span>
-                  <span className="text-[7px] text-zinc-300">
-                    {bay.brand === 'millennium' ? 'REFRACTORY' : 'PLATE'}
-                  </span>
-                </div>
+                      : brandLabel(bay.brand).toUpperCase()
+                  }
+                  subtitle={bay.brand === 'millennium' ? 'REFRACTORY' : 'PLATE'}
+                />
                 {Array.from({ length: 4 }).map((_, i) => (
                   <div
                     key={i}

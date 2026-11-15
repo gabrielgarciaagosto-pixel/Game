@@ -3,6 +3,7 @@ import {
   FLEET_BRAND,
   FLEET_CATALOG,
   FLEET_CLASS_LABEL,
+  coachPerkNote,
   fleetBonusLine,
   resolveCortege,
   type FleetClass,
@@ -282,6 +283,7 @@ export const FleetBrowser: React.FC = () => {
                     'Flower cars add cortege cash on a successful service.'}
                   {detail.fleetClass === 'COACH' &&
                     'Coaches add Interment for this service and the house total on the HUD.'}
+                  {coachPerkNote(detail) ? ` ${coachPerkNote(detail)}` : ''}
                   {' '}
                   Best owned vehicle in each class rolls automatically.
                 </p>

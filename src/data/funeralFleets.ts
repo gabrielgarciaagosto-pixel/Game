@@ -16,6 +16,14 @@ export interface FleetVehicle {
   moneyBonus: number;
   /** Hearses: interment points this service (also added to the house total) */
   interment: number;
+  /** Parish coaches: reputation on every successful service */
+  serviceRep?: number;
+  /** Parish coaches: cash kept each service (cheaper upkeep) */
+  upkeepSaved?: number;
+  /** Parish coaches: reputation only when the service includes a viewing or burial */
+  memorialRep?: number;
+  /** Parish coaches: extra family tip */
+  houseTip?: number;
   length: string;
   power: string;
   crew: string;
@@ -76,7 +84,14 @@ function pewterVariant(
   price: number,
   finish: string,
   blurb: string,
-  house: { builder: string; builderLine: string }
+  house: { builder: string; builderLine: string },
+  edge: {
+    interment?: number;
+    serviceRep?: number;
+    upkeepSaved?: number;
+    memorialRep?: number;
+    houseTip?: number;
+  } = {}
 ): FleetVehicle {
   return {
     id,
@@ -88,7 +103,11 @@ function pewterVariant(
     price,
     repBonus: 0,
     moneyBonus: 0,
-    interment: 6,
+    interment: edge.interment ?? 6,
+    serviceRep: edge.serviceRep ?? 0,
+    upkeepSaved: edge.upkeepSaved ?? 0,
+    memorialRep: edge.memorialRep ?? 0,
+    houseTip: edge.houseTip ?? 0,
     length: "19'6\"",
     power: '5.7L V8',
     crew: 'Casket + 2',
@@ -259,7 +278,8 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     3600,
     'Cool gray, alloy wheels',
     'The parish body in cool gray, with the twin irons kept and alloy wheels in the same wells.',
-    HEARTH
+    HEARTH,
+    { serviceRep: 1 }
   ),
   pewterVariant(
     'coa_pewter_hollis_night',
@@ -267,7 +287,8 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     3900,
     'Near-black, rear pad',
     'Near-black paint and a rear roof pad only. Whitewalls stay where the original put them.',
-    HEARTH
+    HEARTH,
+    { serviceRep: 2 }
   ),
   pewterVariant(
     'coa_pewter_hollis_chapel',
@@ -275,7 +296,8 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     4200,
     'Warm stone, disc wheels',
     'Warm stone paint, one landau iron, and a chrome disc over the whitewall.',
-    HEARTH
+    HEARTH,
+    { serviceRep: 3 }
   ),
   pewterVariant(
     'coa_pewter_keene_plain',
@@ -283,7 +305,8 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     2800,
     'Charcoal, blackwalls',
     'No landau irons and no belt. Blackwall tires on the parish wells.',
-    MARROW
+    MARROW,
+    { upkeepSaved: 40 }
   ),
   pewterVariant(
     'coa_pewter_keene_iron',
@@ -291,7 +314,8 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     3400,
     'Olive gray, blackwalls',
     'Olive gray, the twin irons returned, and blackwall tires.',
-    MARROW
+    MARROW,
+    { upkeepSaved: 80 }
   ),
   pewterVariant(
     'coa_pewter_keene_disc',
@@ -299,7 +323,8 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     4100,
     'Slate, disc whitewall',
     'Slate paint, a single iron, and a disc hub on the whitewall.',
-    MARROW
+    MARROW,
+    { upkeepSaved: 120 }
   ),
   pewterVariant(
     'coa_pewter_vesper_arch',
@@ -307,7 +332,8 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     4500,
     'Blue-gray, arched iron',
     'One arched iron and a round tail lamp. The 1994 body is unchanged.',
-    VESPER
+    VESPER,
+    { interment: 8 }
   ),
   pewterVariant(
     'coa_pewter_vesper_low',
@@ -315,7 +341,8 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     4300,
     'Pewter, low roof pad',
     'A lower roof pad, one iron, and alloy wheels in the original wells.',
-    VESPER
+    VESPER,
+    { interment: 7 }
   ),
   pewterVariant(
     'coa_pewter_vesper_lantern',
@@ -323,7 +350,8 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     4800,
     'Warm gray, round lamp',
     'Round headlamp, an arched iron, and wire wheels. Same nose, same roof line.',
-    VESPER
+    VESPER,
+    { interment: 8, serviceRep: 1 }
   ),
   pewterVariant(
     'coa_pewter_sable_split',
@@ -331,7 +359,8 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     4000,
     'Light body, black quarter',
     'Light paint, a black rear roof only, and a thin belt. Whitewalls.',
-    SABLE
+    SABLE,
+    { memorialRep: 2 }
   ),
   pewterVariant(
     'coa_pewter_sable_wire',
@@ -339,7 +368,8 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     4600,
     'Ivory-gray, wire wheels',
     'Ivory-gray paint, twin irons, and wire wheels. The box does not grow.',
-    SABLE
+    SABLE,
+    { interment: 7, memorialRep: 3 }
   ),
   pewterVariant(
     'coa_pewter_quill_alloy',
@@ -347,7 +377,8 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     3700,
     'Medium gray, stacked lamps',
     'Stacked lamps and alloy wheels. One iron. The parish silhouette stays.',
-    QUILL
+    QUILL,
+    { houseTip: 55 }
   ),
   pewterVariant(
     'coa_pewter_quill_stack',
@@ -355,7 +386,8 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     3500,
     'Green-gray, blackwalls',
     'Stacked lamps, no extra iron, blackwall tires. The body path is the parish body.',
-    QUILL
+    QUILL,
+    { houseTip: 30 }
   ),
   {
     id: 'coa_iron_landau',
@@ -443,10 +475,17 @@ export function normalizeFleetAssignment(raw: unknown): FleetAssignment {
   };
 }
 
+/** Coach rank for auto-best. Interment leads. A parish perk cannot pass the next tier. */
 function classBonus(v: FleetVehicle): number {
   if (v.fleetClass === 'RECOVERY') return v.repBonus;
   if (v.fleetClass === 'ESCORT' || v.fleetClass === 'FLOWER') return v.moneyBonus;
-  return v.interment;
+  return (
+    v.interment * 100 +
+    (v.serviceRep ?? 0) * 12 +
+    (v.memorialRep ?? 0) * 8 +
+    Math.round((v.upkeepSaved ?? 0) / 25) +
+    Math.round((v.houseTip ?? 0) / 20)
+  );
 }
 
 /** Highest tier owned in a class (bonus breaks ties). */
@@ -518,5 +557,35 @@ export function fleetBonusLine(v: FleetVehicle): string {
   if (v.fleetClass === 'ESCORT' || v.fleetClass === 'FLOWER') {
     return `+$${v.moneyBonus.toLocaleString()} cortege`;
   }
-  return `Interment +${v.interment}`;
+  const parts = [`Interment +${v.interment}`];
+  if (v.serviceRep) parts.push(`Family +${v.serviceRep}`);
+  if (v.memorialRep) parts.push(`Memorial +${v.memorialRep}`);
+  if (v.upkeepSaved) parts.push(`Upkeep $${v.upkeepSaved} kept`);
+  if (v.houseTip) parts.push(`Tip +$${v.houseTip}`);
+  return parts.join(' · ');
+}
+
+/** One sentence for the coach detail sheet. Empty when the coach is interment only. */
+export function coachPerkNote(v: FleetVehicle): string | null {
+  if (v.fleetClass !== 'COACH') return null;
+  const bits: string[] = [];
+  if (v.serviceRep) {
+    bits.push(
+      `Family satisfaction +${v.serviceRep} reputation on every successful service.`
+    );
+  }
+  if (v.memorialRep) {
+    bits.push(
+      `Memorial prestige +${v.memorialRep} reputation when the service includes a viewing or burial.`
+    );
+  }
+  if (v.upkeepSaved) {
+    bits.push(
+      `Cheaper upkeep returns $${v.upkeepSaved} on a successful service.`
+    );
+  }
+  if (v.houseTip) {
+    bits.push(`A plainly kept coach. Families add $${v.houseTip} to the tip.`);
+  }
+  return bits.length ? bits.join(' ') : null;
 }

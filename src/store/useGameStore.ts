@@ -3003,9 +3003,6 @@ export const useGameStore = create<GameState>()(
       const cremainsRep = serviceFailed
         ? 0
         : Math.floor((c.cremainsQuality ?? 0) / 28);
-      const tipCash = serviceFailed
-        ? 0
-        : chapelRewards.tipCash + pourTip + cremainsTip;
       const salesMult = Math.max(
         0.5,
         state.ownedProperty.salesMult ?? 1
@@ -3015,10 +3012,26 @@ export const useGameStore = create<GameState>()(
         state.ownedFleetIds,
         state.fleetAssignment
       );
-      const fleetRep = serviceFailed ? 0 : (cortege.recovery?.repBonus ?? 0);
+      const memorialService =
+        c.directive === 'BURIAL_VIEWING' ||
+        c.directive === 'VIEWING_THEN_CREMATION' ||
+        c.directive === 'CREMATION_THEN_VIEWING';
+      const coach = cortege.coach;
+      const coachRep = serviceFailed
+        ? 0
+        : (coach?.serviceRep ?? 0) +
+          (memorialService ? (coach?.memorialRep ?? 0) : 0);
+      const coachUpkeep = serviceFailed ? 0 : (coach?.upkeepSaved ?? 0);
+      const coachTip = serviceFailed ? 0 : (coach?.houseTip ?? 0);
+      const tipCash = serviceFailed
+        ? 0
+        : chapelRewards.tipCash + pourTip + cremainsTip + coachTip;
+      const fleetRep = serviceFailed
+        ? 0
+        : (cortege.recovery?.repBonus ?? 0) + coachRep;
       const escortCash = serviceFailed ? 0 : (cortege.escort?.moneyBonus ?? 0);
       const flowerCash = serviceFailed ? 0 : (cortege.flower?.moneyBonus ?? 0);
-      const fleetCash = escortCash + flowerCash;
+      const fleetCash = escortCash + flowerCash + coachUpkeep;
       const fleetInterment = serviceFailed
         ? 0
         : (cortege.coach?.interment ?? 0);
