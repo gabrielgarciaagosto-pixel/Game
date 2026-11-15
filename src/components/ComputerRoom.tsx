@@ -6,7 +6,12 @@ import {
 } from '../data/cremationPermits';
 import { US_PLACE_LABELS } from '../data/usPlaces';
 import { resolvePlayerName } from '../data/playerName';
-import { formatTimeOf } from '../utils/clock12';
+import {
+  formatTimeOf,
+  readTodFields,
+  writeTod,
+  type Meridiem,
+} from '../utils/clock12';
 import { gameDate, subscribeClock } from '../utils/gameNow';
 import { useGameStore } from '../store/useGameStore';
 import { BankBrowser } from './BankBrowser';
@@ -16,29 +21,6 @@ import { FuneraryEmporium } from './FuneraryEmporium';
 import { FleetBrowser } from './FleetBrowser';
 import { RealtyBrowser } from './RealtyBrowser';
 import { CrematoryCatalog } from './crematory/CrematoryCatalog';
-
-type Meridiem = 'AM' | 'PM';
-
-function readTodFields(raw: string): {
-  hour: string;
-  minute: string;
-  mer: Meridiem;
-} {
-  const match = raw.trim().match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/);
-  if (!match) return { hour: '', minute: '00', mer: 'AM' };
-  return {
-    hour: String(Number(match[1])),
-    minute: match[2],
-    mer: match[3].toUpperCase() === 'PM' ? 'PM' : 'AM',
-  };
-}
-
-function writeTod(hour: string, minute: string, mer: Meridiem): string {
-  if (!hour) return '';
-  const min = Number(minute);
-  if (!Number.isFinite(min) || min < 0 || min > 59) return '';
-  return `${Number(hour)}:${String(min).padStart(2, '0')} ${mer}`;
-}
 
 type DesktopApp =
   | 'DESKTOP'

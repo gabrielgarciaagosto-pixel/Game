@@ -30,8 +30,9 @@ export interface PermitFormDraft {
   dateOfBirth: string; // YYYY-MM-DD
   dateOfDeath: string;
   /**
-   * Time of death. VR-441 stores 12-hour text ("4:15 AM").
-   * Matching also accepts legacy 24-hour HHMM and HH:MM.
+   * Time of death. A finished VR-441 value is 12-hour text ("4:15 AM").
+   * While the hour is still blank the draft may be "" or ":15 PM"; those
+   * fragments are not a time. Matching also accepts legacy 24-hour HHMM and HH:MM.
    */
   timeOfDeath: string;
   placeOfBirth: string;
@@ -69,6 +70,7 @@ export function emptyPermitForm(): PermitFormDraft {
  * Normalize TOD for exact match into 4-digit 24-hour HHMM.
  * "4:15 AM" and "04:15 AM" → "0415". "9:40 PM" → "2140".
  * Legacy "09:30" and "0930" still match. "930" / "9:30" without AM/PM do not.
+ * A draft fragment ":15 PM" (hour not chosen yet) does not match.
  */
 export function normalizeTodToHhmm(raw: string): string | null {
   const trimmed = raw.trim().replace(/\s+/g, ' ');
