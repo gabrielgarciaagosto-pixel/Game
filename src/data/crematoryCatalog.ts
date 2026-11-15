@@ -228,8 +228,54 @@ export function liftPoorRank(rank: Rank, qualityTier: number): Rank {
   return next;
 }
 
+/**
+ * Metered gas per firing. The first plan is the one a new house feels.
+ * Later plans shrink the bill further; the payout also carries a fuel-plan
+ * bonus so the dearer steps still return in a handful of cases.
+ */
 export function fuelCostFor(tier: number): number {
-  return Math.round(48 * Math.pow(0.8, Math.max(0, Math.min(3, tier))));
+  const costs = [180, 60, 30, 12];
+  const i = Math.max(0, Math.min(costs.length - 1, tier));
+  return costs[i] ?? 180;
+}
+
+/** Extra cash at the service for fuel plans past the first. Tier 0 and 1 pay through the meter alone. */
+export function fuelPlanBonus(tier: number): number {
+  const bonus = [0, 0, 150, 410];
+  const i = Math.max(0, Math.min(bonus.length - 1, tier));
+  return bonus[i] ?? 0;
+}
+
+/** Cash a speed tier adds on a finished cremation. Each step returns its price in about 4–8 cases. */
+export function speedCaseBonus(tier: number): number {
+  const total = [0, 175, 455, 855, 1395, 2095];
+  const i = Math.max(0, Math.min(total.length - 1, tier));
+  return total[i] ?? 0;
+}
+
+/**
+ * Cash on top of the cremains tip. Combined with score × 1.6, a quality
+ * step returns its price in about 4–6 cases.
+ */
+export function qualityCaseBonus(tier: number): number {
+  const extra = [0, 160, 450, 960];
+  const i = Math.max(0, Math.min(extra.length - 1, tier));
+  return extra[i] ?? 0;
+}
+
+export function preheatCaseBonus(owned: boolean): number {
+  return owned ? 340 : 0;
+}
+
+export function queueCaseBonus(owned: boolean): number {
+  return owned ? 400 : 0;
+}
+
+/** Second chamber, then the third. The stock single retort adds nothing. */
+export function retortBayCaseBonus(count: number): number {
+  if (count >= 3) return 1950;
+  if (count >= 2) return 800;
+  return 0;
 }
 
 export function purgeMsFor(baseMs: number, preheat: boolean): number {

@@ -93,17 +93,8 @@ export const MenuThemeAudio: React.FC = () => {
   };
 
   useEffect(() => {
-    const unlock = () => {
-      void unlockGameAudio();
-    };
-    window.addEventListener('pointerdown', unlock, { once: true, passive: true });
-    window.addEventListener('keydown', unlock, { once: true });
-    window.addEventListener('touchstart', unlock, { once: true, passive: true });
-    return () => {
-      window.removeEventListener('pointerdown', unlock);
-      window.removeEventListener('keydown', unlock);
-      window.removeEventListener('touchstart', unlock);
-    };
+    audioManager.installGestureUnlock();
+    void unlockGameAudio();
   }, []);
 
   useEffect(() => {

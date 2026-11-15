@@ -131,7 +131,10 @@ export const CrematoryCatalog: React.FC = () => {
           {note}
         </p>
       )}
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 pt-3 pb-36 space-y-2">
+      <div
+        className="flex-1 min-h-0 overflow-y-auto px-3 pt-3 pb-4 space-y-2"
+        style={{ marginBottom: '8.5rem' }}
+      >
         <Card
           kicker="Speed"
           title={speedNext?.name ?? 'Speed line'}

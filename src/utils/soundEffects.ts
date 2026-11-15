@@ -1,20 +1,16 @@
 /**
  * Soft ash-pour bed — filtered noise with GainNode crossfade in/out.
- * Matches crematory polish without a separate asset file.
+ * Uses the shared music context so a second AudioContext cannot take
+ * Android audio focus and silence the beds.
  */
-let pourCtx: AudioContext | null = null;
+import { audioManager } from './audioManager';
+
 let pourGain: GainNode | null = null;
 let pourSource: AudioBufferSourceNode | null = null;
 const POUR_CROSSFADE_MS = 280;
 
-function getPourContext(): AudioContext {
-  if (pourCtx) return pourCtx;
-  const Ctor =
-    window.AudioContext ||
-    (window as unknown as { webkitAudioContext: typeof AudioContext })
-      .webkitAudioContext;
-  pourCtx = new Ctor();
-  return pourCtx;
+function sharedContext(): AudioContext {
+  return audioManager.outputContext();
 }
 
 function makeAshNoiseBuffer(ctx: AudioContext, seconds = 1.5): AudioBuffer {
@@ -33,9 +29,11 @@ function makeAshNoiseBuffer(ctx: AudioContext, seconds = 1.5): AudioBuffer {
 
 /** Fade in a looping ash pour bed (call while tilting). */
 export function startAshPourSfx(volume = 0.22) {
+  if (audioManager.isMuted() || audioManager.getSfxVolume() <= 0.001) return;
   try {
-    const ctx = getPourContext();
-    if (ctx.state === 'suspended') void ctx.resume();
+    const ctx = sharedContext();
+    if (ctx.state !== 'running') void ctx.resume();
+    const level = volume * Math.max(0.35, audioManager.getSfxVolume());
     const t = ctx.currentTime;
     const fade = POUR_CROSSFADE_MS / 1000;
     if (!pourGain) {
@@ -59,7 +57,7 @@ export function startAshPourSfx(volume = 0.22) {
     const g = pourGain.gain;
     g.cancelScheduledValues(t);
     g.setValueAtTime(Math.max(0.0001, g.value), t);
-    g.linearRampToValueAtTime(Math.max(0.0001, volume), t + fade);
+    g.linearRampToValueAtTime(Math.max(0.0001, level), t + fade);
   } catch {
     /* ignore */
   }
@@ -68,8 +66,9 @@ export function startAshPourSfx(volume = 0.22) {
 /** Crossfade pour SFX out. */
 export function stopAshPourSfx() {
   try {
-    if (!pourCtx || !pourGain) return;
-    const t = pourCtx.currentTime;
+    const ctx = audioManager.outputContext();
+    if (!pourGain) return;
+    const t = ctx.currentTime;
     const fade = POUR_CROSSFADE_MS / 1000;
     const g = pourGain.gain;
     g.cancelScheduledValues(t);
@@ -84,30 +83,34 @@ export function stopAshPourSfx() {
  * Synthesizes a clean mortuary service intake bell using the Web Audio API
  * (Zero external MP3 assets required; works offline on Android Capacitor)
  */
+function ringIntakeBell(ctx: AudioContext) {
+  const now = ctx.currentTime;
+  const level = Math.max(0.2, audioManager.getSfxVolume());
+  [880, 1760].forEach((freq, idx) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = idx === 0 ? 'sine' : 'triangle';
+    osc.frequency.setValueAtTime(freq, now);
+    gain.gain.setValueAtTime((idx === 0 ? 0.35 : 0.15) * level, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 1.8);
+  });
+}
+
 export function playIntakeBell() {
+  if (audioManager.isMuted() || audioManager.getSfxVolume() <= 0.001) return;
   try {
-    const AudioCtx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext })
-        .webkitAudioContext;
-    const ctx = new AudioCtx();
-    const now = ctx.currentTime;
-
-    // Fundamental bell tone + harmonic overtone
-    [880, 1760].forEach((freq, idx) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = idx === 0 ? 'sine' : 'triangle';
-      osc.frequency.setValueAtTime(freq, now);
-
-      gain.gain.setValueAtTime(idx === 0 ? 0.35 : 0.15, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 1.8);
-    });
+    const ctx = sharedContext();
+    if (ctx.state !== 'running') {
+      void ctx.resume().then(() => {
+        if (ctx.state === 'running') ringIntakeBell(ctx);
+      });
+      return;
+    }
+    ringIntakeBell(ctx);
   } catch {
     // Ignore if audio context is blocked before first user tap
   }

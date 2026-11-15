@@ -16,6 +16,34 @@ export const ServiceFeedbackModal: React.FC = () => {
         <h3 className="text-lg font-bold text-emerald-100">
           {feedback.decedentName}
         </h3>
+        <div className="rounded-lg border border-emerald-800/50 bg-emerald-950/40 px-3 py-2 space-y-1">
+          <div className="text-[10px] uppercase tracking-wider text-emerald-300/80">
+            Payout
+          </div>
+          <ul className="text-sm text-emerald-50">
+            {feedback.payoutLines.map((line) => (
+              <li key={line.label} className="flex justify-between gap-3">
+                <span>{line.label}</span>
+                <span className="font-mono tabular-nums">
+                  {line.amount < 0 ? '−' : '+'}$
+                  {Math.abs(line.amount).toLocaleString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="flex justify-between gap-3 border-t border-emerald-800/60 pt-1 text-sm font-bold text-emerald-100">
+            <span>Posted</span>
+            <span className="font-mono tabular-nums">
+              ${feedback.payoutNet.toLocaleString()}
+            </span>
+          </p>
+          {feedback.fuelMetered > 0 && (
+            <p className="text-[11px] text-emerald-200/70">
+              Fuel ${feedback.fuelMetered.toLocaleString()} was metered when the
+              retort fired. It is already off the balance.
+            </p>
+          )}
+        </div>
         <div className="rounded-lg border border-amber-800/50 bg-amber-950/40 px-3 py-2 space-y-1">
           <div className="text-[10px] uppercase tracking-wider text-amber-300/80">
             Cortege
@@ -29,9 +57,7 @@ export const ServiceFeedbackModal: React.FC = () => {
             </li>
             <li>
               Escort:{' '}
-              {feedback.fleetEscort
-                ? `${feedback.fleetEscort} · +$${(feedback.fleetCash - feedback.fleetFlowerCash).toLocaleString()}`
-                : 'none'}
+              {feedback.fleetEscort ? feedback.fleetEscort : 'none'}
             </li>
             <li>
               Flower car:{' '}

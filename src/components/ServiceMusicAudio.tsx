@@ -3,7 +3,6 @@ import { useGameStore } from '../store/useGameStore';
 import {
   audioManager,
   CROSSFADE_MS,
-  unlockGameAudio,
 } from '../utils/audioManager';
 import {
   buildPlayOrder,
@@ -57,11 +56,7 @@ export const ServiceMusicAudio: React.FC = () => {
     isViewingService(chapelCase.directive);
 
   useEffect(() => {
-    const unlock = () => {
-      void unlockGameAudio();
-    };
-    window.addEventListener('pointerdown', unlock, { once: true, passive: true });
-    return () => window.removeEventListener('pointerdown', unlock);
+    audioManager.installGestureUnlock();
   }, []);
 
   const playIndex = async (i: number, fadeMs: number) => {

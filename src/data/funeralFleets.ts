@@ -12,7 +12,7 @@ export interface FleetVehicle {
   price: number;
   /** Recovery vans: reputation on a successful service */
   repBonus: number;
-  /** Escorts and flower cars: extra cash on a successful service */
+  /** Escorts, flower cars, and coaches: extra cash on a successful service */
   moneyBonus: number;
   /** Hearses: interment points this service (also added to the house total) */
   interment: number;
@@ -55,6 +55,23 @@ export const FLEET_DOMAIN = 'www.lampblackcoach.biz';
 export const RETIRED_FLEET_REFUNDS: Record<string, number> = {
   rec_silent_arrival: 24000,
 };
+
+/**
+ * Cash a coach adds on a successful service.
+ * A parish coach returns its price in about five cases. Dearer coaches take longer,
+ * and the dollar amount still rises with the price.
+ */
+export function coachServiceCash(price: number): number {
+  const cases = Math.min(12, Math.max(4.5, 4.2 + price / 5500));
+  return Math.round(price / cases);
+}
+
+/** Recovery vans pay this much cash per reputation point, on that service. */
+export const RECOVERY_CASH_PER_REP = 120;
+
+export function recoveryCaseCash(repBonus: number): number {
+  return Math.max(0, repBonus) * RECOVERY_CASH_PER_REP;
+}
 
 const HEARTH = {
   builder: 'Hearth & Hollis',
@@ -102,7 +119,7 @@ function pewterVariant(
     era: '1994 square',
     price,
     repBonus: 0,
-    moneyBonus: 0,
+    moneyBonus: coachServiceCash(price),
     interment: edge.interment ?? 6,
     serviceRep: edge.serviceRep ?? 0,
     upkeepSaved: edge.upkeepSaved ?? 0,
@@ -179,7 +196,7 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     era: '2002 sedan',
     price: 1800,
     repBonus: 0,
-    moneyBonus: 120,
+    moneyBonus: 450,
     interment: 0,
     length: "15'8\"",
     power: '3.8L V6',
@@ -196,7 +213,7 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     era: '1966 dresser',
     price: 9400,
     repBonus: 0,
-    moneyBonus: 460,
+    moneyBonus: 1570,
     interment: 0,
     length: "8'4\"",
     power: '74 ci twin',
@@ -213,7 +230,7 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     era: '2019 limousine',
     price: 27500,
     repBonus: 0,
-    moneyBonus: 820,
+    moneyBonus: 3060,
     interment: 0,
     length: "24'6\"",
     power: '6.2L V8',
@@ -230,7 +247,7 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     era: '1991 flower car',
     price: 6200,
     repBonus: 0,
-    moneyBonus: 280,
+    moneyBonus: 1240,
     interment: 0,
     length: "18'4\"",
     power: '4.5L V8',
@@ -247,7 +264,7 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     era: '1941 flower car',
     price: 16400,
     repBonus: 0,
-    moneyBonus: 520,
+    moneyBonus: 2050,
     interment: 0,
     length: "18'8\"",
     power: 'Straight-8',
@@ -264,7 +281,7 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     era: '1994 square',
     price: 3200,
     repBonus: 0,
-    moneyBonus: 0,
+    moneyBonus: coachServiceCash(3200),
     interment: 6,
     length: "19'6\"",
     power: '5.7L V8',
@@ -398,7 +415,7 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     era: '1938 formal',
     price: 8600,
     repBonus: 0,
-    moneyBonus: 0,
+    moneyBonus: coachServiceCash(8600),
     interment: 14,
     length: "19'2\"",
     power: 'Straight-8',
@@ -415,7 +432,7 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     era: '2006 formal',
     price: 16800,
     repBonus: 0,
-    moneyBonus: 0,
+    moneyBonus: coachServiceCash(16800),
     interment: 24,
     length: "21'4\"",
     power: '4.6L V8',
@@ -432,7 +449,7 @@ export const FLEET_CATALOG: FleetVehicle[] = [
     era: '2018 formal',
     price: 36000,
     repBonus: 0,
-    moneyBonus: 0,
+    moneyBonus: coachServiceCash(36000),
     interment: 38,
     length: "21'8\"",
     power: '3.6L V6',
@@ -484,7 +501,8 @@ function classBonus(v: FleetVehicle): number {
     (v.serviceRep ?? 0) * 12 +
     (v.memorialRep ?? 0) * 8 +
     Math.round((v.upkeepSaved ?? 0) / 25) +
-    Math.round((v.houseTip ?? 0) / 20)
+    Math.round((v.houseTip ?? 0) / 20) +
+    Math.round(v.moneyBonus / 50)
   );
 }
 
@@ -553,11 +571,14 @@ export function resolveCortege(
 }
 
 export function fleetBonusLine(v: FleetVehicle): string {
-  if (v.fleetClass === 'RECOVERY') return `+${v.repBonus} reputation`;
+  if (v.fleetClass === 'RECOVERY') {
+    return `+${v.repBonus} reputation · +$${recoveryCaseCash(v.repBonus).toLocaleString()} this service`;
+  }
   if (v.fleetClass === 'ESCORT' || v.fleetClass === 'FLOWER') {
     return `+$${v.moneyBonus.toLocaleString()} cortege`;
   }
   const parts = [`Interment +${v.interment}`];
+  if (v.moneyBonus > 0) parts.push(`+$${v.moneyBonus.toLocaleString()} service`);
   if (v.serviceRep) parts.push(`Family +${v.serviceRep}`);
   if (v.memorialRep) parts.push(`Memorial +${v.memorialRep}`);
   if (v.upkeepSaved) parts.push(`Saves $${v.upkeepSaved} upkeep`);
@@ -586,6 +607,9 @@ export function coachPerkNote(v: FleetVehicle): string | null {
   }
   if (v.houseTip) {
     bits.push(`Adds $${v.houseTip} to the house tip.`);
+  }
+  if (v.moneyBonus > 0) {
+    bits.push(`Adds $${v.moneyBonus.toLocaleString()} to the service.`);
   }
   return bits.length ? bits.join(' ') : null;
 }

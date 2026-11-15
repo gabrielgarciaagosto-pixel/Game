@@ -61,6 +61,9 @@ class AudioManager {
   private sfxVolume = 0.45;
   private lastPingAt = 0;
   private lastClickAt = 0;
+  private gestureInstalled = false;
+  /** File beds that `decodeAudioData` rejected. HTMLAudioElement plays those. */
+  private elements: HTMLAudioElement[] = [];
 
   /** Tunable crossfade length in milliseconds. */
   crossfadeMs = CROSSFADE_MS;
@@ -127,22 +130,43 @@ class AudioManager {
     return this.ctx;
   }
 
+  /**
+   * Resume on every tap, not only the first. A stray pointerdown used to
+   * consume a once-only listener and leave the context suspended, which
+   * dropped both the music bed and the short clicks.
+   */
+  installGestureUnlock(): void {
+    if (this.gestureInstalled || typeof window === 'undefined') return;
+    this.gestureInstalled = true;
+    const kick = () => {
+      void this.unlock();
+    };
+    window.addEventListener('pointerdown', kick, { passive: true });
+    window.addEventListener('touchstart', kick, { passive: true });
+    window.addEventListener('keydown', kick);
+  }
+
+  /** The one context SFX and music share. A second context steals Android audio focus. */
+  outputContext(): AudioContext {
+    return this.getOrCreateContext();
+  }
+
   /** Call from a user gesture so WebView audio is allowed. */
   async unlock(): Promise<void> {
     const ctx = this.getOrCreateContext();
-    if (ctx.state === 'suspended') {
+    if (ctx.state === 'suspended' || ctx.state === 'interrupted') {
       try {
         await ctx.resume();
       } catch {
         /* ignore */
       }
     }
+    if (this.unlocked) return;
     this.unlocked = true;
-    await Promise.all([
-      this.preload('crematoryStart').catch(() => undefined),
-      this.preload('crematoryLoop').catch(() => undefined),
-      this.preload('theme').catch(() => undefined),
-    ]);
+    // Theme is not a live bed. Crematory clips preload in the background
+    // so a slow decode cannot hold the first tap.
+    void this.preload('crematoryStart').catch(() => undefined);
+    void this.preload('crematoryLoop').catch(() => undefined);
   }
 
   registerUrl(id: string, url: string) {
@@ -168,8 +192,17 @@ class AudioManager {
     const promise = (async () => {
       const ctx = this.getOrCreateContext();
       const res = await fetch(url);
+      if (!res.ok) {
+        this.loadPromises.delete(id);
+        throw new Error(`bed ${id} ${res.status}`);
+      }
       const raw = await res.arrayBuffer();
-      const buffer = await ctx.decodeAudioData(raw.slice(0));
+      const buffer = await Promise.race([
+        ctx.decodeAudioData(raw.slice(0)),
+        new Promise<AudioBuffer>((_, reject) => {
+          window.setTimeout(() => reject(new Error(`decode timeout ${id}`)), 12000);
+        }),
+      ]);
       this.buffers.set(id, buffer);
       this.loadPromises.delete(id);
       return buffer;
@@ -405,11 +438,21 @@ class AudioManager {
     }
     if (this.isStale(gen)) return;
 
-    const buffer = await this.preload(id);
+    let buffer: AudioBuffer;
+    try {
+      buffer = await this.preload(id);
+    } catch {
+      if (this.isStale(gen)) return;
+      const fileUrl = isBuiltin(id) ? BED_URLS[id] : this.urlById.get(id);
+      if (!fileUrl) return;
+      this.playElement(id, fileUrl, { loop, volume, fadeSec, generation: gen });
+      return;
+    }
     if (this.isStale(gen)) return;
 
     this.clearHandoffTimer();
     this.fadeOutVoices(fadeSec);
+    this.stopElements();
     this.currentId = id;
     const voice = this.startVoice(id, buffer, {
       loop,
@@ -430,13 +473,71 @@ class AudioManager {
     this.generation += 1;
     const fadeSec = Math.max(0.05, durationMs / 1000);
     this.fadeOutVoices(fadeSec);
+    this.stopElements();
     this.currentId = null;
     window.setTimeout(() => this.pruneVoices(), durationMs + 100);
+  }
+
+  private stopElements() {
+    for (const el of this.elements) {
+      try {
+        el.pause();
+        el.src = '';
+      } catch {
+        /* ignore */
+      }
+    }
+    this.elements = [];
+  }
+
+  /**
+   * Android WebView rejects some m4a codecs in decodeAudioData. The media
+   * element uses the platform decoder instead, so the bed still plays.
+   */
+  private playElement(
+    id: MusicBedId,
+    url: string,
+    opts: { loop: boolean; volume: number; fadeSec: number; generation: number }
+  ) {
+    this.fadeOutVoices(opts.fadeSec);
+    this.stopElements();
+    const el = new Audio(url);
+    el.loop = opts.loop;
+    el.preload = 'auto';
+    el.volume = 0.0001;
+    this.elements.push(el);
+    this.currentId = id;
+    const vol = Math.max(0.0001, Math.min(1, opts.volume));
+    const steps = 8;
+    let i = 0;
+    const timer = window.setInterval(() => {
+      i += 1;
+      try {
+        el.volume = Math.min(vol, (vol * i) / steps);
+      } catch {
+        /* ignore */
+      }
+      if (i >= steps) window.clearInterval(timer);
+    }, Math.max(16, (opts.fadeSec * 1000) / steps));
+    void el.play().catch(() => undefined);
+    if (!opts.loop) {
+      el.addEventListener('ended', () => {
+        if (this.currentId !== id) return;
+        for (const h of this.oneShotHandlers) {
+          try {
+            h(id);
+          } catch {
+            /* ignore */
+          }
+        }
+      });
+    }
   }
 
   stopImmediate() {
     this.clearHandoffTimer();
     this.generation += 1;
+    this.stopElements();
     const ctx = this.ctx;
     const t = ctx?.currentTime ?? 0;
     for (const voice of this.voices) {
@@ -511,7 +612,21 @@ class AudioManager {
     this.lastClickAt = now;
     try {
       const ctx = this.getOrCreateContext();
-      if (ctx.state === 'suspended') void ctx.resume();
+      if (ctx.state !== 'running') {
+        const pending = ctx.resume();
+        void pending.then(() => {
+          if (ctx.state === 'running') this.playClickNow(ctx, kind);
+        });
+        return;
+      }
+      this.playClickNow(ctx, kind);
+    } catch {
+      /* ignore WebAudio failures */
+    }
+  }
+
+  private playClickNow(ctx: AudioContext, kind: 'tick' | 'clunk'): void {
+    try {
       const t = ctx.currentTime;
       const master = ctx.createGain();
       const peak =

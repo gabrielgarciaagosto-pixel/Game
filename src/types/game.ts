@@ -200,6 +200,12 @@ export interface DecedentCase {
   cremationRank?: Rank;
   /** 0–100 cremains score from the retort quality line. Feeds the service tip. */
   cremainsQuality?: number;
+  /** Chamber that finished this cremation. Used to pay the upgrade bonuses. */
+  retortSpeedTier?: number;
+  retortQualityTier?: number;
+  retortFuelTier?: number;
+  retortPreheat?: boolean;
+  retortQueue?: boolean;
   isUrnFilled: boolean;
   basePayout: number;
   arrivedAt: number;

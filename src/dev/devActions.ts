@@ -19,6 +19,7 @@ import { FLEET_CATALOG } from '../data/funeralFleets';
 import { URN_CATALOG } from '../data/urnCatalog';
 import { IDLE_RETORT } from '../retort/retortTypes';
 import {
+  basePayoutFor,
   generateRandomCase,
   pauseGamePersistWrites,
   resumeGamePersistWrites,
@@ -96,14 +97,7 @@ export function spawnDirective(directive: DispositionDirective) {
       ? now + 45_000
       : null,
     familyRequestedUrnId: null as string | null,
-    basePayout:
-      directive === 'CREMATION_DIRECT'
-        ? 950
-        : directive === 'BURIAL_VIEWING'
-          ? 1350
-          : directive === 'CREMATION_THEN_VIEWING'
-            ? 1550
-            : 1650,
+    basePayout: basePayoutFor(directive),
     cremationPermitStatus: initialPermitStatus(directive),
     cremationPermitSubmittedAt: null,
     cremationPermitEvaluatesAt: null,

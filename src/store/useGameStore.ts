@@ -72,7 +72,13 @@ import {
   cremainsQualityScore,
   defaultRetortBay,
   fuelCostFor,
+  fuelPlanBonus,
   liftPoorRank,
+  preheatCaseBonus,
+  qualityCaseBonus,
+  queueCaseBonus,
+  retortBayCaseBonus,
+  speedCaseBonus,
   normalizeWardrobe,
   retortSpeedFactor,
   type CrematoryWardrobe,
@@ -97,6 +103,7 @@ import {
   RETIRED_FLEET_REFUNDS,
   getFleetVehicle,
   normalizeFleetAssignment,
+  recoveryCaseCash,
   resolveCortege,
   type FleetAssignment,
   type FleetClass,
@@ -208,6 +215,11 @@ interface GameState {
     fleetFlowerCash: number;
     intermentThisService: number;
     intermentTotal: number;
+    /** Signed lines that add up to the cash posted this service. */
+    payoutLines: { label: string; amount: number }[];
+    payoutNet: number;
+    /** Fuel taken when the retort fired. Already off the balance; not in the net. */
+    fuelMetered: number;
   } | null;
   /** Computer portal — cremation permit filing history (wiped on Reset Game) */
   permitSubmissions: PermitSubmissionRecord[];
@@ -497,11 +509,10 @@ export function generateRandomCase(now = gameNow()): DecedentCase {
   const pickedCond = conditions[Math.floor(Math.random() * conditions.length)];
   const directive = directives[Math.floor(Math.random() * directives.length)];
   const payoutByDirective: Record<DecedentCase['directive'], number> = {
-    CREMATION_DIRECT: 950,
-    BURIAL_VIEWING: 1350,
-    VIEWING_THEN_CREMATION: 1650,
-    // Cremate → urn → chapel gathering: between burial viewing and dual-path
-    CREMATION_THEN_VIEWING: 1550,
+    CREMATION_DIRECT: basePayoutFor('CREMATION_DIRECT'),
+    BURIAL_VIEWING: basePayoutFor('BURIAL_VIEWING'),
+    VIEWING_THEN_CREMATION: basePayoutFor('VIEWING_THEN_CREMATION'),
+    CREMATION_THEN_VIEWING: basePayoutFor('CREMATION_THEN_VIEWING'),
   };
   const vitals = generateDecedentVitals(now);
   const preferredFlowers =
@@ -545,6 +556,20 @@ export function generateRandomCase(now = gameNow()): DecedentCase {
     cremationPermitRejectReason: null,
     unpermittedCremation: false,
   };
+}
+
+/** Professional fee by directive. Dev spawns use the same table. */
+export function basePayoutFor(directive: DecedentCase['directive']): number {
+  switch (directive) {
+    case 'CREMATION_DIRECT':
+      return 1400;
+    case 'BURIAL_VIEWING':
+      return 2200;
+    case 'VIEWING_THEN_CREMATION':
+      return 2800;
+    case 'CREMATION_THEN_VIEWING':
+      return 2500;
+  }
 }
 
 export function toInboxFile(c: DecedentCase): CaseInboxFile {
@@ -2108,6 +2133,11 @@ export const useGameStore = create<GameState>()(
       isCremated: true,
       cremationRank: lifted,
       cremainsQuality: score,
+      retortSpeedTier: settled.bay.speedTier,
+      retortQualityTier: settled.bay.qualityTier,
+      retortFuelTier: settled.bay.fuelTier,
+      retortPreheat: settled.bay.preheat,
+      retortQueue: settled.bay.queueSlot,
       location: 'URN_FILLING' as const,
       unpermittedCremation: unpermitted || c.unpermittedCremation,
     }));
@@ -3027,37 +3057,95 @@ export const useGameStore = create<GameState>()(
           (memorialService ? (coach?.memorialRep ?? 0) : 0);
       const coachUpkeep = serviceFailed ? 0 : (coach?.upkeepSaved ?? 0);
       const coachTip = serviceFailed ? 0 : (coach?.houseTip ?? 0);
-      const tipCash = serviceFailed
-        ? 0
-        : chapelRewards.tipCash + pourTip + cremainsTip + coachTip;
+      const coachFee = serviceFailed ? 0 : (coach?.moneyBonus ?? 0);
+      const chapelTip = serviceFailed ? 0 : chapelRewards.tipCash + pourTip;
+      const tipCash = chapelTip + cremainsTip + coachTip;
       const fleetRep = serviceFailed
         ? 0
         : (cortege.recovery?.repBonus ?? 0) + coachRep;
       const escortCash = serviceFailed ? 0 : (cortege.escort?.moneyBonus ?? 0);
       const flowerCash = serviceFailed ? 0 : (cortege.flower?.moneyBonus ?? 0);
-      const fleetCash = escortCash + flowerCash + coachUpkeep;
+      const removalCash = serviceFailed
+        ? 0
+        : recoveryCaseCash(cortege.recovery?.repBonus ?? 0);
+      const coachCash = coachFee + coachUpkeep + coachTip;
+      const fleetCash = escortCash + flowerCash + coachCash;
       const fleetInterment = serviceFailed
         ? 0
         : (cortege.coach?.interment ?? 0);
       const intermentTotal = state.intermentScore + fleetInterment;
 
+      const burned = !serviceFailed && c.isCremated;
+      const speedPay = burned ? speedCaseBonus(c.retortSpeedTier ?? 0) : 0;
+      const qualityPay = burned ? qualityCaseBonus(c.retortQualityTier ?? 0) : 0;
+      const fuelPlanPay = burned ? fuelPlanBonus(c.retortFuelTier ?? 0) : 0;
+      const preheatPay = burned ? preheatCaseBonus(!!c.retortPreheat) : 0;
+      const queuePay = burned ? queueCaseBonus(!!c.retortQueue) : 0;
+      const bayPay = burned
+        ? retortBayCaseBonus(retortCount(state.facilityLevels))
+        : 0;
+      const fuelMetered = burned ? fuelCostFor(c.retortFuelTier ?? 0) : 0;
+      const sealedPay = !serviceFailed && c.isUrnFilled ? 240 : 0;
+      const standing = serviceFailed
+        ? 0
+        : Math.min(480, Math.max(0, state.reputation - 100) * 2);
+      const cremainsPay = cremainsTip + qualityPay;
+
+      const houseRaw =
+        c.basePayout +
+        flowerBonus +
+        chapelTip +
+        urnSale +
+        urnTasteBonus +
+        casketSale +
+        casketTasteBonus +
+        sealedPay +
+        cremainsPay +
+        speedPay +
+        fuelPlanPay +
+        preheatPay +
+        queuePay +
+        bayPay +
+        standing -
+        decayPenalty;
+      const housePaid = serviceFailed
+        ? 0
+        : Math.max(0, Math.round(houseRaw * salesMult));
+      const propertyAdjust = serviceFailed ? 0 : housePaid - houseRaw;
       const netPayout = serviceFailed
         ? -(fine + lateFine)
-        : Math.max(
-            0,
-            Math.round(
-              (c.basePayout +
-                flowerBonus +
-                urnSale +
-                urnTasteBonus +
-                casketSale +
-                casketTasteBonus +
-                tipCash +
-                (c.isUrnFilled ? 150 : 0) -
-                decayPenalty) *
-                salesMult
-            ) + fleetCash
-          );
+        : housePaid + fleetCash + removalCash;
+
+      const pushLine = (
+        lines: { label: string; amount: number }[],
+        label: string,
+        amount: number
+      ) => {
+        if (!amount) return;
+        lines.push({ label, amount });
+      };
+      const payoutLines: { label: string; amount: number }[] = [];
+      if (!serviceFailed) {
+        pushLine(payoutLines, 'Service fee', c.basePayout);
+        pushLine(payoutLines, 'Chapel', flowerBonus);
+        pushLine(payoutLines, 'Tip', chapelTip);
+        pushLine(payoutLines, 'Urn', urnSale + urnTasteBonus);
+        pushLine(payoutLines, 'Casket', casketSale + casketTasteBonus);
+        pushLine(payoutLines, 'Sealed urn', sealedPay);
+        pushLine(payoutLines, 'Cremains', cremainsPay);
+        pushLine(payoutLines, 'Burner', speedPay);
+        pushLine(payoutLines, 'Fuel plan', fuelPlanPay);
+        pushLine(payoutLines, 'Pre-heat', preheatPay);
+        pushLine(payoutLines, 'Queue slot', queuePay);
+        pushLine(payoutLines, 'Extra chamber', bayPay);
+        pushLine(payoutLines, 'Standing', standing);
+        pushLine(payoutLines, 'Decay', -decayPenalty);
+        pushLine(payoutLines, 'Property', propertyAdjust);
+        pushLine(payoutLines, 'Escort', escortCash);
+        pushLine(payoutLines, 'Flower car', flowerCash);
+        pushLine(payoutLines, 'Coach', coachCash);
+        pushLine(payoutLines, 'Removal', removalCash);
+      }
 
       const remaining = state.cases.filter((x) => x.id !== c.id);
       const decayRepHit = Math.floor(c.decayLevel / 10);
@@ -3148,12 +3236,13 @@ export const useGameStore = create<GameState>()(
               fleetFlowerCash: flowerCash,
               intermentThisService: fleetInterment,
               intermentTotal,
+              payoutLines,
+              payoutNet: netPayout,
+              fuelMetered,
             },
         intakeToast: serviceFailed
           ? state.intakeToast
-          : `Service complete — tip $${tipCash}${
-              fleetInterment > 0 ? ` · Interment +${fleetInterment}` : ''
-            }${fleetCash > 0 ? ` · cortege +$${fleetCash}` : ''}`,
+          : `Service complete — $${netPayout.toLocaleString()}`,
         cases: remaining,
         inboxFiles: state.inboxFiles.filter((f) => f.id !== c.id),
         urnInventory: inventory,

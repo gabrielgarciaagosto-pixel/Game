@@ -4,7 +4,6 @@ import {
   audioManager,
   CROSSFADE_MS,
   isCrematoryBed,
-  unlockGameAudio,
 } from '../utils/audioManager';
 import { isMenuBedId } from '../data/menuPlaylist';
 import { isServiceBedId } from '../data/servicePlaylist';
@@ -25,17 +24,7 @@ export const CrematoryAudio: React.FC = () => {
   const activeBedRef = useRef<'start' | 'loop' | 'off'>('off');
 
   useEffect(() => {
-    const unlock = () => {
-      void unlockGameAudio();
-    };
-    window.addEventListener('pointerdown', unlock, { once: true, passive: true });
-    window.addEventListener('keydown', unlock, { once: true });
-    window.addEventListener('touchstart', unlock, { once: true, passive: true });
-    return () => {
-      window.removeEventListener('pointerdown', unlock);
-      window.removeEventListener('keydown', unlock);
-      window.removeEventListener('touchstart', unlock);
-    };
+    audioManager.installGestureUnlock();
   }, []);
 
   // Start sting → loop handoff

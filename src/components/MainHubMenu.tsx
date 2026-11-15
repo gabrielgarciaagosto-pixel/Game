@@ -298,7 +298,7 @@ export const MainHubMenu: React.FC = () => {
     {
       id: 'COMPUTER',
       title: 'COMPUTER',
-      subtitle: `Desktop · Shop · Fleets · Craigmile (${urnOwned} urns)`,
+      subtitle: 'Desktop · Shop · Fleets · Craigmile',
       color: 'from-teal-950/75 via-slate-950/60 to-slate-950/78 border-teal-500/45',
     },
   ];

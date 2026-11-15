@@ -222,8 +222,8 @@ export function satisfactionToRewards(total: number): {
   reputationDelta: number;
 } {
   return {
-    payoutBoostPct: Math.round(total * 0.35),
-    tipCash: Math.round(total * 2.2),
+    payoutBoostPct: Math.round(total * 0.45),
+    tipCash: Math.round(total * 3.4),
     reputationDelta: Math.floor(total / 20),
   };
 }
