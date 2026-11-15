@@ -50,7 +50,9 @@
 
   /* FILES FAB geometry — station shells pad to clear this control */
   --files-fab-height: 3rem;
-  --files-fab-bottom: calc(var(--safe-bottom) + 2.25rem);
+  /* High enough that the button clears bottom-sheet actions and the
+     shop card in the lower right. safe-bottom still tracks the nav bar. */
+  --files-fab-bottom: calc(var(--safe-bottom) + 7.25rem);
   --files-panel-bottom: calc(var(--files-fab-bottom) + 3.75rem);
   --files-clearance: calc(
     var(--files-fab-bottom) + var(--files-fab-height) + 0.85rem
@@ -99,6 +101,36 @@ body {
   padding-bottom: var(--files-clearance);
   padding-left: var(--safe-left);
   padding-right: var(--safe-right);
+}
+
+/*
+  Bottom sheets are pinned to the viewport, which is drawn under the
+  system navigation bar. Pad past that inset so the last control sits
+  above gesture nav and the 3-button bar, with a little air under it.
+  .sheet-safe-inset is for a sheet whose parent already consumed
+  --safe-bottom (the in-game browser). Adding the inset again would
+  lift it twice.
+*/
+.sheet-safe {
+  padding-top: 1rem;
+  padding-left: max(1rem, var(--safe-left));
+  padding-right: max(1rem, var(--safe-right));
+  padding-bottom: calc(var(--safe-bottom) + 1.5rem);
+}
+
+.sheet-safe-inset {
+  padding-top: 1rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  padding-bottom: 1.5rem;
+}
+
+/* Shop inside the computer already ends at the nav inset. This extra
+   pad ends the card grid above the FILES button. */
+.files-overlap-clear {
+  padding-bottom: calc(
+    var(--files-fab-bottom) + var(--files-fab-height) - var(--safe-bottom) + 0.5rem
+  );
 }
 
 /* Keep touch gestures on the WebGL canvas only — not global UI buttons */

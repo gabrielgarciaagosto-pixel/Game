@@ -4,6 +4,7 @@ declare global {
   interface Window {
     __ossuarianHardwareBack?: () => 'handled' | 'exit';
     __ossuarianCloseFiles?: () => void;
+    __ossuarianCloseSettingsConfirm?: () => void;
   }
 }
 import { BankDebtHud } from './components/BankDebtHud';
@@ -47,6 +48,10 @@ function App() {
   useEffect(() => {
     window.__ossuarianHardwareBack = () => {
       const state = useGameStore.getState();
+      if (window.__ossuarianCloseSettingsConfirm) {
+        window.__ossuarianCloseSettingsConfirm();
+        return 'handled';
+      }
       if (state.settingsOpen) {
         state.setSettingsOpen(false);
         return 'handled';

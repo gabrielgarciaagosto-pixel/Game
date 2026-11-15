@@ -331,7 +331,7 @@ export const BankBrowser: React.FC = () => {
       </main>
 
       {confirm && (
-        <div className="absolute inset-0 z-30 bg-black/70 flex items-end sm:items-center justify-center p-4">
+        <div className="sheet-safe-inset absolute inset-0 z-30 bg-black/70 flex items-end sm:items-center justify-center">
           <div className="w-full max-w-sm rounded-xl border border-emerald-700 bg-slate-950 p-4 space-y-3">
             <h4 className="font-bold text-emerald-50">{confirm.title}</h4>
             <p className="text-[12px] text-slate-300">{confirm.body}</p>

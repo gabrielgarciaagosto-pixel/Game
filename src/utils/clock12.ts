@@ -7,14 +7,41 @@ export function formatClock12(hour24: number, minute: number): string {
   return `${hour12}:${String(min).padStart(2, '0')} ${meridiem}`;
 }
 
+/**
+ * The phone's own hour cycle. h23/h24 means a 24-hour clock.
+ * Anything else, including a lookup failure, stays 12-hour AM/PM.
+ */
+export function deviceUsesHour24(): boolean {
+  try {
+    const cycle = new Intl.DateTimeFormat(undefined, {
+      hour: 'numeric',
+    }).resolvedOptions().hourCycle;
+    return cycle === 'h23' || cycle === 'h24';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Local wall time. Uses the device hour cycle and the device timezone
+ * (`Date#getHours`). VR-441 and catalog windows stay on formatClock12.
+ */
 export function formatTimeOf(date: Date): string {
+  if (deviceUsesHour24()) {
+    return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+  }
   return formatClock12(date.getHours(), date.getMinutes());
 }
 
-/** Calendar date plus a 12-hour clock. Avoids the browser's 24-hour locale. */
+/** Local calendar date plus the device clock. */
 export function formatDateTime12(ms: number): string {
   const d = new Date(ms);
   return `${d.toLocaleDateString()} · ${formatTimeOf(d)}`;
+}
+
+/** Short local date, for the desktop clock next to the time. */
+export function formatDeviceDate(date: Date): string {
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 export function hour12Parts(hour24: number): {

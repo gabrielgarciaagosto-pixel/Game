@@ -130,7 +130,7 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
   };
 
   useEffect(() => {
-    const id = window.setInterval(() => setNow(gameDate()), 15_000);
+    const id = window.setInterval(() => setNow(gameDate()), 1000);
     const unsub = subscribeClock(() => setNow(gameDate()));
     return () => {
       window.clearInterval(id);
@@ -253,7 +253,7 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
     <div
       className={`${
         embedded
-          ? 'absolute inset-0'
+          ? 'files-overlap-clear absolute inset-0'
           : 'safe-screen fixed inset-0 z-50'
       } bg-[#140f0c] text-amber-50 flex flex-col select-none overflow-hidden`}
     >
@@ -740,7 +740,7 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
 
       
       {confirmBuy && (
-        <div className="absolute inset-0 z-[60] bg-black/70 flex items-end justify-center p-4">
+        <div className="sheet-safe-inset absolute inset-0 z-[60] bg-black/70 flex items-end justify-center">
           <div className="w-full max-w-sm rounded-xl border border-amber-700 bg-stone-950 p-4 space-y-3">
             <h4 className="font-bold text-amber-50">{confirmBuy.title}</h4>
             <p className="text-[12px] text-stone-300">{confirmBuy.body}</p>
@@ -1092,7 +1092,7 @@ function UrnInspectModal({
   });
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/80 flex items-end sm:items-center justify-center p-3">
+    <div className="sheet-safe fixed inset-0 z-[70] bg-black/80 flex items-end sm:items-center justify-center">
       <div className="w-full max-w-md rounded-2xl border border-amber-700/50 bg-gradient-to-b from-[#2b2118] to-[#100c09] p-4 shadow-2xl">
         <div className="flex justify-between items-start gap-2">
           <div>
@@ -1200,7 +1200,7 @@ function CasketInspectModal({
   const [lid, setLid] = useState<'open' | 'closed' | null>(null);
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/80 flex items-end sm:items-center justify-center p-3">
+    <div className="sheet-safe fixed inset-0 z-[70] bg-black/80 flex items-end sm:items-center justify-center">
       <div className="w-full max-w-md rounded-2xl border border-amber-700/50 bg-gradient-to-b from-[#2b2118] to-[#100c09] p-4 shadow-2xl">
         <div className="flex justify-between items-start gap-2">
           <div>

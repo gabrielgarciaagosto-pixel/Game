@@ -26,6 +26,62 @@ const DEFAULT_VOLUME: Record<BuiltinBedId, number> = {
   crematoryLoop: 0.55,
 };
 
+/** Full interface slider. Clicks were mixed at this gain before the slider existed. */
+const INTERFACE_AT_FULL = 0.45;
+
+export const AUDIO_PREFS_KEY = 'ossuarian-audio-prefs';
+
+export type AudioPrefs = {
+  musicVolume: number;
+  musicMuted: boolean;
+  interfaceVolume: number;
+  interfaceMuted: boolean;
+};
+
+const DEFAULT_AUDIO_PREFS: AudioPrefs = {
+  musicVolume: 1,
+  musicMuted: false,
+  interfaceVolume: 1,
+  interfaceMuted: false,
+};
+
+function clamp01(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(1, n));
+}
+
+export function readAudioPrefs(): AudioPrefs {
+  try {
+    const raw = localStorage.getItem(AUDIO_PREFS_KEY);
+    if (!raw) return { ...DEFAULT_AUDIO_PREFS };
+    const parsed = JSON.parse(raw) as Partial<AudioPrefs>;
+    return {
+      musicVolume: clamp01(
+        typeof parsed.musicVolume === 'number'
+          ? parsed.musicVolume
+          : DEFAULT_AUDIO_PREFS.musicVolume
+      ),
+      musicMuted: parsed.musicMuted === true,
+      interfaceVolume: clamp01(
+        typeof parsed.interfaceVolume === 'number'
+          ? parsed.interfaceVolume
+          : DEFAULT_AUDIO_PREFS.interfaceVolume
+      ),
+      interfaceMuted: parsed.interfaceMuted === true,
+    };
+  } catch {
+    return { ...DEFAULT_AUDIO_PREFS };
+  }
+}
+
+function writeAudioPrefs(prefs: AudioPrefs) {
+  try {
+    localStorage.setItem(AUDIO_PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    /* ignore */
+  }
+}
+
 function isBuiltin(id: string): id is BuiltinBedId {
   return id === 'theme' || id === 'crematoryStart' || id === 'crematoryLoop';
 }
@@ -82,9 +138,16 @@ class AudioManager {
   private generation = 0;
   private handoffTimer: number | null = null;
   private oneShotHandlers = new Set<(id: MusicBedId) => void>();
-  private muted = false;
+  private musicMuted = false;
+  /** Player music level, 0–1. 1 is the mix the beds were written at. */
+  private musicVolume = 1;
+  /** Last bed level before the player music slider (playlist × duck). */
+  private lastMusicLevel = 0.55;
+  private interfaceMuted = false;
+  /** Player interface level, 0–1. 1 matches the original click loudness. */
+  private interfaceLevel = 1;
   private unmuteHandlers = new Set<() => void>();
-  /** One-shot SFX level (0–1). Mute gates SFX without stopping music beds. */
+  /** One-shot SFX level (0–1). Interface mute gates SFX without stopping music. */
   private sfxVolume = 0.45;
   private lastPingAt = 0;
   private lastChimeAt = 0;
@@ -105,16 +168,104 @@ class AudioManager {
   /** Tunable crossfade length in milliseconds. */
   crossfadeMs = CROSSFADE_MS;
 
+  constructor() {
+    this.hydratePrefs();
+  }
+
   isMuted(): boolean {
-    return this.muted;
+    return this.musicMuted;
   }
 
   getSfxVolume(): number {
     return this.sfxVolume;
   }
 
+  getMusicVolume(): number {
+    return this.musicVolume;
+  }
+
+  isMusicMuted(): boolean {
+    return this.musicMuted;
+  }
+
+  /** 0–1. One is the current interface loudness, not a raw gain. */
+  getInterfaceVolume(): number {
+    return this.interfaceLevel;
+  }
+
+  isInterfaceMuted(): boolean {
+    return this.interfaceMuted;
+  }
+
   setSfxVolume(volume: number) {
-    this.sfxVolume = Math.max(0, Math.min(1, volume));
+    const abs = Math.max(0, Math.min(1, volume));
+    this.sfxVolume = abs;
+    this.interfaceLevel = clamp01(abs / INTERFACE_AT_FULL);
+    this.writePrefs();
+  }
+
+  setMusicVolume(volume: number) {
+    this.musicVolume = clamp01(volume);
+    this.writePrefs();
+    if (this.musicMuted) return;
+    this.setCurrentVolume(this.lastMusicLevel, 80);
+  }
+
+  setMusicMuted(muted: boolean) {
+    if (muted === this.musicMuted) return;
+    this.musicMuted = muted;
+    this.writePrefs();
+    if (muted) {
+      this.stopImmediate();
+      return;
+    }
+    this.fireUnmute();
+  }
+
+  setInterfaceVolume(volume: number) {
+    this.interfaceLevel = clamp01(volume);
+    this.sfxVolume = this.interfaceLevel * INTERFACE_AT_FULL;
+    this.writePrefs();
+  }
+
+  setInterfaceMuted(muted: boolean) {
+    if (muted === this.interfaceMuted) return;
+    this.interfaceMuted = muted;
+    this.writePrefs();
+  }
+
+  private hydratePrefs() {
+    const prefs = readAudioPrefs();
+    this.musicVolume = prefs.musicVolume;
+    this.musicMuted = prefs.musicMuted;
+    this.interfaceLevel = prefs.interfaceVolume;
+    this.interfaceMuted = prefs.interfaceMuted;
+    this.sfxVolume = this.interfaceLevel * INTERFACE_AT_FULL;
+  }
+
+  private writePrefs() {
+    writeAudioPrefs({
+      musicVolume: this.musicVolume,
+      musicMuted: this.musicMuted,
+      interfaceVolume: this.interfaceLevel,
+      interfaceMuted: this.interfaceMuted,
+    });
+  }
+
+  private fireUnmute() {
+    for (const h of this.unmuteHandlers) {
+      try {
+        h();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  private scaledMusic(level: number): number {
+    this.lastMusicLevel = level;
+    if (this.musicMuted || this.musicVolume <= 0) return 0.0001;
+    return Math.max(0.0001, Math.min(1, level * this.musicVolume));
   }
 
   addUnmuteHandler(handler: () => void) {
@@ -126,21 +277,16 @@ class AudioManager {
   }
 
   setMuted(muted: boolean) {
+    const restartMusic = this.musicMuted && !muted;
+    this.musicMuted = muted;
+    this.interfaceMuted = muted;
+    this.writePrefs();
     if (muted) {
-      this.muted = true;
       this.stopImmediate();
       return;
     }
-    if (!this.muted) return;
-    this.muted = false;
-    // Controllers re-assert the correct bed for the current room.
-    for (const h of this.unmuteHandlers) {
-      try {
-        h();
-      } catch {
-        /* ignore */
-      }
-    }
+    if (!restartMusic) return;
+    this.fireUnmute();
   }
 
   /** @deprecated prefer add/removeOneShotNearEndHandler for multi-listeners */
@@ -259,8 +405,8 @@ class AudioManager {
    * times any room duck).
    */
   setCurrentVolume(volume: number, durationMs: number): void {
-    if (this.muted) return;
-    const vol = Math.max(0.0001, Math.min(1, volume));
+    const vol = this.scaledMusic(volume);
+    if (this.musicMuted) return;
     if (this.ctx) {
       const dur = Math.max(0.05, durationMs / 1000);
       const t = this.ctx.currentTime;
@@ -440,7 +586,8 @@ class AudioManager {
       url?: string;
     }
   ): Promise<void> {
-    if (this.muted) {
+    if (this.musicMuted) {
+      this.lastMusicLevel = options?.volume ?? this.lastMusicLevel;
       this.currentId = null;
       return;
     }
@@ -485,7 +632,12 @@ class AudioManager {
       if (this.isStale(gen)) return;
       const fileUrl = isBuiltin(id) ? BED_URLS[id] : this.urlById.get(id);
       if (!fileUrl) return;
-      this.playElement(id, fileUrl, { loop, volume, fadeSec, generation: gen });
+      this.playElement(id, fileUrl, {
+        loop,
+        volume: this.scaledMusic(volume),
+        fadeSec,
+        generation: gen,
+      });
       return;
     }
     if (this.isStale(gen)) return;
@@ -496,7 +648,7 @@ class AudioManager {
     this.currentId = id;
     const voice = this.startVoice(id, buffer, {
       loop,
-      volume,
+      volume: this.scaledMusic(volume),
       fadeInSec: fadeSec,
       generation: gen,
     });
@@ -717,7 +869,7 @@ class AudioManager {
    * Respects mute + sfxVolume; debounced so toast storms don't stack.
    */
   playNotificationPing(debounceMs = 480): void {
-    if (this.muted || this.sfxVolume <= 0.001) return;
+    if (this.interfaceMuted || this.sfxVolume <= 0.001) return;
     const now = performance.now();
     if (now - this.lastPingAt < debounceMs) return;
     this.lastPingAt = now;
@@ -764,7 +916,7 @@ class AudioManager {
    * Mute and sfxVolume apply. A second landing inside the window does not stack.
    */
   playNewsChime(debounceMs = 2400): void {
-    if (this.muted || this.sfxVolume <= 0.001) return;
+    if (this.interfaceMuted || this.sfxVolume <= 0.001) return;
     const now = performance.now();
     if (now - this.lastChimeAt < debounceMs) return;
     this.lastChimeAt = now;
@@ -825,7 +977,7 @@ class AudioManager {
    * Respects mute and sfxVolume. Starts on currentTime so Android stays tight.
    */
   playUiClick(kind: 'tick' | 'clunk' = 'tick'): void {
-    if (this.muted || this.sfxVolume <= 0.001) return;
+    if (this.interfaceMuted || this.sfxVolume <= 0.001) return;
     const now = performance.now();
     if (now - this.lastClickAt < 32) return;
     this.lastClickAt = now;

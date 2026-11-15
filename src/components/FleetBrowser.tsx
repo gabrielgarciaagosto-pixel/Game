@@ -326,7 +326,7 @@ export const FleetBrowser: React.FC = () => {
       </main>
 
       {confirm && (
-        <div className="absolute inset-0 z-30 bg-black/60 flex items-end justify-center p-4">
+        <div className="sheet-safe-inset absolute inset-0 z-30 bg-black/60 flex items-end justify-center">
           <div className="w-full max-w-sm rounded-lg border border-[#c4a574]/50 bg-[#1a1612] p-4 space-y-3">
             <h4
               className="text-[#f6efe2]"

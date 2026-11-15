@@ -7,6 +7,7 @@ import {
 import { US_PLACE_LABELS } from '../data/usPlaces';
 import { resolvePlayerName } from '../data/playerName';
 import {
+  formatDeviceDate,
   formatTimeOf,
   readTodFields,
   writeTod,
@@ -49,6 +50,7 @@ export const ComputerRoom: React.FC = () => {
     setActiveStation,
     computerOpenApp,
     setComputerOpenApp,
+    setSettingsOpen,
     cash,
     submitCremationPermit,
     permitSubmissions,
@@ -77,7 +79,7 @@ export const ComputerRoom: React.FC = () => {
   }, [computerOpenApp]);
 
   useEffect(() => {
-    const id = window.setInterval(() => setClock(gameDate()), 15_000);
+    const id = window.setInterval(() => setClock(gameDate()), 1000);
     const unsub = subscribeClock(() => setClock(gameDate()));
     return () => {
       window.clearInterval(id);
@@ -116,7 +118,7 @@ export const ComputerRoom: React.FC = () => {
     }
   };
 
-  const clockLabel = formatTimeOf(clock);
+  const clockLabel = `${formatDeviceDate(clock)} · ${formatTimeOf(clock)}`;
 
   return (
     <div
@@ -163,6 +165,7 @@ export const ComputerRoom: React.FC = () => {
           <DesktopAppIcon kind="REALTY" onOpen={() => openApp('REALTY')} />
           <DesktopAppIcon kind="FLEETS" onOpen={() => openApp('FLEETS')} />
           <DesktopAppIcon kind="CRAIGMILE" onOpen={() => openApp('CRAIGMILE')} />
+          <DesktopAppIcon kind="SETTINGS" onOpen={() => setSettingsOpen(true)} />
         </div>
 
         <div className="crt-taskbar relative z-[7] shrink-0 h-10 flex items-center justify-between px-3">
@@ -174,7 +177,10 @@ export const ComputerRoom: React.FC = () => {
           >
             Start
           </button>
-          <div className="font-mono text-[11px] text-[#9eecc0] crt-phosphor-glow">
+          <div
+            className="font-mono text-[11px] text-[#9eecc0] crt-phosphor-glow"
+            data-device-clock
+          >
             {clockLabel} · ${cash.toLocaleString()}
           </div>
         </div>

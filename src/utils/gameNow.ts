@@ -1,6 +1,7 @@
 /**
- * Shared game clock. Offset is normally 0; Dev Tools advances it so rares,
- * family urn timers, and service deadlines move without waiting on wall time.
+ * Shared game clock. With no Dev offset this is the phone's local time,
+ * date, and timezone. Dev Tools can advance the offset so rares, family
+ * urn timers, and service deadlines move without waiting on wall time.
  */
 
 const OFFSET_KEY = 'ossuarian-dev-clock-offset';

@@ -330,7 +330,7 @@ export const RealtyBrowser: React.FC = () => {
       </main>
 
       {confirm && (
-        <div className="absolute inset-0 z-30 bg-black/50 flex items-end sm:items-center justify-center p-4">
+        <div className="sheet-safe-inset absolute inset-0 z-30 bg-black/50 flex items-end sm:items-center justify-center">
           <div className="w-full max-w-sm rounded-lg border border-[#c4b49a] bg-[#faf6ef] p-4 space-y-3 shadow-xl">
             <h4
               className="font-bold text-[#2a2118]"

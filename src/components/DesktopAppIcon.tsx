@@ -7,7 +7,8 @@ export type DesktopIconKind =
   | 'BANK'
   | 'REALTY'
   | 'FLEETS'
-  | 'CRAIGMILE';
+  | 'CRAIGMILE'
+  | 'SETTINGS';
 
 const META: Record<
   DesktopIconKind,
@@ -19,6 +20,7 @@ const META: Record<
   REALTY: { label: 'Lychgate Realty', short: 'Realty' },
   FLEETS: { label: 'Funeral Fleets', short: 'Fleets' },
   CRAIGMILE: { label: 'Craigmile Crematory', short: 'Craigmile' },
+  SETTINGS: { label: 'Settings', short: 'Settings' },
 };
 
 /** Crisp retro desktop icons — glyph art, phosphor-friendly edges. */
@@ -153,6 +155,28 @@ function IconArt({ kind }: { kind: DesktopIconKind }) {
           <circle cx="22" cy="46" r="2" fill="#34d399" />
           <circle cx="28" cy="46" r="2" fill="#f87171" />
           <circle cx="34" cy="46" r="2" fill="#e7e5e4" />
+        </svg>
+      );
+    case 'SETTINGS':
+      return (
+        <svg viewBox="0 0 56 56" className="w-full h-full" aria-hidden>
+          <rect width="56" height="56" fill="#1e2a38" />
+          <g transform="translate(28 28)">
+            {Array.from({ length: 8 }, (_, tooth) => (
+              <rect
+                key={tooth}
+                x={-3}
+                y={-17}
+                width={6}
+                height={8}
+                rx={1.2}
+                fill="#c9d7de"
+                transform={`rotate(${tooth * 45})`}
+              />
+            ))}
+            <circle r="11" fill="#e7eef2" />
+            <circle r="4.4" fill="#1e2a38" />
+          </g>
         </svg>
       );
   }

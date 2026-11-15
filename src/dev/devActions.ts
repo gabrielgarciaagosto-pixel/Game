@@ -29,7 +29,7 @@ import {
 import { initialPermitStatus } from '../data/cremationPermits';
 import { formatClock12, formatDateTime12 } from '../utils/clock12';
 import type { DispositionDirective } from '../types/game';
-import { audioManager } from '../utils/audioManager';
+import { AUDIO_PREFS_KEY, audioManager } from '../utils/audioManager';
 import {
   advanceClockBy,
   clearClockOffsetStorage,
@@ -518,6 +518,7 @@ function wipeBrowserStorage() {
     const toRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
+      if (k === AUDIO_PREFS_KEY) continue;
       if (k && (k.startsWith('ossuarian') || k.startsWith('ofu-'))) {
         toRemove.push(k);
       }
@@ -558,7 +559,7 @@ function wipeBrowserStorage() {
  * Fix: pause persist writes → clear storage → hardReset in memory → toast.
  * No native confirm; no location.reload dependency.
  */
-export function resetGame() {
+export function resetGame(toast?: string | null) {
   pauseGamePersistWrites();
 
   try {
@@ -571,7 +572,7 @@ export function resetGame() {
   pauseGamePersistWrites();
 
   // In-memory title screen (App.tsx gates on hasStartedGame)
-  useGameStore.getState().hardResetGameState();
+  useGameStore.getState().hardResetGameState(toast);
 
   // Resume persist shortly with the fresh empty state so a later cold start stays clean
   window.setTimeout(() => {
