@@ -92,6 +92,8 @@ class AudioManager {
   private gestureInstalled = false;
   /** File beds that `decodeAudioData` rejected. HTMLAudioElement plays those. */
   private elements: HTMLAudioElement[] = [];
+  /** Detach a one-shot fallback's near-end and ended listeners. */
+  private elementWatches = new Map<HTMLAudioElement, () => void>();
   /** A fallback bed whose play() was blocked. Retried on the next gesture. */
   private pendingPlay: {
     el: HTMLAudioElement;
@@ -551,6 +553,7 @@ class AudioManager {
     this.elements = [];
     if (this.pendingPlay && old.includes(this.pendingPlay.el)) this.pendingPlay = null;
     for (const el of old) {
+      this.stopElementWatch(el);
       const finish = () => {
         try {
           el.pause();
@@ -612,13 +615,37 @@ class AudioManager {
     this.pendingPlay = null;
   }
 
+  private stopElementWatch(el: HTMLAudioElement) {
+    const stop = this.elementWatches.get(el);
+    if (!stop) return;
+    this.elementWatches.delete(el);
+    stop();
+  }
+
+  /**
+   * One-shot fallback beds crossfade on timeupdate inside the fade window.
+   * `ended` is the handoff if that window is missed. Either path fires once.
+   */
   private watchElementNearEnd(el: HTMLAudioElement, id: MusicBedId, fadeSec: number) {
-    const onTime = () => {
-      if (this.currentId !== id) return;
-      const duration = el.duration;
-      if (!Number.isFinite(duration) || duration <= 0) return;
-      if (duration - el.currentTime > fadeSec) return;
+    let handed = false;
+    const detach = () => {
       el.removeEventListener('timeupdate', onTime);
+      el.removeEventListener('ended', onEnded);
+    };
+    const stop = () => {
+      handed = true;
+      detach();
+    };
+    const handoff = () => {
+      if (handed) return;
+      if (this.currentId !== id || !this.elements.includes(el)) {
+        stop();
+        this.elementWatches.delete(el);
+        return;
+      }
+      handed = true;
+      detach();
+      this.elementWatches.delete(el);
       for (const handler of this.oneShotHandlers) {
         try {
           handler(id);
@@ -627,7 +654,19 @@ class AudioManager {
         }
       }
     };
+    const onTime = () => {
+      if (handed || this.currentId !== id) return;
+      const duration = el.duration;
+      if (!Number.isFinite(duration) || duration <= 0) return;
+      if (duration - el.currentTime > fadeSec) return;
+      handoff();
+    };
+    const onEnded = () => {
+      handoff();
+    };
+    this.elementWatches.set(el, stop);
     el.addEventListener('timeupdate', onTime);
+    el.addEventListener('ended', onEnded);
   }
 
   /**

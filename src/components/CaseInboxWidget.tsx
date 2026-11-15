@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import {
   caseStatusLabel,
@@ -46,6 +46,21 @@ export const CaseInboxWidget: React.FC = () => {
   const [pickupOpen, setPickupOpen] = useState(false);
   const [pickHour, setPickHour] = useState(14);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const close = () => {
+      setIsOpen(false);
+      setPickupOpen(false);
+      setCalendarOpen(false);
+    };
+    window.__ossuarianCloseFiles = close;
+    return () => {
+      if (window.__ossuarianCloseFiles === close) {
+        delete window.__ossuarianCloseFiles;
+      }
+    };
+  }, [isOpen]);
+
   const unreadCount = inboxFiles.filter((f) => !f.isRead).length;
   const activeFile =
     inboxFiles.find((f) => f.id === selectedFileId) || inboxFiles[0];
@@ -67,7 +82,9 @@ export const CaseInboxWidget: React.FC = () => {
 
   const handUrnToFamily = () => {
     if (!linkedCase || !urnInHand) return;
-    finalizeServiceAndNextCase('CREMATION', linkedCase.id);
+    finalizeServiceAndNextCase('CREMATION', linkedCase.id, {
+      urnHandoff: true,
+    });
     setIsOpen(false);
     setPickupOpen(false);
     setCalendarOpen(false);

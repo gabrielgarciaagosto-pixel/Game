@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 declare global {
   interface Window {
     __ossuarianHardwareBack?: () => 'handled' | 'exit';
+    __ossuarianCloseFiles?: () => void;
   }
 }
 import { BankDebtHud } from './components/BankDebtHud';
@@ -45,6 +46,22 @@ function App() {
     window.__ossuarianHardwareBack = () => {
       const state = useGameStore.getState();
       if (!state.hasStartedGame) return 'exit';
+      if (state.bankForeclosed) {
+        state.acknowledgeBankForeclosure();
+        return 'handled';
+      }
+      if (state.serviceFeedback) {
+        state.clearServiceFeedback();
+        return 'handled';
+      }
+      if (state.legalAlert) {
+        state.clearLegalAlert();
+        return 'handled';
+      }
+      if (window.__ossuarianCloseFiles) {
+        window.__ossuarianCloseFiles();
+        return 'handled';
+      }
       if (state.activeStation === 'COMPUTER') {
         if (state.computerOpenApp) {
           state.setComputerOpenApp(null);

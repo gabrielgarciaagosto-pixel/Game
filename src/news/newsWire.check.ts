@@ -309,6 +309,7 @@ class FallbackAudio {
   paused = true;
   duration = 12;
   currentTime = 0;
+  listeners = new Map<string, Set<() => void>>();
   constructor() {
     FallbackAudio.latest = this;
   }
@@ -320,8 +321,17 @@ class FallbackAudio {
   pause(): void {
     this.paused = true;
   }
-  addEventListener(): void {}
-  removeEventListener(): void {}
+  addEventListener(type: string, fn: () => void): void {
+    const set = this.listeners.get(type) ?? new Set();
+    set.add(fn);
+    this.listeners.set(type, set);
+  }
+  removeEventListener(type: string, fn: () => void): void {
+    this.listeners.get(type)?.delete(fn);
+  }
+  emit(type: string): void {
+    for (const fn of [...(this.listeners.get(type) ?? [])]) fn();
+  }
 }
 
 const ticks: Array<() => void> = [];
@@ -390,6 +400,31 @@ FallbackAudio.allow = true;
 await audioManager.unlock();
 await new Promise((resolve) => setTimeout(resolve, 0));
 check(audioManager.getCurrentId() === 'theme', 'the next gesture starts the blocked bed');
+
+let handoffs = 0;
+const onNearEnd = (id: string) => {
+  if (id === 'crematoryStart') handoffs += 1;
+};
+audioManager.addOneShotNearEndHandler(onNearEnd);
+await audioManager.crossfadeTo('crematoryStart', {
+  loop: false,
+  volume: 0.4,
+  durationMs: 80,
+});
+await new Promise((resolve) => setTimeout(resolve, 0));
+const sting = FallbackAudio.latest;
+if (!sting) throw new Error('start sting element exists');
+check(sting.listeners.has('timeupdate'), 'one-shot fallback still watches timeupdate');
+check(sting.listeners.has('ended'), 'one-shot fallback listens for ended');
+sting.currentTime = 0;
+sting.emit('timeupdate');
+check(handoffs === 0, 'timeupdate outside the fade window does not hand off');
+sting.emit('ended');
+check(handoffs === 1, 'ended hands the sting off when the fade window was missed');
+sting.emit('ended');
+sting.emit('timeupdate');
+check(handoffs === 1, 'ended and timeupdate do not hand off twice');
+audioManager.removeOneShotNearEndHandler(onNearEnd);
 
 const summary: NewsTickResult | { groups: typeof groups; priceVolume: number; caseSpawn: number; headlines: number } =
   {

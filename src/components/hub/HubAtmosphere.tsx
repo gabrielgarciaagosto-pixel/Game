@@ -117,6 +117,14 @@ export const HubAtmosphere: React.FC = () => {
   const [tick, setTick] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
 
+  const spiritKey =
+    cases.length >= 3
+      ? cases
+          .slice(0, Math.min(SPIRIT_CAP, cases.length))
+          .map((c) => c.id)
+          .join('|')
+      : '';
+
   const needsClock =
     embalmingLeftAtMs != null ||
     cases.some((c) => c.serviceDateMs != null || c.location === 'CHAPEL') ||
@@ -142,7 +150,7 @@ export const HubAtmosphere: React.FC = () => {
       const w = root.clientWidth;
       const h = root.clientHeight;
       if (w < 10 || h < 10) {
-        if (!reduce) raf = requestAnimationFrame(frame);
+        raf = requestAnimationFrame(frame);
         return;
       }
       const dt = Math.min(0.034, (now - last) / 1000);
@@ -273,7 +281,7 @@ export const HubAtmosphere: React.FC = () => {
 
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [spiritKey]);
 
   const nowWall = Date.now();
   const nowGame = gameNow();

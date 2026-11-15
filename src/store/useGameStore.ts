@@ -413,7 +413,8 @@ interface GameState {
   removeChapelFlower: (caseId: string, pieceId: string) => void;
   finalizeServiceAndNextCase: (
     chosenDisposition: 'BURIAL' | 'CREMATION',
-    caseId: string
+    caseId: string,
+    settlement?: { urnHandoff?: boolean }
   ) => void;
   clearLegalAlert: () => void;
   clearServiceFeedback: () => void;
@@ -1095,6 +1096,36 @@ function settleFinishedChamber(
     retortBays: bays,
     cremationBurnActive: stillBurn,
     fuelChargedCost,
+  };
+}
+
+/** Load the case that was waiting on this chamber, if it is still in the cooler. */
+function admitQueuedCase(
+  cases: DecedentCase[],
+  settled: ReturnType<typeof settleFinishedChamber>,
+  now: number
+) {
+  const queued = settled.queuedId
+    ? cases.find((c) => c.id === settled.queuedId && c.location === 'COOLER')
+    : undefined;
+  if (!queued) {
+    return {
+      cases,
+      machines: settled.retortMachines,
+      retort: settled.retort,
+      queued: null as DecedentCase | null,
+    };
+  }
+  const loaded = freshLoad(queued.id, settled.bay.preheat);
+  const machines = settled.retortMachines.slice();
+  machines[settled.index] = loaded;
+  return {
+    cases: updateCaseById(cases, queued.id, (c) =>
+      relocateCase(c, 'CREMATION', now)
+    ),
+    machines,
+    retort: loaded,
+    queued,
   };
 }
 
@@ -2215,16 +2246,17 @@ export const useGameStore = create<GameState>()(
           (casketInv[active.offeredCasketId] ?? 0) + 1;
       }
       const settled = settleFinishedChamber(state, active.id);
+      const remaining = state.cases.filter((c) => c.id !== active.id);
+      const admitted = admitQueuedCase(remaining, settled, gameNow());
       set({
         cash: state.cash - 2500,
         reputation: Math.max(0, state.reputation - 40),
         legalAlert: `LAWSUIT FILED! ${active.name}'s contract specified Traditional Burial & Viewing Only. You were fined $2,500 for Wrongful Cremation!`,
-        cases: state.cases.filter((c) => c.id !== active.id),
+        cases: admitted.cases,
         inboxFiles: state.inboxFiles.filter((f) => f.id !== active.id),
         urnInventory: inventory,
         casketInventory: casketInv,
-        activeCaseId:
-          state.cases.find((c) => c.id !== active.id)?.id ?? null,
+        activeCaseId: admitted.queued?.id ?? remaining[0]?.id ?? null,
         placedFlowers: [],
         serviceRatingBonus: 0,
         activeStation: 'OVERVIEW',
@@ -2238,10 +2270,13 @@ export const useGameStore = create<GameState>()(
         cremationDecayArrested: settled.cremationBurnActive
           ? state.cremationDecayArrested
           : false,
-        retort: settled.retort,
-        retortMachines: settled.retortMachines,
+        retort: admitted.retort,
+        retortMachines: admitted.machines,
         activeRetortIndex: settled.activeRetortIndex,
         retortBays: settled.retortBays,
+        intakeToast: admitted.queued
+          ? `${admitted.queued.name} loaded on retort ${String.fromCharCode(65 + settled.index)}`
+          : state.intakeToast,
       });
       return;
     }
@@ -2266,22 +2301,21 @@ export const useGameStore = create<GameState>()(
       location: 'URN_FILLING' as const,
       unpermittedCremation: unpermitted || c.unpermittedCremation,
     }));
-    let machines = settled.retortMachines;
-    let nextRetort = settled.retort;
-    const queued = settled.queuedId
-      ? state.cases.find(
-          (c) => c.id === settled.queuedId && c.location === 'COOLER'
-        )
-      : null;
-    if (queued) {
-      cases = updateCaseById(cases, queued.id, (c) =>
-        relocateCase(c, 'CREMATION', gameNow())
-      );
-      const loaded = freshLoad(queued.id, settled.bay.preheat);
-      machines = machines.slice();
-      machines[settled.index] = loaded;
-      nextRetort = loaded;
-    }
+    const admitted = admitQueuedCase(cases, settled, gameNow());
+    cases = admitted.cases;
+    const queued = admitted.queued;
+    const fineAt = gameNow();
+    const fineNote = unpermitted
+      ? [
+          {
+            id: `fine-unpermitted-${fineAt.toString(36)}`,
+            at: fineAt,
+            amount: -UNPERMITTED_CREMATION_FINE,
+            label: `Unpermitted cremation fine — ${active.name}`,
+            kind: 'FINE' as const,
+          },
+        ]
+      : [];
 
     set({
       activeCaseId: caseId,
@@ -2298,6 +2332,7 @@ export const useGameStore = create<GameState>()(
       legalAlert: unpermitted
         ? `STATE BOARD INSPECTION: ${active.name} was cremated without an approved cremation permit (status: ${active.cremationPermitStatus}). Fine $${UNPERMITTED_CREMATION_FINE.toLocaleString()} and reputation −${UNPERMITTED_CREMATION_REP_HIT}. File permits on the Computer before firing the retort.`
         : state.legalAlert,
+      financeLedger: [...fineNote, ...state.financeLedger].slice(0, 80),
       ossilegiumCommuneGrams:
         state.ossilegiumCommuneGrams + Math.round(boneAshGrams * 0.02),
       activeStation: 'URN_FILLING',
@@ -2311,8 +2346,8 @@ export const useGameStore = create<GameState>()(
       cremationDecayArrested: settled.cremationBurnActive
         ? state.cremationDecayArrested
         : false,
-      retort: nextRetort,
-      retortMachines: machines,
+      retort: admitted.retort,
+      retortMachines: admitted.machines,
       activeRetortIndex: settled.activeRetortIndex,
       retortBays: settled.retortBays,
       intakeToast: queued
@@ -3044,10 +3079,11 @@ export const useGameStore = create<GameState>()(
       };
     }),
 
-  finalizeServiceAndNextCase: (chosenDisposition, caseId) =>
+  finalizeServiceAndNextCase: (chosenDisposition, caseId, settlement) =>
     set((state) => {
       const c = resolveCase(state, caseId);
       if (!c) return { activeStation: 'OVERVIEW' };
+      const urnHandoff = settlement?.urnHandoff === true;
 
       let fine = 0;
       let alertMsg: string | null = null;
@@ -3094,11 +3130,11 @@ export const useGameStore = create<GameState>()(
       const offeredCasket = getCasketById(c.offeredCasketId);
       const failedService = fine > 0;
       const lateService =
-        c.serviceDateMs != null && gameNow() > c.serviceDateMs;
+        !urnHandoff && c.serviceDateMs != null && gameNow() > c.serviceDateMs;
       const lateFine = lateService ? 900 : 0;
       const serviceFailed = failedService || lateFine > 0;
 
-      const layout = state.chapelLayouts[c.id];
+      const layout = urnHandoff ? undefined : state.chapelLayouts[c.id];
       const theme = layout?.theme ?? {
         wallId: null,
         floorId: null,
@@ -3113,24 +3149,27 @@ export const useGameStore = create<GameState>()(
         .filter((k): k is FlowerKind =>
           k === 'LILIES' || k === 'ROSES' || k === 'WREATH'
         );
-      const prefMatches = evaluateChapelPrefMatches({
-        prefs: c.familyChapelPrefs,
-        theme,
-        flowersPlaced: flowerKinds,
-        serviceMusicId: layout?.serviceMusicId ?? null,
-      });
-      const prefBonusPts = serviceFailed
-        ? 0
-        : chapelPrefMatchBonus(prefMatches);
-      const chapelScore = scoreChapelArrangement({
-        pieces: layout?.pieces ?? [],
-        preferred: c.preferredFlowers,
-        ownedDecorIds: state.chapelOwnedDecor,
-        theme,
-        decayLevel: c.decayLevel,
-        urnPrestige: offered?.prestigeBonus ?? 0,
-        familyPrefBonus: prefBonusPts,
-      });
+      const prefMatches = urnHandoff
+        ? []
+        : evaluateChapelPrefMatches({
+            prefs: c.familyChapelPrefs,
+            theme,
+            flowersPlaced: flowerKinds,
+            serviceMusicId: layout?.serviceMusicId ?? null,
+          });
+      const prefBonusPts =
+        urnHandoff || serviceFailed ? 0 : chapelPrefMatchBonus(prefMatches);
+      const chapelScore = urnHandoff
+        ? { total: 0 }
+        : scoreChapelArrangement({
+            pieces: layout?.pieces ?? [],
+            preferred: c.preferredFlowers,
+            ownedDecorIds: state.chapelOwnedDecor,
+            theme,
+            decayLevel: c.decayLevel,
+            urnPrestige: offered?.prestigeBonus ?? 0,
+            familyPrefBonus: prefBonusPts,
+          });
       const chapelRewards = satisfactionToRewards(chapelScore.total);
 
       // Chapel score is the single source of truth (preview matches payout)
@@ -3178,10 +3217,20 @@ export const useGameStore = create<GameState>()(
         state.ownedProperty.salesMult ?? 1
       );
 
-      const cortege = resolveCortege(
-        state.ownedFleetIds,
-        state.fleetAssignment
-      );
+      const cortege = urnHandoff
+        ? {
+            recovery: null,
+            escort: null,
+            flower: null,
+            coach: null,
+            assigned: {
+              recovery: false,
+              escort: false,
+              flower: false,
+              coach: false,
+            },
+          }
+        : resolveCortege(state.ownedFleetIds, state.fleetAssignment);
       const memorialService =
         c.directive === 'BURIAL_VIEWING' ||
         c.directive === 'VIEWING_THEN_CREMATION' ||
