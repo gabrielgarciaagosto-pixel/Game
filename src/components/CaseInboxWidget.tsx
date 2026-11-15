@@ -26,10 +26,17 @@ function addDays(ms: number, days: number): number {
 }
 
 export const CaseInboxWidget: React.FC = () => {
-  const { inboxFiles, markFileRead, setServiceDate, cases } = useGameStore();
+  const {
+    inboxFiles,
+    markFileRead,
+    setServiceDate,
+    cases,
+    finalizeServiceAndNextCase,
+  } = useGameStore();
   const [isOpen, setIsOpen] = useState(false);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [pickupOpen, setPickupOpen] = useState(false);
   const [pickHour, setPickHour] = useState(14);
 
   const unreadCount = inboxFiles.filter((f) => !f.isRead).length;
@@ -37,6 +44,27 @@ export const CaseInboxWidget: React.FC = () => {
     inboxFiles.find((f) => f.id === selectedFileId) || inboxFiles[0];
 
   const linkedCase = cases.find((c) => c.id === activeFile?.id);
+  const directPickup =
+    linkedCase?.directive === 'CREMATION_DIRECT' && linkedCase.isCremated;
+  const urnInHand = directPickup && linkedCase.isUrnFilled;
+
+  const openSchedule = () => {
+    if (directPickup) {
+      setPickupOpen(true);
+      setCalendarOpen(false);
+      return;
+    }
+    setPickupOpen(false);
+    setCalendarOpen(true);
+  };
+
+  const handUrnToFamily = () => {
+    if (!linkedCase || !urnInHand) return;
+    finalizeServiceAndNextCase('CREMATION', linkedCase.id);
+    setIsOpen(false);
+    setPickupOpen(false);
+    setCalendarOpen(false);
+  };
 
   const calendarDays = useMemo(() => {
     const today = startOfDay(gameNow());
@@ -95,6 +123,7 @@ export const CaseInboxWidget: React.FC = () => {
                   setSelectedFileId(file.id);
                   markFileRead(file.id);
                   setCalendarOpen(false);
+                  setPickupOpen(false);
                 }}
                 style={{ touchAction: 'manipulation' }}
                 className={`w-full text-left p-2.5 border-b border-slate-800/80 text-xs ${
@@ -110,7 +139,14 @@ export const CaseInboxWidget: React.FC = () => {
                 </div>
                 {file.serviceDateMs && (
                   <div className="text-[10px] text-sky-300 mt-0.5">
-                    Service{' '}
+                    {cases.some(
+                      (c) =>
+                        c.id === file.id &&
+                        c.directive === 'CREMATION_DIRECT' &&
+                        c.isCremated
+                    )
+                      ? 'Pickup'
+                      : 'Service'}{' '}
                     {new Date(file.serviceDateMs).toLocaleDateString(undefined, {
                       month: 'short',
                       day: 'numeric',
@@ -325,7 +361,9 @@ export const CaseInboxWidget: React.FC = () => {
 
                   {activeFile.serviceDateMs ? (
                     <div className="p-2 bg-sky-950/60 border border-sky-700 rounded text-[11px]">
-                      Viewing / service set for{' '}
+                      {directPickup
+                        ? 'Family urn pickup set for '
+                        : 'Viewing / service set for '}
                       <strong>
                         {new Date(activeFile.serviceDateMs).toLocaleString()}
                       </strong>
@@ -346,29 +384,67 @@ export const CaseInboxWidget: React.FC = () => {
                       )}
                       <button
                         type="button"
-                        onClick={() => setCalendarOpen(true)}
+                        onClick={openSchedule}
                         style={{ touchAction: 'manipulation' }}
                         className="block mt-2 text-sky-300 underline"
                       >
-                        Reschedule
+                        {directPickup ? 'Reschedule pickup' : 'Reschedule'}
                       </button>
                     </div>
                   ) : (
                     <button
                       type="button"
-                      onClick={() => setCalendarOpen(true)}
+                      onClick={openSchedule}
                       style={{ touchAction: 'manipulation' }}
                       className="w-full py-2.5 bg-sky-600 active:bg-sky-500 rounded font-bold text-sm"
                     >
-                      Set Date for Viewing / Service
+                      {directPickup
+                        ? 'Schedule Family Urn Pickup'
+                        : 'Set Date for Viewing / Service'}
                     </button>
+                  )}
+
+                  {directPickup && pickupOpen && (
+                    <div className="mt-2 p-2 bg-slate-950 border border-amber-700/70 rounded-lg space-y-2">
+                      <p className="text-[11px] text-slate-300 leading-snug">
+                        Cremation is finished. Hand the sealed urn to the
+                        family now, or set a day for them to collect it.
+                      </p>
+                      <button
+                        type="button"
+                        disabled={!urnInHand}
+                        onClick={handUrnToFamily}
+                        style={{ touchAction: 'manipulation' }}
+                        className={`w-full py-2.5 rounded font-bold text-sm ${
+                          urnInHand
+                            ? 'bg-amber-500 text-slate-950 active:bg-amber-400'
+                            : 'bg-slate-800 text-slate-500'
+                        }`}
+                      >
+                        Hand the urn to the family now
+                      </button>
+                      {!urnInHand && (
+                        <p className="text-[10px] text-amber-200/80 leading-snug">
+                          Seal the urn in processing before handing it over.
+                          A pickup day can still be set.
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setCalendarOpen(true)}
+                        style={{ touchAction: 'manipulation' }}
+                        className="w-full py-2 rounded bg-sky-800 active:bg-sky-700 font-semibold text-xs"
+                      >
+                        Choose a pickup day
+                      </button>
+                    </div>
                   )}
 
                   {calendarOpen && (
                     <div className="mt-2 p-2 bg-slate-950 border border-slate-700 rounded-lg">
                       <div className="flex justify-between items-center mb-2">
                         <span className="font-bold text-slate-300">
-                          Pick service day
+                          {directPickup ? 'Pick pickup day' : 'Pick service day'}
                         </span>
                         <label className="text-[10px] text-slate-400 flex items-center gap-1">
                           Hour (24h)
