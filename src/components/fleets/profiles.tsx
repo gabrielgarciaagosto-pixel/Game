@@ -475,23 +475,32 @@ export function SilentArrival({ paint, glass }: Ids) {
         </clipPath>
       </defs>
       <path
-        d="M24 114 L38 100 L54 92 H86 L104 58 L122 22 H356 L380 30 L400 54 L408 86 L402 116 H32 Z"
+        d="M4 166 L4 128 L12 112 L16 78 L30 62 L56 54 L104 48 L124 32 L142 22 H346 L368 30 L390 48 L406 78 L412 124 L406 166 Z"
         fill={`url(#${paint})`}
-        stroke="rgba(255,255,255,0.34)"
-        strokeWidth="0.8"
+        stroke="rgba(255,255,255,0.42)"
+        strokeWidth="0.9"
       />
+      <path d="M18 104 H396 L404 166 H8 Z" fill="#1a1f26" />
       <path
-        d="M122 20 H368"
+        d="M142 20 H356"
         stroke="#eef2f6"
         strokeWidth="1.8"
         strokeLinecap="round"
       />
       <path
-        d="M136 24 H340"
-        stroke="rgba(255,255,255,0.18)"
+        d="M152 24 H336"
+        stroke="rgba(255,255,255,0.2)"
         strokeWidth="3"
         strokeLinecap="round"
       />
+      <rect x="6" y="78" width="20" height="46" rx="1.2" fill="#12151a" stroke="#e2e8ee" strokeWidth="1.2" />
+      <path d="M10 86 H22 M10 94 H22 M10 102 H22 M10 110 H22 M10 118 H22" stroke="#d5dde4" strokeWidth="1.2" />
+      <rect x="28" y="68" width="42" height="18" rx="1.8" fill="#f4f1e6" stroke="#e2e8ee" strokeWidth="0.9" />
+      <rect x="30" y="70" width="28" height="14" fill="#fff" />
+      <rect x="58" y="72" width="10" height="10" fill="#c5d8ee" />
+      <path d="M2 122 H42 V166 H0 Z" fill="#222830" stroke="#d5dde4" strokeWidth="1.15" />
+      <path d="M4 132 H38" stroke="#f2f5f8" strokeWidth="2.4" />
+      <path d="M4 142 H38" stroke="#9aa3ad" strokeWidth="1.4" />
       <Pane d="M132 30 H204 V90 H118 L132 30 Z" glass={glass} />
       <PleatedDrape x={212} y={28} w={72} h={62} clipId={clipDoor} />
       <PleatedDrape x={292} y={28} w={56} h={48} clipId={clipQuarter} />
@@ -506,20 +515,23 @@ export function SilentArrival({ paint, glass }: Ids) {
       />
       <circle cx="300" cy="40" r="2.3" fill="#f7f8f8" stroke="#9aa3ad" strokeWidth="0.45" />
       <circle cx="344" cy="42" r="2.3" fill="#f7f8f8" stroke="#9aa3ad" strokeWidth="0.45" />
-      <path d="M64 96 H396" stroke="#e8eef3" strokeWidth="1.7" />
-      <path d="M48 112 H398" stroke="#c5ced6" strokeWidth="2" />
+      <path d="M48 100 H398" stroke="#e8eef3" strokeWidth="1.8" />
+      <path d="M22 124 H394" stroke="#c5ced6" strokeWidth="1.5" />
+      <path d="M8 164 H48" stroke="#e8eef3" strokeWidth="2.8" />
+      <path d="M108 164 H292" stroke="#e8eef3" strokeWidth="2.8" />
+      <path d="M352 164 H404" stroke="#e8eef3" strokeWidth="2.8" />
       <path d="M208 46 V110 M288 44 V110" stroke="#121316" strokeWidth="0.8" />
       <rect x="176" y="98" width="14" height="2.2" rx="0.7" fill="#e8eef3" />
       <rect x="250" y="98" width="14" height="2.2" rx="0.7" fill="#e8eef3" />
-      <rect x="24" y="90" width="12" height="8" rx="1" fill="#f6f3ea" />
-      <rect x="22" y="100" width="14" height="10" fill="#101114" />
-      <path d="M396 64 H410 V112 H396 Z" fill="#6e1418" />
-      <path d="M399 70 H407 V106 H399 Z" fill="#e23b42" />
-      <circle cx="366" cy="100" r="3.2" fill="none" stroke="#c5ced6" />
-      <Well cx={116} cy={126} r={22} />
-      <Well cx={322} cy={126} r={22} />
-      <AlloyWheel cx={116} cy={126} r={22} spokes={12} lip="#f6f1e4" />
-      <AlloyWheel cx={322} cy={126} r={22} spokes={12} lip="#f6f1e4" />
+      <path d="M396 86 H414 V160 H396 Z" fill="#6e1418" />
+      <path d="M399 92 H410 V154 H399 Z" fill="#e23b42" />
+      <circle cx="370" cy="128" r="3.4" fill="none" stroke="#c5ced6" strokeWidth="1.1" />
+      <path d="M48 164 Q78 90 108 164" fill="#101216" />
+      <path d="M292 164 Q322 90 352 164" fill="#101216" />
+      <AlloyWheel cx={78} cy={158} r={28} spokes={12} lip="#f6f1e4" />
+      <AlloyWheel cx={322} cy={158} r={28} spokes={12} lip="#f6f1e4" />
+      <path d="M50 162 Q78 96 106 162" fill="none" stroke="#d5dde4" strokeWidth="1.3" />
+      <path d="M294 162 Q322 96 350 162" fill="none" stroke="#d5dde4" strokeWidth="1.3" />
     </g>
   );
 }

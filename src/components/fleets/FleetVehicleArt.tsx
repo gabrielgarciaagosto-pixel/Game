@@ -304,7 +304,7 @@ const PAINT: Record<string, [string, string, string?]> = {
   rec_parish_panel: ['#f4f1ea', '#c8c4b8'],
   rec_night_call: ['#24344a', '#101820'],
   rec_laurel: ['#2a241c', '#0c0c0e'],
-  rec_silent_arrival: ['#2a2e32', '#121416', '#07080a'],
+  rec_silent_arrival: ['#3a414a', '#2c323a', '#242a32'],
   esc_civic_lead: ['#2a2e33', '#101114'],
   esc_garden_deck: ['#f7f1e4', '#e4d2ae', '#c4b08a'],
   flw_forty_one: ['#f6f3ec', '#e4ddd0', '#b7b0a2'],
@@ -328,9 +328,11 @@ export const FleetVehicleArt: React.FC<{
   const hi = spec[0];
   const mid = spec[1];
   const shade = spec[2] ?? '#050505';
+  const tall = vehicleId === 'rec_silent_arrival';
+  const vbH = tall ? 198 : 170;
   return (
     <svg
-      viewBox="0 0 420 170"
+      viewBox={`0 0 420 ${vbH}`}
       className="w-full h-full"
       role="img"
       aria-label={title ?? vehicleId}
@@ -352,8 +354,8 @@ export const FleetVehicleArt: React.FC<{
           <stop offset="100%" stopColor="#6a4a12" />
         </radialGradient>
       </defs>
-      <rect width="420" height="170" fill="transparent" />
-      <ellipse cx="210" cy="158" rx="170" ry="6" fill="rgba(0,0,0,0.28)" />
+      <rect width="420" height={vbH} fill="transparent" />
+      <ellipse cx="210" cy={tall ? 188 : 158} rx="170" ry="6" fill="rgba(0,0,0,0.28)" />
       <Body vehicleId={vehicleId} g={g} />
     </svg>
   );
