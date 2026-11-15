@@ -202,11 +202,15 @@ export const TutorialLayer: React.FC = () => {
   }, [tutorialStep, tutorial]);
 
   useLayoutEffect(() => {
-    if (tutorial !== 'active') return;
+    // The title covers the room. Measuring then would keep the title's
+    // buttons, and Continue would not scan again.
+    if (tutorial !== 'active' || titleGate || !hasStartedGame) return;
     const next = screenObstacles();
     setObstacles((prev) => (sameObstacles(prev, next) ? prev : next));
   }, [
     tutorial,
+    titleGate,
+    hasStartedGame,
     tutorialStep,
     activeStation,
     filesPanelOpen,
