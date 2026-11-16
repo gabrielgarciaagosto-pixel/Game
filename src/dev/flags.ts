@@ -1,14 +1,18 @@
 /**
- * Developer tools overlay gate.
+ * Developer tools.
  *
- * Release strip: set to `false`, or build with `VITE_DEV_TOOLS=0`.
- * Demo builds leave this `true` (or `VITE_DEV_TOOLS=1`) so Gabriel can QA.
+ * Internal builds leave them on unless `VITE_DEV_TOOLS=0`.
+ * A public itch.io package sets `VITE_PUBLIC_DEMO=1`, which forces this
+ * off and lets the bundler drop the overlay, the FILES DEV button, and
+ * the seven-tap summon.
  */
 const envFlag = import.meta.env.VITE_DEV_TOOLS;
 
 export const DEV_TOOLS: boolean =
-  envFlag === '0' || envFlag === 'false'
+  import.meta.env.VITE_PUBLIC_DEMO === '1'
     ? false
-    : envFlag === '1' || envFlag === 'true'
-      ? true
-      : true; // default ON for this demo branch — flip to false for store release
+    : envFlag === '0' || envFlag === 'false'
+      ? false
+      : envFlag === '1' || envFlag === 'true'
+        ? true
+        : true;

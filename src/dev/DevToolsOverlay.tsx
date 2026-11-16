@@ -164,7 +164,7 @@ function ResetGameButton() {
       return;
     }
     setArmed(false);
-    actions.resetGame();
+    actions.resetGame('[DEV] Game reset — back at title.');
   };
 
   return (

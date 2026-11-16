@@ -468,7 +468,7 @@ export const MainHubMenu: React.FC = () => {
             id="urns"
             active={openStat === 'urns'}
             onTap={(id) => {
-              noteUrnsTap();
+              if (import.meta.env.VITE_PUBLIC_DEMO !== '1') noteUrnsTap();
               setOpenStat((s) => (s === id ? null : id));
             }}
             className="border-amber-900/50"

@@ -195,7 +195,6 @@ import {
   setNotificationGate,
 } from '../utils/houseNotifications';
 import { gameNow } from '../utils/gameNow';
-import { DEV_TOOLS } from '../dev/flags';
 import { readIntakeDevOptions } from '../dev/intakeOptions';
 import {
   PHONE_EXTRA_PER_DAY,
@@ -1706,7 +1705,9 @@ export const useGameStore = create<GameState>()(
       bankOpenTab: null,
       intakeToast:
         toast === undefined
-          ? '[DEV] Game reset — back at title.'
+          ? import.meta.env.VITE_PUBLIC_DEMO === '1'
+            ? 'Game reset — back at title.'
+            : '[DEV] Game reset — back at title.'
           : toast,
       legalAlert: null,
       serviceFeedback: null,
@@ -1886,9 +1887,12 @@ export const useGameStore = create<GameState>()(
     ) {
       set(career);
     }
-    const dev = DEV_TOOLS
-      ? readIntakeDevOptions()
-      : { sci: false, pause: false };
+    const dev =
+      import.meta.env.VITE_PUBLIC_DEMO === '1' ||
+      import.meta.env.VITE_DEV_TOOLS === '0' ||
+      import.meta.env.VITE_DEV_TOOLS === 'false'
+        ? { sci: false, pause: false }
+        : readIntakeDevOptions();
     const now = gameNow();
     const coolerCount = state.cases.filter((c) => c.location === 'COOLER').length;
     const cap = coolerBayCapacity(state.facilityLevels.cooler_bays || 0);
@@ -3720,6 +3724,7 @@ export const useGameStore = create<GameState>()(
   },
 
   markActiveCaseEmbalmed: () => {
+    if (import.meta.env.VITE_PUBLIC_DEMO === '1') return false;
     const state = get();
     const id = state.activeCaseId;
     if (!id) return false;

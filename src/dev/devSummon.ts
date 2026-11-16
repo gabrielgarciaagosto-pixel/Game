@@ -27,7 +27,7 @@ export function subscribeDevSummon(listener: () => void): () => void {
 }
 
 export function noteUrnsTap(): void {
-  if (!DEV_TOOLS || summoned) return;
+  if (import.meta.env.VITE_PUBLIC_DEMO === '1' || !DEV_TOOLS || summoned) return;
   const now = performance.now();
   taps = taps.filter((t) => now - t <= WINDOW_MS);
   taps.push(now);

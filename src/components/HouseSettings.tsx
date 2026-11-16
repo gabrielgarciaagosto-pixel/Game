@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { DEFAULT_PLAYER_NAME } from '../data/playerName';
-import { resetGame } from '../dev/devActions';
+import { COMING_SOON_POINTS } from './ComingSoonNote';
+import { resetGame } from '../utils/resetGame';
 import { useGameStore } from '../store/useGameStore';
 import { audioManager } from '../utils/audioManager';
 import { requestHouseNotificationPermission } from '../utils/houseNotifications';
@@ -179,6 +180,20 @@ export const HouseSettings: React.FC = () => {
                   {notifyNote}
                 </p>
               ) : null}
+            </div>
+
+            <div className="mt-4 border-t border-[#3a3228] pt-4">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-[#c4a574]">
+                Coming soon
+              </p>
+              <p className="mt-2 text-[11px] leading-snug text-[#b7aa98]">
+                This public demo is a work in progress. Still ahead, in general terms:
+              </p>
+              <ul className="mt-2 space-y-1 text-[12px] text-[#f3eadc]">
+                {COMING_SOON_POINTS.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
             </div>
 
             <button

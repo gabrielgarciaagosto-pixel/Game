@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useState } from 'react';
 
 declare global {
   interface Window {
@@ -29,11 +29,19 @@ import { HouseSettings } from './components/HouseSettings';
 import { TutorialLayer } from './components/TutorialLayer';
 import { UrnStartScreen } from './components/UrnStartScreen';
 import { UrnVaultRoom } from './components/UrnVaultRoom';
-import { DevToolsOverlay, DEV_TOOLS } from './dev';
 import { useIntakeSpawner } from './hooks/useIntakeSpawner';
 import { useRetortEngine } from './hooks/useRetortEngine';
 import { directiveLabel, displayCaseName, locationLabel } from './types/game';
 import { useGameStore } from './store/useGameStore';
+
+const DevToolsOverlay =
+  import.meta.env.VITE_PUBLIC_DEMO === '1'
+    ? null
+    : lazy(() =>
+        import('./dev/DevToolsOverlay').then((mod) => ({
+          default: mod.DevToolsOverlay,
+        }))
+      );
 
 function App() {
   const [hydrated, setHydrated] = useState(() =>
@@ -193,7 +201,11 @@ function App() {
         />
       ) : (
     <div className="relative flex flex-col w-full h-full overflow-hidden bg-slate-950 text-slate-100">
-      {DEV_TOOLS ? <DevToolsOverlay /> : null}
+      {DevToolsOverlay ? (
+        <Suspense fallback={null}>
+          <DevToolsOverlay />
+        </Suspense>
+      ) : null}
       {activeStation === 'OVERVIEW' ? (
         <MainHubMenu />
       ) : (

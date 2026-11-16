@@ -25,22 +25,20 @@ import { IDLE_RETORT } from '../retort/retortTypes';
 import {
   basePayoutFor,
   generateRandomCase,
-  pauseGamePersistWrites,
-  resumeGamePersistWrites,
   toInboxFile,
   useGameStore,
 } from '../store/useGameStore';
 import { initialPermitStatus } from '../data/cremationPermits';
 import { formatClock12, formatDateTime12 } from '../utils/clock12';
 import type { DispositionDirective } from '../types/game';
-import { AUDIO_PREFS_KEY, audioManager } from '../utils/audioManager';
+import { audioManager } from '../utils/audioManager';
 import {
   advanceClockBy,
-  clearClockOffsetStorage,
   gameNow,
   setClockOffsetMs,
   getClockOffsetMs,
 } from '../utils/gameNow';
+import { resetGame } from '../utils/resetGame';
 
 function toast(msg: string) {
   useGameStore.setState({ intakeToast: `[DEV] ${msg}` });
@@ -525,104 +523,7 @@ export function forcePickFamilyUrnForActive() {
   }));
 }
 
-const KNOWN_STORAGE_KEYS = [
-  'ossuarian-first-urn-v1',
-  'ossuarian-dev-clock-offset',
-  'ossuarian-dev-fab-pos',
-  'ossuarian-dev-intake',
-] as const;
-
-function wipeBrowserStorage() {
-  clearClockOffsetStorage();
-
-  try {
-    sessionStorage.removeItem('ofu-demo-urn-phase');
-    const sessionKill: string[] = [];
-    for (let i = 0; i < sessionStorage.length; i++) {
-      const k = sessionStorage.key(i);
-      if (k && (k.startsWith('ossuarian') || k.startsWith('ofu-'))) {
-        sessionKill.push(k);
-      }
-    }
-    for (const k of sessionKill) sessionStorage.removeItem(k);
-  } catch {
-    /* ignore */
-  }
-
-  try {
-    for (const key of KNOWN_STORAGE_KEYS) {
-      localStorage.removeItem(key);
-    }
-    const toRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k === AUDIO_PREFS_KEY) continue;
-      if (k && (k.startsWith('ossuarian') || k.startsWith('ofu-'))) {
-        toRemove.push(k);
-      }
-    }
-    for (const k of toRemove) localStorage.removeItem(k);
-  } catch {
-    /* ignore */
-  }
-
-  // Best-effort IndexedDB wipe (Capacitor does not use Preferences for save).
-  try {
-    if (typeof indexedDB?.databases === 'function') {
-      void indexedDB.databases().then((dbs) => {
-        for (const db of dbs) {
-          if (
-            db.name &&
-            (db.name.includes('ossuarian') || db.name.includes('ofu-'))
-          ) {
-            indexedDB.deleteDatabase(db.name);
-          }
-        }
-      });
-    }
-  } catch {
-    /* ignore */
-  }
-}
-
-/**
- * Capacitor-safe full wipe → title screen.
- *
- * v0.9.9 Android failure root causes:
- * 1) `window.confirm` often fails silently in Capacitor WebView → reset never ran
- * 2) `location.replace` flushed dirty Zustand state back into localStorage after
- *    clearStorage, so reload rehydrated the old save (no title)
- * 3) Same-URL navigation may not remount the SPA — must set hasStartedGame false
- *
- * Fix: pause persist writes → clear storage → hardReset in memory → toast.
- * No native confirm; no location.reload dependency.
- */
-export function resetGame(toast?: string | null) {
-  pauseGamePersistWrites();
-
-  try {
-    resumeGamePersistWrites();
-    useGameStore.persist.clearStorage();
-  } catch {
-    /* ignore */
-  }
-  wipeBrowserStorage();
-  pauseGamePersistWrites();
-
-  // In-memory title screen (App.tsx gates on hasStartedGame)
-  useGameStore.getState().hardResetGameState(toast);
-
-  // Resume persist shortly with the fresh empty state so a later cold start stays clean
-  window.setTimeout(() => {
-    try {
-      resumeGamePersistWrites();
-      // Nudge persist to write the fresh slice (hasStartedGame: false, empty cases)
-      useGameStore.setState((s) => ({ intakeToast: s.intakeToast }));
-    } catch {
-      /* ignore */
-    }
-  }, 150);
-}
+export { resetGame };
 
 /** @deprecated Prefer resetGame — kept as alias for older Dev Tools labels. */
 export function resetSave() {

@@ -29,13 +29,33 @@ import { inventoryUnits } from '../data/caseRating';
 import { FamilyPreferenceCard } from './FamilyPreferenceCard';
 import { gameNow } from '../utils/gameNow';
 import { audioManager } from '../utils/audioManager';
-import { DEV_TOOLS } from '../dev';
+import { DEV_TOOLS } from '../dev/flags';
 import { useDevSummoned } from '../dev/devSummon';
 import { PhoneFab } from './PhoneFab';
 import { UrnVessel } from './urns/UrnVessel';
 
 const FILE_FAB_CLASS =
   'bg-amber-500 active:bg-amber-400 text-slate-950 font-extrabold px-3.5 py-3 rounded-xl shadow-2xl flex items-center gap-2 border-2 border-amber-200 text-sm min-h-12';
+
+function FilesDevButton() {
+  if (import.meta.env.VITE_PUBLIC_DEMO === '1') return null;
+  return <FilesDevButtonLive />;
+}
+
+function FilesDevButtonLive() {
+  const devSummoned = useDevSummoned();
+  if (!DEV_TOOLS || !devSummoned) return null;
+  return (
+    <button
+      type="button"
+      aria-label="Developer tools"
+      onClick={() => window.dispatchEvent(new Event('ossuarian-dev-open'))}
+      className="mt-1 font-mono text-[9px] font-bold tracking-wider text-lime-300 border border-lime-400/70 bg-zinc-950 rounded px-1 py-0.5"
+    >
+      DEV
+    </button>
+  );
+}
 
 function moneyLabel(amount: number): string {
   const abs = Math.abs(Math.round(amount)).toLocaleString();
@@ -95,7 +115,6 @@ export const CaseInboxWidget: React.FC = () => {
     setCalendarOpen(false);
     setScheduleNote(null);
   }, [activeStation]);
-  const devSummoned = useDevSummoned();
 
   useEffect(() => {
     if (!isOpen) {
@@ -251,18 +270,7 @@ export const CaseInboxWidget: React.FC = () => {
               <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
                 Family Directives
               </div>
-              {DEV_TOOLS && devSummoned ? (
-                <button
-                  type="button"
-                  aria-label="Developer tools"
-                  onClick={() =>
-                    window.dispatchEvent(new Event('ossuarian-dev-open'))
-                  }
-                  className="mt-1 font-mono text-[9px] font-bold tracking-wider text-lime-300 border border-lime-400/70 bg-zinc-950 rounded px-1 py-0.5"
-                >
-                  DEV
-                </button>
-              ) : null}
+              <FilesDevButton />
             </div>
             {inboxFiles.length === 0 && (
               <p className="p-3 text-xs text-slate-500">Inbox empty</p>

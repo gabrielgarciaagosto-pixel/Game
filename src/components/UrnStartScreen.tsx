@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { DEFAULT_PLAYER_NAME } from '../data/playerName';
 import { useGameStore } from '../store/useGameStore';
+import { ComingSoonPanel } from './ComingSoonNote';
 import { GAME_VERSION } from '../version';
 
 interface UrnStartScreenProps {
@@ -26,6 +27,7 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
   const [isFadingOut, setIsFadingOut] = useState(false);
   const [isRattling, setIsRattling] = useState(false);
   const [statusText, setStatusText] = useState('Awaiting Mortician...');
+  const [soonOpen, setSoonOpen] = useState(false);
   const timersRef = useRef<number[]>([]);
   const rattleTimerRef = useRef<number | null>(null);
 
@@ -277,6 +279,18 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
           cursor: pointer;
         }
 
+        .splash-soon {
+          margin-top: 0.15rem;
+          border: none;
+          background: transparent;
+          color: #c4a574;
+          font-family: 'Cinzel', Georgia, 'Times New Roman', serif;
+          font-size: 0.68rem;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          cursor: pointer;
+        }
+
         .splash-credit {
           position: absolute;
           left: var(--safe-left);
@@ -287,12 +301,24 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
              The padding is the quiet band above 3-button and gesture bars. */
           padding-bottom: calc(var(--safe-bottom) + 1.25rem);
           font-family: 'Cinzel', Georgia, 'Times New Roman', serif;
+          text-align: center;
+          line-height: 1.45;
+        }
+
+        .splash-demo {
+          margin: 0 0 0.15rem;
+          font-size: 0.78rem;
+          font-weight: 700;
+          letter-spacing: 0.14em;
+          color: #e6c98a;
+        }
+
+        .splash-byline {
+          margin: 0;
           font-size: 0.68rem;
           font-weight: 500;
           letter-spacing: 0.12em;
           color: #6e675c;
-          text-align: center;
-          line-height: 1.4;
         }
 
         .ash-puff-1, .ash-puff-2, .ash-puff-3 {
@@ -526,10 +552,23 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
             Settings
           </button>
         )}
+        {!isAnimating && (
+          <button
+            type="button"
+            className="splash-soon"
+            onClick={() => setSoonOpen(true)}
+          >
+            Coming soon
+          </button>
+        )}
       </div>
-      <p className="splash-credit">
-        Developed by Dextra-Mortem · v{GAME_VERSION}
-      </p>
+      <div className="splash-credit">
+        <p className="splash-demo">DEMO — Work in Progress</p>
+        <p className="splash-byline">
+          Developed by Dextra-Mortem · v{GAME_VERSION}
+        </p>
+      </div>
+      {soonOpen ? <ComingSoonPanel onClose={() => setSoonOpen(false)} /> : null}
     </div>
   );
 };

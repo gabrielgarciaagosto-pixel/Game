@@ -5,16 +5,19 @@
  */
 
 const OFFSET_KEY = 'ossuarian-dev-clock-offset';
+const PUBLIC_DEMO = import.meta.env.VITE_PUBLIC_DEMO === '1';
 
 let offsetMs = 0;
-try {
-  const raw = localStorage.getItem(OFFSET_KEY);
-  if (raw != null) {
-    const n = Number(raw);
-    if (Number.isFinite(n)) offsetMs = n;
+if (!PUBLIC_DEMO) {
+  try {
+    const raw = localStorage.getItem(OFFSET_KEY);
+    if (raw != null) {
+      const n = Number(raw);
+      if (Number.isFinite(n)) offsetMs = n;
+    }
+  } catch {
+    /* ignore */
   }
-} catch {
-  /* ignore */
 }
 
 type Listener = () => void;
@@ -34,11 +37,13 @@ export function getClockOffsetMs(): number {
 }
 
 export function setClockOffsetMs(ms: number): void {
+  if (PUBLIC_DEMO) return;
   offsetMs = Math.trunc(ms);
   persist();
 }
 
 export function advanceClockBy(ms: number): void {
+  if (PUBLIC_DEMO) return;
   offsetMs += Math.trunc(ms);
   persist();
 }
@@ -60,7 +65,7 @@ export function clearClockOffsetStorage(): void {
 }
 
 export function gameNow(): number {
-  return Date.now() + offsetMs;
+  return PUBLIC_DEMO ? Date.now() : Date.now() + offsetMs;
 }
 
 export function gameDate(): Date {
