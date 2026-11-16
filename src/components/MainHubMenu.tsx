@@ -12,6 +12,7 @@ import { directiveLabel, displayCaseName, type StationId } from '../types/game';
 import { TAG_WINDOW_MS, useGameStore, type LastCaseNote } from '../store/useGameStore';
 import { HubAtmosphere } from './hub/HubAtmosphere';
 import { titleProgress } from '../data/rankProgression';
+import { noteUrnsTap } from '../dev/devSummon';
 import { DeskCalendar } from './hub/DeskCalendar';
 import { NewsTicker } from './hub/NewsTicker';
 import type { DecedentCase } from '../types/game';
@@ -172,7 +173,7 @@ function HubRoomButton({
   const tap = useTapAction(() => onPick(id));
   return (
     <div
-      className={`hub-bob ${wide ? 'col-span-2' : ''}`}
+      className={`hub-bob h-full min-h-0 ${wide ? 'col-span-2' : ''}`}
       style={{
         ['--bob-dur' as string]: bob.dur,
         ['--bob-delay' as string]: bob.delay,
@@ -181,19 +182,19 @@ function HubRoomButton({
       <button
         type="button"
         {...tap}
-        className={`${wide ? 'min-h-[5.75rem]' : 'min-h-[6.25rem]'} w-full rounded-2xl bg-gradient-to-br ${color} border p-3 flex flex-col justify-between items-start text-left shadow-[0_10px_30px_rgba(0,0,0,0.35)] active:scale-[0.98] relative overflow-hidden`}
+        className={`h-full min-h-0 w-full rounded-2xl bg-gradient-to-br ${color} border p-2 flex flex-col justify-between items-start text-left shadow-[0_10px_30px_rgba(0,0,0,0.35)] active:scale-[0.98] relative overflow-hidden`}
       >
         {bursting && <HubBurst id={id} />}
         <span aria-hidden className="absolute -right-2 -bottom-3 text-5xl opacity-[0.1] font-black pointer-events-none">
           {title.slice(0, 1)}
         </span>
-        <span className="relative text-[15px] font-extrabold tracking-wide">{title}</span>
+        <span className="relative text-[14px] font-extrabold tracking-wide leading-tight">{title}</span>
         {badge && (
           <span className="relative px-2 py-1 text-[10px] font-bold bg-red-600 text-white rounded animate-pulse">
             {badge}
           </span>
         )}
-        <span className="relative text-[11px] text-slate-300">{subtitle}</span>
+        <span className="relative line-clamp-2 text-[11px] leading-tight text-slate-300">{subtitle}</span>
       </button>
     </div>
   );
@@ -218,6 +219,7 @@ function StatChip({
       type="button"
       {...tap}
       aria-expanded={active}
+      data-stat-chip={id}
       className={`bg-slate-950/80 px-2.5 py-1.5 rounded-lg border font-mono text-[11px] ${className} ${
         active ? 'ring-1 ring-amber-300/70' : ''
       }`}
@@ -395,7 +397,10 @@ export const MainHubMenu: React.FC = () => {
   const open = openStat ? statCopy[openStat] : null;
 
   return (
-    <div className="safe-hub relative w-full h-full bg-[#070b12] text-slate-100 flex flex-col select-none overflow-hidden">
+    <div
+      className="safe-hub relative w-full h-full bg-[#070b12] text-slate-100 flex flex-col select-none overflow-hidden"
+      data-hub-root
+    >
       <HubAtmosphere />
       <div
         className="pointer-events-none absolute inset-0 opacity-70"
@@ -414,14 +419,13 @@ export const MainHubMenu: React.FC = () => {
         />
       )}
 
-      <div className="relative z-40 shrink-0 border-b border-slate-800/90 pb-2 space-y-2 px-1">
-        <div className="space-y-1">
-          <NewsTicker />
-          <p className="text-[11px] text-slate-400 leading-snug" data-hub-last-case>
-            Last case:{' '}
-            <span className="text-amber-300 font-semibold">{lastCaseLine(lastCase, cases)}</span>
-          </p>
-        </div>
+      <div className="relative z-40 shrink-0 border-b border-slate-800/90 pb-1.5 space-y-1 px-1">
+        <NewsTicker />
+        <RankStrip xp={careerXp} />
+        <p className="text-[11px] text-slate-400 leading-snug" data-hub-last-case>
+          Last case:{' '}
+          <span className="text-amber-300 font-semibold">{lastCaseLine(lastCase, cases)}</span>
+        </p>
 
         <div className="flex flex-wrap gap-1.5">
           <StatChip
@@ -462,14 +466,15 @@ export const MainHubMenu: React.FC = () => {
           <StatChip
             id="urns"
             active={openStat === 'urns'}
-            onTap={(id) => setOpenStat((s) => (s === id ? null : id))}
+            onTap={(id) => {
+              noteUrnsTap();
+              setOpenStat((s) => (s === id ? null : id));
+            }}
             className="border-amber-900/50"
           >
             URNS <span className="text-amber-300 font-bold">{urnOwned}</span>
           </StatChip>
         </div>
-
-        <RankStrip xp={careerXp} />
 
         {open && (
           <div
@@ -485,7 +490,10 @@ export const MainHubMenu: React.FC = () => {
         )}
       </div>
 
-      <div className="relative z-10 flex-1 min-h-0 grid grid-cols-2 gap-2.5 content-start py-3 overflow-y-auto pb-4">
+      <div
+        className="relative z-10 min-h-0 flex-1 overflow-hidden grid grid-cols-2 grid-rows-4 gap-1.5 py-1.5"
+        data-hub-grid
+      >
         {tiles.map((tile, index) => (
           <HubRoomButton
             key={tile.id}
@@ -501,7 +509,10 @@ export const MainHubMenu: React.FC = () => {
           />
         ))}
       </div>
-      <div className="relative z-20 flex shrink-0 justify-start px-1 pb-[max(0.4rem,var(--safe-bottom))]">
+      <div
+        className="pointer-events-none absolute z-20"
+        style={{ left: 'var(--safe-left)', bottom: 'var(--safe-bottom)' }}
+      >
         <DeskCalendar />
       </div>
     </div>

@@ -48,14 +48,22 @@
 
 :root {
 
-  /* FILES FAB geometry — station shells pad to clear this control */
+  /* FILES FAB geometry — station shells pad to clear this control.
+     PHONE stacks above FILES at the same size. safe-bottom still tracks the nav bar. */
   --files-fab-height: 3rem;
-  /* High enough that the button clears bottom-sheet actions and the
-     shop card in the lower right. safe-bottom still tracks the nav bar. */
+  --phone-fab-height: 3rem;
+  --fab-gap: 0.4rem;
+  --fab-stack-height: calc(
+    var(--files-fab-height) + var(--fab-gap) + var(--phone-fab-height)
+  );
+  /* High enough that the stack clears bottom-sheet actions and the
+     shop card in the lower right. */
   --files-fab-bottom: calc(var(--safe-bottom) + 7.25rem);
-  --files-panel-bottom: calc(var(--files-fab-bottom) + 3.75rem);
+  --files-panel-bottom: calc(
+    var(--files-fab-bottom) + var(--fab-stack-height) + 0.55rem
+  );
   --files-clearance: calc(
-    var(--files-fab-bottom) + var(--files-fab-height) + 0.85rem
+    var(--files-fab-bottom) + var(--fab-stack-height) + 0.7rem
   );
 }
 
@@ -127,16 +135,25 @@ body {
   padding-bottom: var(--sheet-air);
 }
 
-/* FILES is above the computer. Hide it for the life of a bottom sheet. */
-html[data-sheet-open] .files-fab-anchor {
-  display: none;
+/* FILES (and PHONE, which shares the anchor) hide for the life of a bottom sheet. */
+.files-fab-anchor,
+.dev-summon-fab,
+.dev-summon-panel {
+  transition: opacity 180ms ease, visibility 180ms ease;
+}
+html[data-sheet-open] .files-fab-anchor,
+html[data-sheet-open] .dev-summon-fab,
+html[data-sheet-open] .dev-summon-panel {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* Shop inside the computer already ends at the nav inset. This extra
    pad ends the card grid above the FILES button. */
 .files-overlap-clear {
   padding-bottom: calc(
-    var(--files-fab-bottom) + var(--files-fab-height) - var(--safe-bottom) + 0.5rem
+    var(--files-fab-bottom) + var(--fab-stack-height) - var(--safe-bottom) + 0.5rem
   );
 }
 

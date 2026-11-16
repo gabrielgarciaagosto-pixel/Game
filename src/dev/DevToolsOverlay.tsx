@@ -9,6 +9,7 @@ import {
 } from '../utils/gameNow';
 import * as actions from './devActions';
 import { stationLabel } from '../types/game';
+import { hideDevTools, useDevSummoned } from './devSummon';
 import { DEV_TOOLS } from './flags';
 import {
   setPauseCaseIntake,
@@ -21,10 +22,9 @@ const DRAG_THRESHOLD = 8;
 type Pos = { x: number; y: number };
 
 function defaultPos(): Pos {
-  const size = 44;
   return {
-    x: Math.max(8, window.innerWidth - size - 12),
-    y: Math.max(8, window.innerHeight - size - 190),
+    x: 18,
+    y: Math.max(8, window.innerHeight - 210),
   };
 }
 
@@ -36,8 +36,10 @@ function loadPos(): Pos {
       if (typeof p.x === 'number' && typeof p.y === 'number') {
         // The old default sat on the Cooler card. Start clear of that corner.
         if (p.x < 72 && p.y < 220) return defaultPos();
-        // The desk calendar owns the hub's bottom-left.
-        if (p.x < 200 && p.y > window.innerHeight - 240) return defaultPos();
+        // The desk calendar owns the lowest left corner.
+        if (p.x < 200 && p.y > window.innerHeight - 120) return defaultPos();
+        // PHONE sits on FILES in the lower right.
+        if (p.x > window.innerWidth - 180 && p.y > window.innerHeight - 280) return defaultPos();
         return p;
       }
     }
@@ -221,6 +223,7 @@ function useFps() {
  */
 export const DevToolsOverlay: React.FC = () => {
   const hasStartedGame = useGameStore((s) => s.hasStartedGame);
+  const summoned = useDevSummoned();
   const activeStation = useGameStore((s) => s.activeStation);
   const cash = useGameStore((s) => s.cash);
   const reputation = useGameStore((s) => s.reputation);
@@ -269,7 +272,7 @@ export const DevToolsOverlay: React.FC = () => {
     return () => window.clearInterval(id);
   }, [open]);
 
-  if (!DEV_TOOLS || !hasStartedGame) return null;
+  if (!DEV_TOOLS || !hasStartedGame || !summoned) return null;
 
   const onPointerDown = (e: React.PointerEvent) => {
     dragRef.current = {
@@ -331,14 +334,15 @@ export const DevToolsOverlay: React.FC = () => {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        className="fixed z-[9998] w-11 h-11 rounded-full border-2 border-lime-400/80 bg-zinc-950/90 text-lime-300 shadow-lg shadow-black/50 flex items-center justify-center touch-none select-none"
+        data-dev-summoned
+        className="dev-summon-fab fixed z-[9998] w-11 h-11 rounded-full border-2 border-lime-400/80 bg-zinc-950/90 text-lime-300 shadow-lg shadow-black/50 flex items-center justify-center touch-none select-none"
         style={{ left: pos.x, top: pos.y }}
       >
         <span className="font-mono text-[10px] font-bold tracking-wider">DEV</span>
       </button>
       {open && (
         <div
-          className="fixed z-[9999] inset-x-3 bottom-3 top-[18%] max-w-lg mx-auto rounded-md border border-lime-500/50 bg-zinc-950/95 text-lime-100 shadow-2xl flex flex-col overflow-hidden"
+          className="dev-summon-panel fixed z-[9999] inset-x-3 bottom-3 top-[18%] max-w-lg mx-auto rounded-md border border-lime-500/50 bg-zinc-950/95 text-lime-100 shadow-2xl flex flex-col overflow-hidden"
           style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
         >
           <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-lime-500/30 bg-zinc-900/90">
@@ -351,6 +355,16 @@ export const DevToolsOverlay: React.FC = () => {
             <button
               type="button"
               className="ml-auto text-[11px] text-lime-300/80 px-2 py-0.5 border border-lime-500/30 rounded"
+              onClick={() => {
+                setOpen(false);
+                hideDevTools();
+              }}
+            >
+              Hide
+            </button>
+            <button
+              type="button"
+              className="text-[11px] text-lime-300/80 px-2 py-0.5 border border-lime-500/30 rounded"
               onClick={() => setOpen(false)}
             >
               close

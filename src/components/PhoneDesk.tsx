@@ -72,8 +72,7 @@ function Row({
   );
 }
 
-/** Desk phone on the office computer. Each contact cools down on its own. */
-export const PhoneDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+export function usePhoneLines() {
   const reputation = useGameStore((s) => s.reputation);
   const careerXp = useGameStore((s) => s.careerXp);
   const homesKept = useGameStore((s) => s.homesKept);
@@ -97,7 +96,66 @@ export const PhoneDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     rankIndex: held.index,
     rankTitle: held.title,
   };
+  const readyCount = PHONE_CONTACTS.filter((contact) => {
+    const access = contactAccess(contact, progress);
+    const readyAt = cooldowns[contact.id] ?? 0;
+    return access.unlocked && now >= readyAt;
+  }).length;
 
+  return {
+    todayCount,
+    last,
+    placePhoneCall,
+    now,
+    readyCount,
+    cooldowns,
+    progress,
+  };
+}
+
+/** Shared contact list for the computer desk and the hub phone panel. */
+export const PhoneBook: React.FC = () => {
+  const { todayCount, last, placePhoneCall, now, cooldowns, progress } = usePhoneLines();
+  return (
+    <div className="space-y-3">
+      <p className="text-[12px] leading-snug text-slate-400">
+        The day still brings its own cases. These lines are extra — {todayCount}/
+        {PHONE_EXTRA_PER_DAY} landed today. Calling one number does not quiet the others.
+      </p>
+      {last ? (
+        <div
+          data-phone-result
+          className={`rounded-xl border px-3 py-2 text-[13px] leading-snug ${
+            last.hit
+              ? 'border-emerald-600/60 bg-emerald-950/70 text-emerald-50'
+              : 'border-slate-700 bg-slate-900 text-slate-200'
+          }`}
+        >
+          {last.text}
+        </div>
+      ) : null}
+      <ul className="space-y-2">
+        {PHONE_CONTACTS.map((contact) => {
+          const access = contactAccess(contact, progress);
+          return (
+            <Row
+              key={contact.id}
+              contact={contact}
+              unlocked={access.unlocked}
+              reason={access.reason}
+              readyAt={cooldowns[contact.id] ?? 0}
+              now={now}
+              onCall={placePhoneCall}
+            />
+          );
+        })}
+      </ul>
+    </div>
+  );
+};
+
+/** Desk phone on the office computer. Each contact cools down on its own. */
+export const PhoneDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   return (
     <div className="absolute inset-0 z-20 flex flex-col bg-[#07110e] text-slate-100" data-phone-desk>
       <header
@@ -116,40 +174,8 @@ export const PhoneDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           Close
         </button>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 space-y-3">
-        <p className="text-[12px] leading-snug text-slate-400">
-          The day still brings its own cases. These lines are extra —{' '}
-          {todayCount}/{PHONE_EXTRA_PER_DAY} landed today. Calling one number
-          does not quiet the others.
-        </p>
-        {last ? (
-          <div
-            data-phone-result
-            className={`rounded-xl border px-3 py-2 text-[13px] leading-snug ${
-              last.hit
-                ? 'border-emerald-600/60 bg-emerald-950/70 text-emerald-50'
-                : 'border-slate-700 bg-slate-900 text-slate-200'
-            }`}
-          >
-            {last.text}
-          </div>
-        ) : null}
-        <ul className="space-y-2">
-          {PHONE_CONTACTS.map((contact) => {
-            const access = contactAccess(contact, progress);
-            return (
-              <Row
-                key={contact.id}
-                contact={contact}
-                unlocked={access.unlocked}
-                reason={access.reason}
-                readyAt={cooldowns[contact.id] ?? 0}
-                now={now}
-                onCall={placePhoneCall}
-              />
-            );
-          })}
-        </ul>
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+        <PhoneBook />
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { displayCaseName, type DecedentCase } from '../../types/game';
 import { formatTimeOf } from '../../utils/clock12';
 import { gameNow } from '../../utils/gameNow';
 import { useGameStore } from '../../store/useGameStore';
+import { useSheetOpen } from '../useSheetOpen';
 
 const MIN_OFFSET = -7;
 const MAX_OFFSET = 13;
@@ -77,6 +78,7 @@ export const DeskCalendar: React.FC = () => {
   }, []);
   const [offset, setOffset] = useState(0);
   const [open, setOpen] = useState(false);
+  useSheetOpen(open);
   const [monthCursor, setMonthCursor] = useState(() => new Date(gameNow()));
   const [flip, setFlip] = useState<{ deg: number; dir: 1 | -1; animMs: number } | null>(
     null
@@ -253,9 +255,17 @@ function ScheduleBook({
   const appts = dayAppointments(cases, selected);
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/60 p-3 sm:items-center">
+    <div
+      className="pointer-events-auto fixed inset-0 z-[70] flex items-end justify-center bg-black/60 sm:items-center"
+      style={{
+        paddingTop: '0.75rem',
+        paddingLeft: 'max(0.75rem, var(--safe-left))',
+        paddingRight: 'max(0.75rem, var(--safe-right))',
+        paddingBottom: 'calc(var(--safe-bottom) + 0.85rem)',
+      }}
+    >
       <div
-        className="flex max-h-[92%] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-amber-900/40 bg-[#121820] text-slate-100 shadow-2xl"
+        className="flex max-h-full min-h-0 w-full max-w-md flex-col overflow-hidden rounded-2xl border border-amber-900/40 bg-[#121820] text-slate-100 shadow-2xl"
         data-calendar-open
       >
         <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">

@@ -166,7 +166,13 @@ export const ComputerRoom: React.FC = () => {
           </button>
         </div>
 
-        <div className="flex-1 px-2 pt-2 pb-1 grid grid-cols-2 gap-x-1 gap-y-1 content-start max-w-lg overflow-y-auto">
+        <div
+          className="flex-1 px-2 pt-2 grid grid-cols-2 gap-x-1 gap-y-1 content-start max-w-lg overflow-y-auto"
+          style={{
+            paddingBottom:
+              'calc(var(--files-fab-bottom) + var(--fab-stack-height) - var(--safe-bottom) + 0.35rem)',
+          }}
+        >
           <DesktopAppIcon kind="VR441" onOpen={() => openApp('VR441')} />
           <DesktopAppIcon kind="SHOP" onOpen={() => openApp('SHOP')} />
           <DesktopAppIcon kind="BANK" onOpen={() => openApp('BANK')} />

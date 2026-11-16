@@ -27,6 +27,8 @@ import { getUrnById } from '../data/urnCatalog';
 import { gameNow } from '../utils/gameNow';
 import { audioManager } from '../utils/audioManager';
 import { DEV_TOOLS } from '../dev';
+import { useDevSummoned } from '../dev/devSummon';
+import { PhoneFab } from './PhoneFab';
 import { UrnVessel } from './urns/UrnVessel';
 
 const FILE_FAB_CLASS =
@@ -74,6 +76,7 @@ export const CaseInboxWidget: React.FC = () => {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [pickupOpen, setPickupOpen] = useState(false);
   const [pickHour, setPickHour] = useState(14);
+  const devSummoned = useDevSummoned();
 
   useEffect(() => {
     if (!isOpen) {
@@ -142,12 +145,15 @@ export const CaseInboxWidget: React.FC = () => {
   return (
     <>
       <div
-        className="files-fab-anchor fixed z-[52] flex items-end gap-2"
+        className="files-fab-anchor fixed z-[52] flex flex-col items-end"
         style={{
           bottom: 'var(--files-fab-bottom)',
           right: 'var(--safe-right)',
+          gap: 'var(--fab-gap)',
         }}
       >
+        <PhoneFab />
+        <div className="flex items-end gap-2">
         {isOpen && (
           <button
             type="button"
@@ -181,6 +187,7 @@ export const CaseInboxWidget: React.FC = () => {
             </span>
           )}
         </button>
+        </div>
       </div>
 
       {isOpen && (
@@ -197,7 +204,7 @@ export const CaseInboxWidget: React.FC = () => {
               <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
                 Family Directives
               </div>
-              {DEV_TOOLS ? (
+              {DEV_TOOLS && devSummoned ? (
                 <button
                   type="button"
                   aria-label="Developer tools"
