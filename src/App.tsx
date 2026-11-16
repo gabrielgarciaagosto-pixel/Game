@@ -143,6 +143,7 @@ function App() {
     return () => window.clearTimeout(id);
   }, [intakeToast]);
 
+  const onTitle = titleGate || !hasStartedGame;
   const onHub = hasStartedGame && !titleGate && activeStation === 'OVERVIEW';
   const [hubToastTop, setHubToastTop] = useState<number | null>(null);
   useLayoutEffect(() => {
@@ -292,11 +293,17 @@ function App() {
           style={
             onHub
               ? { top: hubToastTop ?? 0, left: '0.75rem', right: '0.75rem' }
-              : {
-                  bottom: 'calc(var(--files-clearance) + 0.35rem)',
-                  left: '0.75rem',
-                  right: '0.75rem',
-                }
+              : onTitle
+                ? {
+                    top: 'calc(var(--safe-top) + 0.45rem)',
+                    left: '0.75rem',
+                    right: '0.75rem',
+                  }
+                : {
+                    bottom: 'calc(var(--files-clearance) + 0.35rem)',
+                    left: '0.75rem',
+                    right: '0.75rem',
+                  }
           }
         >
           <div className="flex items-center justify-between gap-2 rounded-lg border border-cyan-400 bg-cyan-950 px-2.5 py-0.5 text-cyan-50 shadow-xl">

@@ -1817,7 +1817,7 @@ export const useGameStore = create<GameState>()(
       inboxFiles: [toInboxFile(next), ...state.inboxFiles],
       intakeToast: opts?.quiet
         ? state.intakeToast
-        : (opts?.toast ?? 'New Remains Received in Cooler'),
+        : (opts?.toast ?? `${next.name} — tag in the cooler`),
       activeCaseId: state.activeCaseId ?? next.id,
       lastCase: {
         id: next.id,
@@ -2023,7 +2023,7 @@ export const useGameStore = create<GameState>()(
       wire = wire.map((item) =>
         item === spawnSlot ? { ...item, caseId: next.id } : item
       );
-      intakeToast = `${displayCaseName(next)} — headline intake`;
+      intakeToast = `${next.name} — headline intake`;
       activeCaseId = activeCaseId ?? next.id;
       lastCase = {
         id: next.id,
@@ -2185,7 +2185,7 @@ export const useGameStore = create<GameState>()(
       bays[i] = { ...bay, queueCaseId: caseId };
       return {
         retortBays: bays,
-        intakeToast: `${displayCaseName(queued)} queued on retort ${String.fromCharCode(65 + i)}`,
+        intakeToast: `${queued.name} queued on retort ${String.fromCharCode(65 + i)}`,
       };
     }),
 
