@@ -281,8 +281,11 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
           position: absolute;
           left: var(--safe-left);
           right: var(--safe-right);
-          bottom: calc(var(--safe-bottom) + 0.85rem);
+          bottom: 0;
           margin: 0;
+          /* --safe-bottom is the nav inset (env or the Capacitor var).
+             The padding is the quiet band above 3-button and gesture bars. */
+          padding-bottom: calc(var(--safe-bottom) + 1.25rem);
           font-family: 'Cinzel', Georgia, 'Times New Roman', serif;
           font-size: 0.68rem;
           font-weight: 500;

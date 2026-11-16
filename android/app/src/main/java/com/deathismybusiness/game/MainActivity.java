@@ -2,29 +2,49 @@ package com.deathismybusiness.game;
 
 import android.os.Bundle;
 import android.view.View;
+import android.webkit.WebView;
 import androidx.activity.EdgeToEdge;
 import androidx.activity.OnBackPressedCallback;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.WebViewListener;
 
 public class MainActivity extends BridgeActivity {
+    private Insets latestBars = Insets.NONE;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         // Draw under the system bars. Insets are published as CSS variables
         // (--safe-area-inset-*) so the hub and computer chrome pad themselves.
+        // The first dispatch often lands on about:blank and is wiped when the
+        // app document commits, so the page listener publishes again.
         EdgeToEdge.enable(this);
         View decor = getWindow().getDecorView();
         ViewCompat.setOnApplyWindowInsetsListener(decor, (v, insets) -> {
-            Insets bars = insets.getInsets(
+            latestBars = insets.getInsets(
                 WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout()
             );
-            publishSafeArea(bars);
+            publishSafeArea(latestBars);
             return insets;
         });
         ViewCompat.requestApplyInsets(decor);
+        if (getBridge() != null) {
+            getBridge().addWebViewListener(new WebViewListener() {
+                @Override
+                public void onPageCommitVisible(WebView view, String url) {
+                    publishSafeArea(latestBars);
+                }
+
+                @Override
+                public void onPageLoaded(WebView webView) {
+                    publishSafeArea(latestBars);
+                    ViewCompat.requestApplyInsets(getWindow().getDecorView());
+                }
+            });
+        }
 
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
