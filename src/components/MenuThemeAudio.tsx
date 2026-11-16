@@ -112,16 +112,21 @@ export const MenuThemeAudio: React.FC = () => {
     const manifest = await loadMenuPlaylist();
     if (isStale(gen)) return;
     manifestRef.current = manifest;
-    if (freshThemeDue()) {
+    // Near-end always advances. A stuck opener flag must not replay Ossuarian.
+    if (mode === 'handoff') {
+      if (freshThemeDue()) markFreshThemePlayed();
+    } else if (audioManager.bedIsCurrent('theme')) {
+      // StrictMode remounts the opener. Don't replace Ossuarian with a random track.
+      playingRef.current = true;
+      if (freshThemeDue()) markFreshThemePlayed();
+      return;
+    } else if (freshThemeDue()) {
       await playTheme(fadeMs, gen);
-      if (!isStale(gen) && audioManager.getCurrentId() === 'theme') {
+      // A blocked fallback play() leaves currentId null, but the theme element
+      // still owns the bed. Marking here is what lets the near-end rotate.
+      if (!isStale(gen) && audioManager.bedIsCurrent('theme')) {
         markFreshThemePlayed();
       }
-      return;
-    }
-    // StrictMode remounts the opener. Don't replace Ossuarian with a random track.
-    if (mode !== 'handoff' && audioManager.getCurrentId() === 'theme') {
-      playingRef.current = true;
       return;
     }
     const next = pickRandomMenuTrackId(manifest, avoid);

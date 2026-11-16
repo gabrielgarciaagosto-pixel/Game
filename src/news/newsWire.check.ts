@@ -388,6 +388,7 @@ FallbackAudio.allow = false;
 await audioManager.crossfadeTo('theme', { loop: true, volume: 0.4, durationMs: 80 });
 await new Promise((resolve) => setTimeout(resolve, 0));
 check(audioManager.getCurrentId() == null, 'a blocked play() does not count as playing');
+check(audioManager.bedIsCurrent('theme'), 'a blocked fallback still owns the theme bed');
 const bed = FallbackAudio.latest;
 if (!bed) throw new Error('fallback element exists');
 const beforeDuck = bed.volume;
@@ -414,6 +415,7 @@ await audioManager.crossfadeTo('crematoryStart', {
 await new Promise((resolve) => setTimeout(resolve, 0));
 const sting = FallbackAudio.latest;
 if (!sting) throw new Error('start sting element exists');
+check(audioManager.getCurrentId() === 'crematoryStart', 'a started fallback bed is current when crossfade resolves');
 check(sting.listeners.has('timeupdate'), 'one-shot fallback still watches timeupdate');
 check(sting.listeners.has('ended'), 'one-shot fallback listens for ended');
 sting.currentTime = 0;

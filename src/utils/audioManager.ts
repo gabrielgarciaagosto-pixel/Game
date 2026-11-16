@@ -400,6 +400,16 @@ class AudioManager {
   }
 
   /**
+   * True when this bed is the live voice, or the fallback element still
+   * waiting for play() to be allowed. A blocked play() leaves currentId null.
+   */
+  bedIsCurrent(id: MusicBedId): boolean {
+    if (this.currentId === id) return true;
+    const pending = this.pendingPlay;
+    return pending?.id === id && pending.generation === this.generation;
+  }
+
+  /**
    * Ramp the live music bed. Does not restart the clip, touch SFX, or
    * unmute a muted bus. Caller passes the player level (playlist volume
    * times any room duck).
@@ -632,7 +642,7 @@ class AudioManager {
       if (this.isStale(gen)) return;
       const fileUrl = isBuiltin(id) ? BED_URLS[id] : this.urlById.get(id);
       if (!fileUrl) return;
-      this.playElement(id, fileUrl, {
+      await this.playElement(id, fileUrl, {
         loop,
         volume: this.scaledMusic(volume),
         fadeSec,
@@ -825,7 +835,7 @@ class AudioManager {
    * Android WebView rejects some m4a codecs in decodeAudioData. The media
    * element uses the platform decoder instead, so the bed still plays.
    */
-  private playElement(
+  private async playElement(
     id: MusicBedId,
     url: string,
     opts: { loop: boolean; volume: number; fadeSec: number; generation: number }
@@ -840,8 +850,8 @@ class AudioManager {
     this.elements.push(el);
     const vol = Math.max(0.0001, Math.min(1, opts.volume));
     this.fadeElement(el, vol, opts.fadeSec * 1000);
-    void this.tryElementPlay(el, id, opts.generation);
     if (!opts.loop) this.watchElementNearEnd(el, id, opts.fadeSec);
+    await this.tryElementPlay(el, id, opts.generation);
   }
 
   stopImmediate() {
