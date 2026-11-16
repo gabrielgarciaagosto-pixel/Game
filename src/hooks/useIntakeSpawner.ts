@@ -2,9 +2,15 @@ import { useEffect, useRef } from 'react';
 import { nextIntakeDelayMs, useGameStore } from '../store/useGameStore';
 import { intakeNewsFactor } from '../news/newsWire';
 import { gameNow } from '../utils/gameNow';
+import { DEV_TOOLS } from '../dev/flags';
+import {
+  readIntakeDevOptions,
+  useIntakeDevOptions,
+} from '../dev/intakeOptions';
 
 /**
- * Background cooler intake: random 3–5 minute interval between arrivals.
+ * Background cooler intake. Normal wait is 3–5 minutes.
+ * SCI stretches that to 5–10. Pause Case Intake stops arrivals until off.
  * Also ticks decay for cases left outside refrigeration.
  */
 export function useIntakeSpawner() {
@@ -19,6 +25,7 @@ export function useIntakeSpawner() {
   const tickBankLoans = useGameStore((s) => s.tickBankLoans);
   const tickNews = useGameStore((s) => s.tickNews);
   const clientFlow = useGameStore((s) => s.ownedProperty.clientFlow);
+  const intakeDev = useIntakeDevOptions();
   const clientFlowRef = useRef(clientFlow);
   clientFlowRef.current = clientFlow;
 
@@ -28,13 +35,18 @@ export function useIntakeSpawner() {
     let timeoutId: ReturnType<typeof setTimeout>;
     let cancelled = false;
 
+    const devIntake = () =>
+      DEV_TOOLS ? readIntakeDevOptions() : { sci: false, pause: false };
+
     const scheduleNext = () => {
+      if (devIntake().pause) return;
       const flow =
         clientFlowRef.current *
         intakeNewsFactor(useGameStore.getState().newsWire, gameNow());
-      const delay = nextIntakeDelayMs(flow);
+      const delay = nextIntakeDelayMs(flow, devIntake().sci);
       timeoutId = setTimeout(() => {
         if (cancelled) return;
+        if (devIntake().pause) return;
         receiveNewIntake();
         expireUntaggedNames();
         scheduleNext();
@@ -69,5 +81,7 @@ export function useIntakeSpawner() {
     tickBankLoans,
     tickBankForeclosure,
     tickNews,
+    intakeDev.pause,
+    intakeDev.sci,
   ]);
 }

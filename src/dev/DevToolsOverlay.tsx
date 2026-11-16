@@ -10,6 +10,11 @@ import {
 import * as actions from './devActions';
 import { stationLabel } from '../types/game';
 import { DEV_TOOLS } from './flags';
+import {
+  setPauseCaseIntake,
+  setSlowCaseIntake,
+  useIntakeDevOptions,
+} from './intakeOptions';
 
 const POS_KEY = 'ossuarian-dev-fab-pos';
 const DRAG_THRESHOLD = 8;
@@ -96,6 +101,41 @@ function Btn({
  * No window.confirm — Android WebView often swallows it and the wipe never runs.
  * Uses pointerup (not click) so touch inside the scroll panel registers.
  */
+function IntakeDevSection() {
+  const opts = useIntakeDevOptions();
+  const toggleClass = (on: boolean) =>
+    `px-2 py-1 text-[11px] font-mono rounded border ${
+      on
+        ? 'border-lime-300 bg-lime-400 text-zinc-950 font-bold'
+        : 'border-lime-500/40 bg-zinc-900 text-lime-100'
+    }`;
+  return (
+    <Section title="Intake">
+      <button
+        type="button"
+        data-testid="dev-sci"
+        aria-pressed={opts.sci}
+        onClick={() => setSlowCaseIntake(!opts.sci)}
+        className={toggleClass(opts.sci)}
+      >
+        SCI {opts.sci ? 'ON' : 'OFF'}
+      </button>
+      <button
+        type="button"
+        data-testid="dev-pause-intake"
+        aria-pressed={opts.pause}
+        onClick={() => setPauseCaseIntake(!opts.pause)}
+        className={toggleClass(opts.pause)}
+      >
+        Pause Case Intake {opts.pause ? 'ON' : 'OFF'}
+      </button>
+      <p className="w-full text-[9px] text-lime-300/70 leading-snug">
+        SCI waits 5–10 min between cases. Pause stops arrivals. Pause wins.
+      </p>
+    </Section>
+  );
+}
+
 function ResetGameButton() {
   const [armed, setArmed] = useState(false);
   const guardRef = useRef(false);
@@ -327,6 +367,8 @@ export const DevToolsOverlay: React.FC = () => {
           </div>
 
           <div className="flex-1 overflow-y-auto px-3 py-3 overscroll-contain">
+            <IntakeDevSection />
+
             <Section title="Spawn">
               <Btn
                 label="Direct Cremation"

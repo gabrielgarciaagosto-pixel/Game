@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { freshThemeDue, markFreshThemePlayed } from '../utils/bootSave';
 import { useGameStore } from '../store/useGameStore';
 import {
   audioManager,
@@ -20,7 +21,9 @@ const DUCK_FADE_MS = 750;
 
 /**
  * Title + main-hub BGM (Gabriel menu playlist).
- * Random track on menu open; on end, another random (avoid immediate repeat).
+ * A launch with no save starts on the Ossuarian theme, once, then joins
+ * the menu rotation. A launch that already has a save starts on a random
+ * menu track. On end, another random (avoid immediate repeat).
  * Stays playing in every room except the chapel, ducked to about 35%.
  * Chapel keeps the service playlist. Mute and the playlist volume still apply.
  * SFX never go through this bed.
@@ -81,14 +84,46 @@ export const MenuThemeAudio: React.FC = () => {
     }
   };
 
+  const playTheme = async (fadeMs: number, gen: number) => {
+    if (isStale(gen)) return;
+    const manifest = manifestRef.current;
+    if (!manifest) return;
+    const token = ++playTokenRef.current;
+    currentTrackRef.current = null;
+    playingRef.current = true;
+    await audioManager.crossfadeTo('theme', {
+      loop: false,
+      volume: manifest.volume * gainScaleRef.current,
+      durationMs: fadeMs,
+    });
+    if (token !== playTokenRef.current) return;
+    if (isStale(gen) && audioManager.getCurrentId() === 'theme') {
+      playingRef.current = false;
+      void audioManager.fadeOut(fadeMs);
+    }
+  };
+
   const startRandom = async (
     fadeMs: number,
     avoid: string | null,
-    gen: number
+    gen: number,
+    mode: 'open' | 'handoff' | 'unmute'
   ) => {
     const manifest = await loadMenuPlaylist();
     if (isStale(gen)) return;
     manifestRef.current = manifest;
+    if (freshThemeDue()) {
+      await playTheme(fadeMs, gen);
+      if (!isStale(gen) && audioManager.getCurrentId() === 'theme') {
+        markFreshThemePlayed();
+      }
+      return;
+    }
+    // StrictMode remounts the opener. Don't replace Ossuarian with a random track.
+    if (mode !== 'handoff' && audioManager.getCurrentId() === 'theme') {
+      playingRef.current = true;
+      return;
+    }
     const next = pickRandomMenuTrackId(manifest, avoid);
     if (!next) return;
     await playTrack(next, fadeMs, gen);
@@ -101,14 +136,15 @@ export const MenuThemeAudio: React.FC = () => {
 
   useEffect(() => {
     const onNearEnd = (id: string) => {
-      if (!isMenuBedId(id)) return;
+      if (id !== 'theme' && !isMenuBedId(id)) return;
       if (!playingRef.current || !manifestRef.current) return;
       if (!menuShouldPlayRef.current) return;
       const gen = genRef.current;
       void startRandom(
         manifestRef.current.crossfadeMs ?? CROSSFADE_MS,
         currentTrackRef.current,
-        gen
+        gen,
+        'handoff'
       );
     };
     audioManager.addOneShotNearEndHandler(onNearEnd);
@@ -123,7 +159,8 @@ export const MenuThemeAudio: React.FC = () => {
       void startRandom(
         manifestRef.current?.crossfadeMs ?? CROSSFADE_MS,
         currentTrackRef.current,
-        gen
+        gen,
+        'unmute'
       );
     };
     audioManager.addUnmuteHandler(onUnmute);
@@ -150,7 +187,7 @@ export const MenuThemeAudio: React.FC = () => {
     const target = manifestVol * gainScale;
 
     // Same clip, new level: hub is full, every other non-chapel room is ducked.
-    if (playingRef.current && isMenuBedId(audioManager.getCurrentId())) {
+    if (playingRef.current && isMenuOrThemeBedId(audioManager.getCurrentId())) {
       audioManager.setCurrentVolume(target, DUCK_FADE_MS);
       return;
     }
@@ -158,7 +195,7 @@ export const MenuThemeAudio: React.FC = () => {
     // Hub / title owns the bus: crossfade over leftover chapel/crematory beds
     // so returning from Chapel is never stuck silent.
     const gen = ++genRef.current;
-    void startRandom(atHub ? chapelFade : DUCK_FADE_MS, null, gen);
+    void startRandom(atHub ? chapelFade : DUCK_FADE_MS, null, gen, 'open');
   }, [menuShouldPlay, gainScale, atHub]);
 
   return null;

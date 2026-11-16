@@ -183,8 +183,12 @@ import {
 } from '../news/newsWire';
 
 export const TAG_WINDOW_MS = 60_000;
-const INTAKE_MIN_MS = 180_000;
-const INTAKE_MAX_MS = 300_000;
+/** Normal automatic intake window: 3–5 minutes. */
+export const INTAKE_MIN_MS = 180_000;
+export const INTAKE_MAX_MS = 300_000;
+/** SCI (Slow Case Intake): 5–10 minutes. */
+export const SLOW_INTAKE_MIN_MS = 300_000;
+export const SLOW_INTAKE_MAX_MS = 600_000;
 /** Decay points per second outside cooler when not embalmed/cremated */
 const DECAY_PER_SEC = 0.35;
 
@@ -912,13 +916,14 @@ function flowersFromLayout(
 }
 
 /**
- * Random delay between 3–5 minutes for the next intake.
- * Higher `clientFlow` (property stat) shortens the wait.
+ * Random delay before the next automatic intake.
+ * Normal is 3–5 minutes. SCI uses 5–10. Property flow and the news
+ * volume factor still shorten or stretch that window.
  */
-export function nextIntakeDelayMs(clientFlow = 1): number {
-  const base =
-    INTAKE_MIN_MS +
-    Math.floor(Math.random() * (INTAKE_MAX_MS - INTAKE_MIN_MS + 1));
+export function nextIntakeDelayMs(clientFlow = 1, slow = false): number {
+  const min = slow ? SLOW_INTAKE_MIN_MS : INTAKE_MIN_MS;
+  const max = slow ? SLOW_INTAKE_MAX_MS : INTAKE_MAX_MS;
+  const base = min + Math.floor(Math.random() * (max - min + 1));
   const flow = Math.max(0.5, Number.isFinite(clientFlow) ? clientFlow : 1);
   return Math.max(20_000, Math.round(base / flow));
 }

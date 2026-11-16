@@ -492,6 +492,7 @@ const KNOWN_STORAGE_KEYS = [
   'ossuarian-first-urn-v1',
   'ossuarian-dev-clock-offset',
   'ossuarian-dev-fab-pos',
+  'ossuarian-dev-intake',
 ] as const;
 
 function wipeBrowserStorage() {
