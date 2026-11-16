@@ -79,6 +79,16 @@ export const DeskCalendar: React.FC = () => {
   const [offset, setOffset] = useState(0);
   const [open, setOpen] = useState(false);
   useSheetOpen(open);
+  React.useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.__ossuarianCloseCalendar = close;
+    return () => {
+      if (window.__ossuarianCloseCalendar === close) {
+        delete window.__ossuarianCloseCalendar;
+      }
+    };
+  }, [open]);
   const [monthCursor, setMonthCursor] = useState(() => new Date(gameNow()));
   const [flip, setFlip] = useState<{ deg: number; dir: 1 | -1; animMs: number } | null>(
     null

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { audioManager } from '../utils/audioManager';
 import { PhoneBook, usePhoneLines } from './PhoneDesk';
 
@@ -9,8 +9,10 @@ const PHONE_FAB_CLASS =
  * Hub twin of FILES. Same anchor, so it shows and hides in the same rooms.
  * The calendar sheet hides that anchor; this button goes with it.
  */
-export const PhoneFab: React.FC = () => {
-  const [open, setOpen] = useState(false);
+export const PhoneFab: React.FC<{
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}> = ({ open, onOpenChange }) => {
   const { readyCount } = usePhoneLines();
 
   return (
@@ -22,7 +24,7 @@ export const PhoneFab: React.FC = () => {
         aria-expanded={open}
         onClick={() => {
           audioManager.playUiClick('tick');
-          setOpen((v) => !v);
+          onOpenChange(!open);
         }}
         style={{ touchAction: 'manipulation' }}
         className={PHONE_FAB_CLASS}
@@ -37,12 +39,7 @@ export const PhoneFab: React.FC = () => {
       {open ? (
         <div
           data-phone-panel
-          style={{
-            bottom: 'var(--files-panel-bottom)',
-            left: 'var(--safe-left)',
-            right: 'var(--safe-right)',
-          }}
-          className="fixed z-[51] flex h-[min(62vh,26rem)] flex-col overflow-hidden rounded-2xl border-2 border-emerald-700/70 bg-slate-900 text-slate-100 shadow-2xl"
+          className="hub-fab-sheet fixed z-[51] flex flex-col overflow-hidden rounded-2xl border-2 border-emerald-700/70 bg-slate-900 text-slate-100 shadow-2xl"
         >
           <div className="flex shrink-0 items-center gap-2 border-b border-slate-800 px-3 py-2">
             <div>
@@ -55,7 +52,7 @@ export const PhoneFab: React.FC = () => {
               type="button"
               onClick={() => {
                 audioManager.playUiClick('tick');
-                setOpen(false);
+                onOpenChange(false);
               }}
               className="ml-auto rounded-full border border-emerald-800 px-3 py-1 text-[12px] font-bold text-emerald-100"
             >

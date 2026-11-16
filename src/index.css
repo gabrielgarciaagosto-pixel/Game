@@ -149,6 +149,19 @@ html[data-sheet-open] .dev-summon-panel {
   pointer-events: none;
 }
 
+/* Phone and files sheets sit above the FAB stack. The height cap keeps
+   Close under the status-bar inset on short phones. */
+.hub-fab-sheet {
+  left: var(--safe-left);
+  right: var(--safe-right);
+  bottom: var(--files-panel-bottom);
+  height: min(
+    62vh,
+    26rem,
+    calc(100dvh - var(--files-panel-bottom) - var(--safe-top) - 0.75rem)
+  );
+}
+
 /* Shop inside the computer already ends at the nav inset. This extra
    pad ends the card grid above the FILES button. */
 .files-overlap-clear {

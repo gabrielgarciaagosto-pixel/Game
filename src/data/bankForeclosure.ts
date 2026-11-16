@@ -17,7 +17,7 @@ export const BANK_FORECLOSURE_AFTER_MS = 72 * HOUR_MS;
 export const LOAN_INSTALLMENT_MS = 24 * HOUR_MS;
 
 export const BANK_WARNING_MESSAGE =
-  'BANK NOTICE: Your accounts are overdrawn. Restore a non-negative balance within a day of open parlor time or the bank will foreclose. This clock pauses while Ossuarian is closed.';
+  'BANK NOTICE: Your accounts are overdrawn. This notice arrives after 24 hours of open parlor time. Restore a non-negative balance before 72 hours of open parlor time or the bank will foreclose. This clock pauses while Ossuarian is closed.';
 
 export const BANK_FORECLOSURE_TITLE = 'FORECLOSED';
 export const BANK_FORECLOSURE_BODY =

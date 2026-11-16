@@ -61,6 +61,7 @@ export const CaseInboxWidget: React.FC = () => {
     finalizeServiceAndNextCase,
   } = useGameStore();
   const [isOpen, setIsOpen] = useState(false);
+  const [phoneOpen, setPhoneOpen] = useState(false);
   const [archivesOpen, setArchivesOpen] = useState(false);
   const [selectedArchiveId, setSelectedArchiveId] = useState<string | null>(
     null
@@ -76,6 +77,7 @@ export const CaseInboxWidget: React.FC = () => {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [pickupOpen, setPickupOpen] = useState(false);
   const [pickHour, setPickHour] = useState(14);
+  const [scheduleNote, setScheduleNote] = useState<string | null>(null);
   const devSummoned = useDevSummoned();
 
   useEffect(() => {
@@ -99,6 +101,27 @@ export const CaseInboxWidget: React.FC = () => {
       }
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!phoneOpen) return;
+    const close = () => setPhoneOpen(false);
+    window.__ossuarianClosePhone = close;
+    return () => {
+      if (window.__ossuarianClosePhone === close) {
+        delete window.__ossuarianClosePhone;
+      }
+    };
+  }, [phoneOpen]);
+
+  const openPhone = (next: boolean) => {
+    setPhoneOpen(next);
+    if (!next) return;
+    setIsOpen(false);
+    setArchivesOpen(false);
+    setPickupOpen(false);
+    setCalendarOpen(false);
+    setScheduleNote(null);
+  };
 
   const unreadCount = inboxFiles.filter((f) => !f.isRead).length;
   const activeFile =
@@ -138,6 +161,13 @@ export const CaseInboxWidget: React.FC = () => {
     if (!activeFile) return;
     const d = new Date(dayMs);
     d.setHours(pickHour, 0, 0, 0);
+    if (d.getTime() <= gameNow()) {
+      setScheduleNote(
+        'That hour has already passed. Pick a later time. Nothing was booked.'
+      );
+      return;
+    }
+    setScheduleNote(null);
     setServiceDate(activeFile.id, d.getTime());
     setCalendarOpen(false);
   };
@@ -152,7 +182,7 @@ export const CaseInboxWidget: React.FC = () => {
           gap: 'var(--fab-gap)',
         }}
       >
-        <PhoneFab />
+        <PhoneFab open={phoneOpen} onOpenChange={openPhone} />
         <div className="flex items-end gap-2">
         {isOpen && (
           <button
@@ -173,8 +203,12 @@ export const CaseInboxWidget: React.FC = () => {
           onClick={() => {
             audioManager.playUiClick('tick');
             setIsOpen((open) => {
-              if (open) setArchivesOpen(false);
-              return !open;
+              if (open) {
+                setArchivesOpen(false);
+                return false;
+              }
+              setPhoneOpen(false);
+              return true;
             });
           }}
           style={{ touchAction: 'manipulation' }}
@@ -192,12 +226,8 @@ export const CaseInboxWidget: React.FC = () => {
 
       {isOpen && (
         <div
-          style={{
-            bottom: 'var(--files-panel-bottom)',
-            left: 'var(--safe-left)',
-            right: 'var(--safe-right)',
-          }}
-          className="fixed z-50 h-[min(62vh,26rem)] bg-slate-900 border-2 border-amber-500/60 rounded-2xl shadow-2xl flex overflow-hidden text-slate-100 select-none"
+          data-files-panel
+          className="hub-fab-sheet fixed z-50 bg-slate-900 border-2 border-amber-500/60 rounded-2xl shadow-2xl flex overflow-hidden text-slate-100 select-none"
         >
           <div className="w-[38%] max-w-[9.5rem] border-r border-slate-800 overflow-y-auto bg-slate-950/60">
             <div className="p-2 border-b border-slate-800">
@@ -556,14 +586,15 @@ export const CaseInboxWidget: React.FC = () => {
                           <select
                             aria-label="Service hour"
                             value={hour12Parts(pickHour).hour}
-                            onChange={(e) =>
+                            onChange={(e) => {
+                              setScheduleNote(null);
                               setPickHour(
                                 hour24From12(
                                   Number(e.target.value),
                                   hour12Parts(pickHour).meridiem
                                 )
-                              )
-                            }
+                              );
+                            }}
                             className="bg-slate-800 rounded px-1 py-0.5"
                           >
                             {Array.from({ length: 12 }, (_, i) => i + 1).map(
@@ -577,14 +608,15 @@ export const CaseInboxWidget: React.FC = () => {
                           <select
                             aria-label="AM or PM"
                             value={hour12Parts(pickHour).meridiem}
-                            onChange={(e) =>
+                            onChange={(e) => {
+                              setScheduleNote(null);
                               setPickHour(
                                 hour24From12(
                                   hour12Parts(pickHour).hour,
                                   e.target.value === 'PM' ? 'PM' : 'AM'
                                 )
-                              )
-                            }
+                              );
+                            }}
                             className="bg-slate-800 rounded px-1 py-0.5"
                           >
                             <option value="AM">AM</option>
@@ -592,6 +624,14 @@ export const CaseInboxWidget: React.FC = () => {
                           </select>
                         </label>
                       </div>
+                      {scheduleNote ? (
+                        <p
+                          data-schedule-note
+                          className="mb-2 text-[11px] font-semibold leading-snug text-amber-200"
+                        >
+                          {scheduleNote}
+                        </p>
+                      ) : null}
                       <div className="grid grid-cols-4 gap-1.5">
                         {calendarDays.map((day) => {
                           const label = new Date(day).toLocaleDateString(
@@ -668,12 +708,7 @@ function ArchivesPanel({
   const active = records.find((r) => r.id === selectedId) || records[0];
   return (
     <div
-      style={{
-        bottom: 'var(--files-panel-bottom)',
-        left: 'var(--safe-left)',
-        right: 'var(--safe-right)',
-      }}
-      className="fixed z-[51] h-[min(62vh,26rem)] bg-slate-900 border-2 border-amber-500/60 rounded-2xl shadow-2xl flex overflow-hidden text-slate-100 select-none"
+      className="hub-fab-sheet fixed z-[51] bg-slate-900 border-2 border-amber-500/60 rounded-2xl shadow-2xl flex overflow-hidden text-slate-100 select-none"
     >
       <div className="w-[38%] max-w-[9.5rem] border-r border-slate-800 overflow-y-auto bg-slate-950/60">
         <div className="p-2 border-b border-slate-800 text-xs font-bold uppercase tracking-wider text-slate-400">

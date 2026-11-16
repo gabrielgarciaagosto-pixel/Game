@@ -4,6 +4,8 @@ declare global {
   interface Window {
     __ossuarianHardwareBack?: () => 'handled' | 'exit';
     __ossuarianCloseFiles?: () => void;
+    __ossuarianClosePhone?: () => void;
+    __ossuarianCloseCalendar?: () => void;
     __ossuarianCloseSettingsConfirm?: () => void;
   }
 }
@@ -72,6 +74,18 @@ function App() {
       }
       if (state.legalAlert) {
         state.clearLegalAlert();
+        return 'handled';
+      }
+      if (state.rankFanfare) {
+        state.dismissRankFanfare();
+        return 'handled';
+      }
+      if (window.__ossuarianCloseCalendar) {
+        window.__ossuarianCloseCalendar();
+        return 'handled';
+      }
+      if (window.__ossuarianClosePhone) {
+        window.__ossuarianClosePhone();
         return 'handled';
       }
       if (window.__ossuarianCloseFiles) {

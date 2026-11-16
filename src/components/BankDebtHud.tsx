@@ -7,7 +7,7 @@ import {
 import { subscribeClock } from '../utils/gameNow';
 import { useGameStore } from '../store/useGameStore';
 
-/** HUD strip when accounts are overdrawn past a day of open parlor time. */
+/** HUD strip once the overdraft has 24 hours of open parlor time on the clock. */
 export const BankDebtHud: React.FC = () => {
   const cash = useGameStore((s) => s.cash);
   const overdraftAccruedMs = useGameStore((s) => s.overdraftAccruedMs);
