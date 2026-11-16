@@ -25,7 +25,7 @@ export interface NewsHeadline {
   /** EFFECT moves price or volume, or opens a celebrity case. MISCELLANEOUS does not. */
   group: NewsGroup;
   text: string;
-  /** 1 or 2 in-game days. A day is 24 family hours. */
+  /** 1 or 2 in-game days. A day is one real day. */
   days: number;
   /** Intake multiplier while a volume line is live. */
   flow?: number;

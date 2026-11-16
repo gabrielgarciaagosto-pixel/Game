@@ -179,6 +179,9 @@ export const ShowroomAndChapelModal: React.FC = () => {
   const lateService =
     currentCase.serviceDateMs != null &&
     gameNow() > currentCase.serviceDateMs;
+  const graceService =
+    lateService &&
+    gameNow() - (currentCase.serviceDateMs ?? 0) <= 45 * 60 * 1000;
   const offered = getUrnById(currentCase.offeredUrnId);
   const offeredCasket = getCasketById(currentCase.offeredCasketId);
   const urnStandService = caseUsesUrnStand(currentCase);
@@ -238,7 +241,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
               ? ` · Casket ${friendlyToken(currentCase.preferredCasketMaterial)}`
               : ''}{' '}
             · ${cash}
-            {lateService ? ' · LATE' : ''}
+            {graceService ? ' · GRACE' : lateService ? ' · RESCHEDULE' : ''}
             {currentCase.decayLevel > 5
               ? ` · ${decayLabel(currentCase.decayLevel)}`
               : ''}

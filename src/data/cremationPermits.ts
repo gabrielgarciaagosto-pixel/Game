@@ -186,6 +186,12 @@ export interface PermitSubmissionRecord {
   decedentName: string;
   submittedAt: number;
   evaluatesAt: number;
+  /**
+   * Foreground milliseconds left before Vital Records answers.
+   * Missing on older saves; the next open tick starts the short race over
+   * instead of resolving it while the app was closed.
+   */
+  remainingMs?: number;
   evaluatedAt: number | null;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   /** Empty when exact match; non-empty / sentinel for wrong filings. */

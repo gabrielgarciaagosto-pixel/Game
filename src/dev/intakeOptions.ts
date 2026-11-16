@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 export const INTAKE_DEV_KEY = 'ossuarian-dev-intake';
 
 export type IntakeDevOptions = {
-  /** Slow Case Intake: 5–10 minutes between arrivals. */
+  /** Slow Case Intake: two cases a day, 8–12 hours apart. */
   sci: boolean;
   /** No automatic arrivals until turned off. Wins over SCI. */
   pause: boolean;

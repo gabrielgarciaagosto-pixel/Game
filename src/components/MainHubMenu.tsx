@@ -1,18 +1,18 @@
 import React, { useRef, useState } from 'react';
 import {
-  bankMsUntilForeclosure,
-  formatFamilyCountdown,
+  foreclosureMsRemaining,
+  formatRealCountdown,
 } from '../data/bankForeclosure';
 import { resolveCortege } from '../data/funeralFleets';
 import { getUrnById } from '../data/urnCatalog';
 import { useTapAction } from '../hooks/useTapAction';
-import { gameNow } from '../utils/gameNow';
 import { getCremationTargets } from '../utils/mortuaryMath';
 import { retortProgress } from '../retort/retortTypes';
 import { directiveLabel, displayCaseName, type StationId } from '../types/game';
 import { TAG_WINDOW_MS, useGameStore, type LastCaseNote } from '../store/useGameStore';
-import { tagWindowIsHeld } from '../tutorial/steps';
 import { HubAtmosphere } from './hub/HubAtmosphere';
+import { titleProgress } from '../data/rankProgression';
+import { DeskCalendar } from './hub/DeskCalendar';
 import { NewsTicker } from './hub/NewsTicker';
 import type { DecedentCase } from '../types/game';
 
@@ -44,6 +44,38 @@ function lastCaseLine(note: LastCaseNote | null, cases: DecedentCase[]): string 
   }
   if (note) return `${note.name} · ${note.service}`;
   return 'None yet';
+}
+
+function RankStrip({ xp }: { xp: number }) {
+  const progress = titleProgress(xp);
+  const { current, next, into, span, pct } = progress;
+  return (
+    <div
+      className="rounded-xl border border-amber-900/50 bg-black/35 px-2.5 py-1.5"
+      data-rank-display
+      data-rank-tier={current.tier}
+      data-rank-title={current.title}
+      data-rank-pct={pct}
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="min-w-0 truncate text-[12px] leading-tight">
+          <span className="mr-1.5 inline-flex min-w-[1.4rem] items-center justify-center rounded bg-amber-200/15 px-1 font-black text-amber-100">
+            {current.tier}
+          </span>
+          <span className="font-semibold text-amber-50">{current.title}</span>
+        </p>
+        <span className="shrink-0 font-mono text-[10px] text-slate-400">
+          {next ? `${into}/${span}` : 'Kept'}
+        </span>
+      </div>
+      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/10">
+        <div
+          className="h-full rounded-full bg-amber-300"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
 }
 
 function HubBurst({ id }: { id: StationId }) {
@@ -149,9 +181,7 @@ function HubRoomButton({
       <button
         type="button"
         {...tap}
-        className={`min-h-[7.25rem] w-full rounded-2xl bg-gradient-to-br ${color} border p-3 flex flex-col justify-between items-start text-left shadow-[0_10px_30px_rgba(0,0,0,0.35)] active:scale-[0.98] relative overflow-hidden ${
-          wide ? 'min-h-[6.5rem]' : ''
-        }`}
+        className={`${wide ? 'min-h-[5.75rem]' : 'min-h-[6.25rem]'} w-full rounded-2xl bg-gradient-to-br ${color} border p-3 flex flex-col justify-between items-start text-left shadow-[0_10px_30px_rgba(0,0,0,0.35)] active:scale-[0.98] relative overflow-hidden`}
       >
         {bursting && <HubBurst id={id} />}
         <span aria-hidden className="absolute -right-2 -bottom-3 text-5xl opacity-[0.1] font-black pointer-events-none">
@@ -214,7 +244,9 @@ export const MainHubMenu: React.FC = () => {
     ownedFleetIds,
     fleetAssignment,
     negativeCashSinceMs,
+    overdraftAccruedMs,
     bankForeclosed,
+    careerXp,
   } = useGameStore();
 
   const coolerCases = cases.filter((c) => c.location === 'COOLER');
@@ -224,14 +256,9 @@ export const MainHubMenu: React.FC = () => {
   const [burst, setBurst] = useState<StationId | null>(null);
   const navTimer = useRef<number | null>(null);
 
-  const untaggedUrgentCount = coolerCases.filter((c) => {
-    const now = gameNow();
-    return (
-      !c.isTagged &&
-      now < c.tagExpiresAt &&
-      !tagWindowIsHeld(c.tagExpiresAt, TAG_WINDOW_MS, now)
-    );
-  }).length;
+  const untaggedUrgentCount = coolerCases.filter(
+    (c) => !c.isTagged && !c.nameExpired && c.tagRemainingMs > 0 && c.tagRemainingMs <= TAG_WINDOW_MS
+  ).length;
 
   const roster = retortMachines.length > 0 ? retortMachines : [retort];
   const burning = roster
@@ -334,7 +361,7 @@ export const MainHubMenu: React.FC = () => {
       body: 'House operating balance. Service payouts, vessel sales, fines, and loan drafts all post here. A negative balance starts the bank’s foreclosure clock.',
       detail: `$${cash.toLocaleString()} on hand · ${ownedProperty.label}, ${ownedProperty.city} ${ownedProperty.stateCode} · loans $${debt.toLocaleString()} outstanding${
         cash < 0 && negativeCashSinceMs != null && !bankForeclosed
-          ? ` · foreclosure in ${formatFamilyCountdown(bankMsUntilForeclosure(negativeCashSinceMs, gameNow()) ?? 0)}`
+          ? ` · foreclosure in ${formatRealCountdown(foreclosureMsRemaining(overdraftAccruedMs))} of open parlor time`
           : ''
       }`,
     },
@@ -442,6 +469,8 @@ export const MainHubMenu: React.FC = () => {
           </StatChip>
         </div>
 
+        <RankStrip xp={careerXp} />
+
         {open && (
           <div
             className="rounded-xl border border-slate-700 bg-slate-950/95 p-3 text-[12px] text-slate-300 shadow-xl"
@@ -456,7 +485,7 @@ export const MainHubMenu: React.FC = () => {
         )}
       </div>
 
-      <div className="relative z-10 flex-1 min-h-0 grid grid-cols-2 gap-2.5 content-start py-3 overflow-y-auto pb-20">
+      <div className="relative z-10 flex-1 min-h-0 grid grid-cols-2 gap-2.5 content-start py-3 overflow-y-auto pb-4">
         {tiles.map((tile, index) => (
           <HubRoomButton
             key={tile.id}
@@ -471,6 +500,9 @@ export const MainHubMenu: React.FC = () => {
             onPick={pickRoom}
           />
         ))}
+      </div>
+      <div className="relative z-20 flex shrink-0 justify-start px-1 pb-[max(0.4rem,var(--safe-bottom))]">
+        <DeskCalendar />
       </div>
     </div>
   );

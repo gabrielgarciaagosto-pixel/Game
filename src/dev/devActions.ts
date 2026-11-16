@@ -16,6 +16,7 @@ import {
   type RareTone,
 } from '../data/shopRotation';
 import { FLEET_CATALOG } from '../data/funeralFleets';
+import { titleProgress } from '../data/rankProgression';
 import { URN_CATALOG } from '../data/urnCatalog';
 import { IDLE_RETORT } from '../retort/retortTypes';
 import {
@@ -40,6 +41,16 @@ import {
 
 function toast(msg: string) {
   useGameStore.setState({ intakeToast: `[DEV] ${msg}` });
+}
+
+/** Grants exactly the XP that reaches the next house title. */
+export function devRaiseHouseRank(): void {
+  const { careerXp, grantCareerXp } = useGameStore.getState();
+  const progress = titleProgress(careerXp);
+  if (!progress.next) return;
+  const need = progress.span - progress.into;
+  if (need <= 0) return;
+  grantCareerXp(need);
 }
 
 export function addCash(amount: number) {
@@ -97,6 +108,8 @@ export function spawnDirective(directive: DispositionDirective) {
     familyUrnDueAt: directiveNeedsUrn(directive)
       ? now + 45_000
       : null,
+    familyUrnRemainingMs: directiveNeedsUrn(directive) ? 45_000 : null,
+    tagRemainingMs: base.tagRemainingMs,
     familyRequestedUrnId: null as string | null,
     basePayout: basePayoutFor(directive),
     cremationPermitStatus: initialPermitStatus(directive),
@@ -167,7 +180,7 @@ export function forceFamilyUrnNow() {
     cases: s.cases.map((c) => {
       if (!directiveNeedsUrn(c.directive)) return c;
       if (c.familyRequestedUrnId) return c;
-      return { ...c, familyUrnDueAt: now - 1 };
+      return { ...c, familyUrnDueAt: now - 1, familyUrnRemainingMs: 0 };
     }),
   }));
   useGameStore.getState().tickFamilyUrnChoices();

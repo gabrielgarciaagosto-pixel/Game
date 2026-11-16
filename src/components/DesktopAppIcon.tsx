@@ -8,6 +8,7 @@ export type DesktopIconKind =
   | 'REALTY'
   | 'FLEETS'
   | 'CRAIGMILE'
+  | 'PHONE'
   | 'SETTINGS';
 
 const META: Record<
@@ -20,6 +21,7 @@ const META: Record<
   REALTY: { label: 'Lychgate Realty', short: 'Realty' },
   FLEETS: { label: 'Funeral Fleets', short: 'Fleets' },
   CRAIGMILE: { label: 'Craigmile Crematory', short: 'Craigmile' },
+  PHONE: { label: 'Desk Phone', short: 'Phone' },
   SETTINGS: { label: 'Settings', short: 'Settings' },
 };
 
@@ -155,6 +157,19 @@ function IconArt({ kind }: { kind: DesktopIconKind }) {
           <circle cx="22" cy="46" r="2" fill="#34d399" />
           <circle cx="28" cy="46" r="2" fill="#f87171" />
           <circle cx="34" cy="46" r="2" fill="#e7e5e4" />
+        </svg>
+      );
+    case 'PHONE':
+      return (
+        <svg viewBox="0 0 56 56" className="w-full h-full" aria-hidden>
+          <rect width="56" height="56" fill="#0c241c" />
+          <rect x="16" y="8" width="24" height="40" rx="4" fill="#12382c" />
+          <rect x="19" y="12" width="18" height="26" rx="1" fill="#07140f" />
+          <circle cx="28" cy="43" r="2.2" fill="#6ee7b7" />
+          <path
+            d="M22 22c2 4 6 8 10 10l2-2 3 1-1 4c-6 1-13-6-14-12l4-1 1 3-2 2z"
+            fill="#6ee7b7"
+          />
         </svg>
       );
     case 'SETTINGS':

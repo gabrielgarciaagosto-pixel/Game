@@ -5,10 +5,11 @@
  * in-game days, then waits half a day before another can start.
  * Miscellaneous lines fill the rest of the crawl and turn over faster.
  * A celebrity case can sit beside that, and only one of those at a time.
- * An in-game day is 24 family hours.
+ * An in-game day is one real day.
  */
 import { PROPERTY_LISTINGS } from '../data/bankProducts';
 import { FAMILY_MINUTE_MS } from '../data/familyUrnTiming';
+import { DAY_MS } from '../data/pacing';
 import {
   headlineById,
   renderHeadline,
@@ -18,7 +19,7 @@ import {
   type NewsHeadline,
 } from '../data/newsHeadlines';
 
-export const NEWS_DAY_MS = 24 * 60 * FAMILY_MINUTE_MS;
+export const NEWS_DAY_MS = DAY_MS;
 
 /** Extra on the fee when a headline case is handled with care. Total about 2.35×. */
 export const HEADLINE_CAREFUL_EXTRA = 1.35;

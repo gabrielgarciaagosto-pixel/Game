@@ -4,11 +4,10 @@ import {
   earlyPayoffAmount,
 } from '../data/bankProducts';
 import {
-  BANK_FORECLOSURE_AFTER_MS,
-  formatFamilyCountdown,
+  foreclosureMsRemaining,
+  formatRealCountdown,
 } from '../data/bankForeclosure';
 import { formatDateTime12 } from '../utils/clock12';
-import { gameNow } from '../utils/gameNow';
 import { useGameStore } from '../store/useGameStore';
 import { TapButton } from './TapButton';
 import { useSheetOpen } from './useSheetOpen';
@@ -23,6 +22,7 @@ export const BankBrowser: React.FC = () => {
   const activeLoans = useGameStore((s) => s.activeLoans);
   const ownedProperty = useGameStore((s) => s.ownedProperty);
   const negativeCashSinceMs = useGameStore((s) => s.negativeCashSinceMs);
+  const overdraftAccruedMs = useGameStore((s) => s.overdraftAccruedMs);
   const bankWarningIssued = useGameStore((s) => s.bankWarningIssued);
   const bankOpenTab = useGameStore((s) => s.bankOpenTab);
   const setBankOpenTab = useGameStore((s) => s.setBankOpenTab);
@@ -175,19 +175,14 @@ export const BankBrowser: React.FC = () => {
                 ${cash.toLocaleString()}
               </div>
               <p className="text-[11px] text-slate-400 leading-snug">
-                Overdraft and missed loan/mortgage drafts share the foreclosure
-                timer (2h warning · 4h seize).
+                Overdraft counts only while the parlor is open: a warning after
+                one day at the desk, foreclosure after three. Loan drafts are
+                once a day, and a missed week does not stack.
               </p>
               {negativeCashSinceMs != null && cash < 0 && (
                 <p className="text-[11px] text-amber-200 font-mono">
-                  Debt clock:{' '}
-                  {formatFamilyCountdown(
-                    Math.max(
-                      0,
-                      BANK_FORECLOSURE_AFTER_MS -
-                        (gameNow() - negativeCashSinceMs)
-                    )
-                  )}{' '}
+                  Open-parlor debt clock:{' '}
+                  {formatRealCountdown(foreclosureMsRemaining(overdraftAccruedMs))}{' '}
                   to foreclosure
                 </p>
               )}
@@ -247,10 +242,8 @@ export const BankBrowser: React.FC = () => {
                 <div className="text-[10px] font-mono text-slate-400 grid grid-cols-2 gap-1">
                   <span>Principal ${p.principal.toLocaleString()}</span>
                   <span>APR {p.aprPct}%</span>
-                  <span>Term {p.termFamilyHours}h fam.</span>
-                  <span>
-                    Pay ${p.paymentAmount} / {p.paymentEveryFamilyHours}h
-                  </span>
+                  <span>Drafts daily</span>
+                  <span>Pay ${p.paymentAmount} each day</span>
                 </div>
                 <TapButton
                   onTap={() =>

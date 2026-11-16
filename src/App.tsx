@@ -16,6 +16,7 @@ import { CremationMiniGame } from './components/CremationMiniGame';
 import { CrematoryAudio } from './components/CrematoryAudio';
 import { EmbalmingMiniGame } from './components/EmbalmingMiniGame';
 import { MainHubMenu } from './components/MainHubMenu';
+import { RankFanfare } from './components/RankFanfare';
 import { MenuThemeAudio } from './components/MenuThemeAudio';
 import { NotificationPing } from './components/NotificationPing';
 import { ServiceFeedbackModal } from './components/ServiceFeedbackModal';
@@ -217,6 +218,7 @@ function App() {
 
       <CaseInboxWidget />
       {hasStartedGame ? <BankDebtHud /> : null}
+      {hasStartedGame ? <RankFanfare /> : null}
 
       {legalAlert && (
         <div className="fixed inset-0 z-[60] bg-black/70 flex items-center justify-center p-6">

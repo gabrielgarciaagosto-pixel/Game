@@ -92,9 +92,14 @@ export function releaseHeldTagWindow<
     nameExpired: boolean;
     arrivedAt: number;
     tagExpiresAt: number;
+    tagRemainingMs?: number;
   },
 >(row: T, now: number, windowMs: number): T {
   if (row.isTagged || row.nameExpired) return row;
-  if (!tagWindowIsHeld(row.tagExpiresAt, windowMs, now)) return row;
-  return { ...row, tagExpiresAt: now + windowMs };
+  const held =
+    typeof row.tagRemainingMs === 'number'
+      ? row.tagRemainingMs > windowMs
+      : tagWindowIsHeld(row.tagExpiresAt, windowMs, now);
+  if (!held) return row;
+  return { ...row, tagExpiresAt: now + windowMs, tagRemainingMs: windowMs };
 }

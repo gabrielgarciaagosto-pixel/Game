@@ -183,8 +183,14 @@ export interface DecedentCase {
    * Distinct from offeredUrnId (what the player actually staged).
    */
   familyRequestedUrnId: string | null;
-  /** Wall-clock when the family request should fire */
+  /** Legacy stamp. The wait that runs is familyUrnRemainingMs. */
   familyUrnDueAt: number | null;
+  /**
+   * Foreground milliseconds until the family names a vessel.
+   * Null once they have chosen, or when no urn is required.
+   * A closed app does not spend this.
+   */
+  familyUrnRemainingMs: number | null;
   /** How the family speaks of them in the thank-you. "Mom", "Dad", and so on. */
   familyRelation?: string;
   /** 0–100 ash-pour quality from the urnization mini-game */
@@ -213,7 +219,13 @@ export interface DecedentCase {
   isUrnFilled: boolean;
   basePayout: number;
   arrivedAt: number;
+  /** Absolute mirror of the toe-tag clock. The race itself is tagRemainingMs. */
   tagExpiresAt: number;
+  /**
+   * Milliseconds left to tag. Counts down only while the parlor is open.
+   * A closed app does not spend it.
+   */
+  tagRemainingMs: number;
   isTagged: boolean;
   nameExpired: boolean;
   /** 0 = pristine, 100 = fully decomposed */

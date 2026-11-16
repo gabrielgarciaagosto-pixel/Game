@@ -11,10 +11,14 @@ export const FAMILY_MINUTE_MS = 6_000;
 export const FAMILY_URN_CHOICE_MIN_MINUTES = 6;
 export const FAMILY_URN_CHOICE_MAX_MINUTES = 9;
 
-export function rollFamilyUrnDueAt(arrivedAt: number): number {
+export function rollFamilyUrnWaitMs(): number {
   const span =
     FAMILY_URN_CHOICE_MAX_MINUTES - FAMILY_URN_CHOICE_MIN_MINUTES + 1;
   const minutes =
     FAMILY_URN_CHOICE_MIN_MINUTES + Math.floor(Math.random() * span);
-  return arrivedAt + minutes * FAMILY_MINUTE_MS;
+  return minutes * FAMILY_MINUTE_MS;
+}
+
+export function rollFamilyUrnDueAt(arrivedAt: number): number {
+  return arrivedAt + rollFamilyUrnWaitMs();
 }

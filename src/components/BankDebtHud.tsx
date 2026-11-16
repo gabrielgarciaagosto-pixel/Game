@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import {
   BANK_WARNING_AFTER_MS,
-  bankMsUntilForeclosure,
-  formatFamilyCountdown,
+  foreclosureMsRemaining,
+  formatRealCountdown,
 } from '../data/bankForeclosure';
-import { gameNow, subscribeClock } from '../utils/gameNow';
+import { subscribeClock } from '../utils/gameNow';
 import { useGameStore } from '../store/useGameStore';
 
-/** HUD strip when accounts are overdrawn past the 2h bank warning. */
+/** HUD strip when accounts are overdrawn past a day of open parlor time. */
 export const BankDebtHud: React.FC = () => {
   const cash = useGameStore((s) => s.cash);
-  const negativeCashSinceMs = useGameStore((s) => s.negativeCashSinceMs);
+  const overdraftAccruedMs = useGameStore((s) => s.overdraftAccruedMs);
   const bankWarningIssued = useGameStore((s) => s.bankWarningIssued);
   const bankForeclosed = useGameStore((s) => s.bankForeclosed);
   const [, setTick] = useState(0);
@@ -24,12 +24,10 @@ export const BankDebtHud: React.FC = () => {
     };
   }, []);
 
-  if (bankForeclosed || cash >= 0 || negativeCashSinceMs == null) return null;
-  const now = gameNow();
-  const elapsed = now - negativeCashSinceMs;
-  if (elapsed < BANK_WARNING_AFTER_MS && !bankWarningIssued) return null;
+  if (bankForeclosed || cash >= 0) return null;
+  if (overdraftAccruedMs < BANK_WARNING_AFTER_MS && !bankWarningIssued) return null;
 
-  const remaining = bankMsUntilForeclosure(negativeCashSinceMs, now) ?? 0;
+  const remaining = foreclosureMsRemaining(overdraftAccruedMs);
 
   return (
     <div
@@ -41,7 +39,7 @@ export const BankDebtHud: React.FC = () => {
           BANK DEBT · ${cash.toLocaleString()}
         </span>
         <span className="text-amber-100">
-          Foreclosure in {formatFamilyCountdown(remaining)}
+          Foreclosure in {formatRealCountdown(remaining)}
         </span>
       </div>
     </div>

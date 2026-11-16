@@ -23,8 +23,8 @@ type Pos = { x: number; y: number };
 function defaultPos(): Pos {
   const size = 44;
   return {
-    x: 10,
-    y: Math.max(8, window.innerHeight - size - 56),
+    x: Math.max(8, window.innerWidth - size - 12),
+    y: Math.max(8, window.innerHeight - size - 190),
   };
 }
 
@@ -36,6 +36,8 @@ function loadPos(): Pos {
       if (typeof p.x === 'number' && typeof p.y === 'number') {
         // The old default sat on the Cooler card. Start clear of that corner.
         if (p.x < 72 && p.y < 220) return defaultPos();
+        // The desk calendar owns the hub's bottom-left.
+        if (p.x < 200 && p.y > window.innerHeight - 240) return defaultPos();
         return p;
       }
     }
@@ -130,7 +132,7 @@ function IntakeDevSection() {
         Pause Case Intake {opts.pause ? 'ON' : 'OFF'}
       </button>
       <p className="w-full text-[9px] text-lime-300/70 leading-snug">
-        SCI waits 5–10 min between cases. Pause stops arrivals. Pause wins.
+        SCI is two cases a day, 8–12 hours apart. Pause writes no arrival. Pause wins.
       </p>
     </Section>
   );
@@ -368,6 +370,12 @@ export const DevToolsOverlay: React.FC = () => {
 
           <div className="flex-1 overflow-y-auto px-3 py-3 overscroll-contain">
             <IntakeDevSection />
+            <Section title="House rank">
+              <Btn
+                label="Raise house rank"
+                onClick={() => actions.devRaiseHouseRank()}
+              />
+            </Section>
 
             <Section title="Spawn">
               <Btn

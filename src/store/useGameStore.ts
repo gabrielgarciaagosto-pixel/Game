@@ -45,7 +45,6 @@ import {
   TUTORIAL_TAG_HOLD_MS,
   TUTORIAL_TAG_STEP,
   releaseHeldTagWindow,
-  tagWindowIsHeld,
   type TutorialPhase,
 } from '../tutorial/steps';
 import { getCremationTargets } from '../utils/mortuaryMath';
@@ -129,6 +128,7 @@ import {
   BANK_FORECLOSURE_AFTER_MS,
   BANK_WARNING_AFTER_MS,
   BANK_WARNING_MESSAGE,
+  LOAN_INSTALLMENT_MS,
 } from '../data/bankForeclosure';
 import {
   directiveNeedsCremationPermit,
@@ -167,28 +167,57 @@ import {
   satisfactionToRewards,
   scoreChapelArrangement,
 } from '../utils/chapelSatisfaction';
-import { rollFamilyUrnDueAt } from '../data/familyUrnTiming';
+import {
+  rollFamilyUrnDueAt,
+  rollFamilyUrnWaitMs,
+} from '../data/familyUrnTiming';
 import {
   caseUsesUrnStand,
   directiveNeedsUrn,
   pickFamilyUrnRequest,
 } from '../data/familyUrnPick';
 import { gameNow } from '../utils/gameNow';
+import { DEV_TOOLS } from '../dev/flags';
+import { readIntakeDevOptions } from '../dev/intakeOptions';
+import {
+  PHONE_EXTRA_PER_DAY,
+  SERVICE_GRACE_FINE,
+  SERVICE_RESCHEDULE_REP,
+  advanceIntakeSchedule,
+  localDayKey,
+  rollIntakeGapMs,
+  serviceTiming,
+} from '../data/pacing';
+import {
+  contactAccess,
+  phoneContactById,
+  pickPhoneLine,
+  type PhoneCallResult,
+} from '../data/phoneContacts';
+import {
+  XP_NEW_HOME,
+  XP_URN_SEALED,
+  grantCareer,
+  serviceCareerXp,
+  titleAtXp,
+  type RankFanfare,
+} from '../data/rankProgression';
 import { EMBALMING_SUPPLY_BASE, type NewsHeadline } from '../data/newsHeadlines';
 import {
   advanceNewsWire,
   headlineFeeDelta,
+  intakeNewsFactor,
   quotedPrice,
   type NewsWireItem,
 } from '../news/newsWire';
 
 export const TAG_WINDOW_MS = 60_000;
-/** Normal automatic intake window: 3–5 minutes. */
-export const INTAKE_MIN_MS = 180_000;
-export const INTAKE_MAX_MS = 300_000;
-/** SCI (Slow Case Intake): 5–10 minutes. */
-export const SLOW_INTAKE_MIN_MS = 300_000;
-export const SLOW_INTAKE_MAX_MS = 600_000;
+/** Automatic intake gap: 4–8 real hours, five cases on a local day. */
+export const INTAKE_MIN_MS = 4 * 3_600_000;
+export const INTAKE_MAX_MS = 8 * 3_600_000;
+/** SCI stretches the day to 8–12 hours and two cases. */
+export const SLOW_INTAKE_MIN_MS = 8 * 3_600_000;
+export const SLOW_INTAKE_MAX_MS = 12 * 3_600_000;
 /** Decay points per second outside cooler when not embalmed/cremated */
 const DECAY_PER_SEC = 0.35;
 
@@ -220,7 +249,7 @@ interface GameState {
    * Which Computer desktop app to open (null = desktop).
    * EMPORIUM redirects here with 'SHOP'. Not persisted.
    */
-  computerOpenApp: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS' | 'CRAIGMILE' | null;
+  computerOpenApp: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS' | 'CRAIGMILE' | 'PHONE' | null;
   /** Optional deep-link tab when opening BANK (not persisted) */
   bankOpenTab: 'overview' | 'loans' | 'listings' | null;
   cases: DecedentCase[];
@@ -279,12 +308,15 @@ interface GameState {
   financeLedger: FinanceLedgerEntry[];
   /**
    * gameNow() when cash first went negative; null when cash >= 0.
-   * Persisted so debt time survives restarts.
+   * The foreclosure race itself is overdraftAccruedMs, which only grows
+   * while the parlor is open.
    */
   negativeCashSinceMs: number | null;
-  /** True after the 2h bank warning toast was issued for this debt stretch */
+  /** Open-parlor milliseconds spent overdrawn this stretch. */
+  overdraftAccruedMs: number;
+  /** True after the day-scale bank warning toast for this debt stretch */
   bankWarningIssued: boolean;
-  /** True when 4h debt triggered foreclosure game-over */
+  /** True when three open days of debt triggered foreclosure */
   bankForeclosed: boolean;
   /** Current funeral home property (persisted) */
   ownedProperty: OwnedProperty;
@@ -306,7 +338,31 @@ interface GameState {
   newsCelebGate: number;
   /** Headline ids that just left the wire, so they do not repeat at once. */
   newsRecent: string[];
+  /** Local day key for the automatic intake cap. */
+  intakeDayKey: string;
+  intakeSpawnedToday: number;
+  /** Next automatic arrival. Null while Pause Case Intake is on. */
+  nextIntakeAt: number | null;
+  /** True after the first empty-cooler case of a new clock. */
+  intakeBootstrapped: boolean;
+  phoneDayKey: string;
+  phoneCasesToday: number;
+  /** Per-contact cooldown stamps. Calling one does not write the others. */
+  phoneCooldownUntil: Record<string, number>;
+  phoneLastResult: PhoneCallResult | null;
+  /** Lifetime house XP. Rank is derived from this. */
+  careerXp: number;
+  /** Parlors kept, including the starter. A relocation adds one. */
+  homesKept: number;
+  /** Reputation marks that have already paid XP. */
+  repMilestonesClaimed: number[];
+  /** Set when a title changes. Cleared by the fanfare. */
+  rankFanfare: RankFanfare | null;
   tickNews: () => void;
+  tickIntake: (opts?: { catchUpLimit?: number }) => void;
+  placePhoneCall: (contactId: string) => void;
+  grantCareerXp: (gain: number) => void;
+  dismissRankFanfare: () => void;
   /**
    * Wall-clock when the player left the embalming table.
    * Fumes linger on the hub. Not persisted.
@@ -350,7 +406,7 @@ interface GameState {
   hardResetGameState: (toast?: string | null) => void;
   setActiveStation: (station: StationId) => void;
   setComputerOpenApp: (
-    app: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS' | 'CRAIGMILE' | null
+    app: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS' | 'CRAIGMILE' | 'PHONE' | null
   ) => void;
   buyFleetVehicle: (id: string) => { ok: boolean; message: string };
   assignFleetVehicle: (fleetClass: FleetClass, id: string | null) => void;
@@ -385,7 +441,12 @@ interface GameState {
   markFileRead: (fileId: string) => void;
   setServiceDate: (caseId: string, serviceDateMs: number) => void;
   clearIntakeToast: () => void;
-  receiveNewIntake: () => boolean;
+  receiveNewIntake: (opts?: {
+    toast?: string;
+    directive?: DecedentCase['directive'];
+    /** Phone already shows the outcome. Do not cover that screen with the hub toast. */
+    quiet?: boolean;
+  }) => boolean;
   expireUntaggedNames: () => void;
   tickDecay: () => void;
   /** Fire due family urn requests → toast + case file update */
@@ -591,6 +652,7 @@ export function generateRandomCase(now = gameNow()): DecedentCase {
   const vitals = generateDecedentVitals(now);
   const preferredFlowers =
     flowers[Math.floor(Math.random() * flowers.length)]!;
+  const urnWaitMs = directiveNeedsUrn(directive) ? rollFamilyUrnWaitMs() : null;
   return {
     id: Math.random().toString(36).substring(2, 8).toUpperCase(),
     name: randomDecedentName(),
@@ -607,9 +669,8 @@ export function generateRandomCase(now = gameNow()): DecedentCase {
     offeredUrnId: null,
     offeredCasketId: null,
     familyRequestedUrnId: null,
-    familyUrnDueAt: directiveNeedsUrn(directive)
-      ? rollFamilyUrnDueAt(now)
-      : null,
+    familyUrnDueAt: urnWaitMs == null ? null : now + urnWaitMs,
+    familyUrnRemainingMs: urnWaitMs,
     urnPourQuality: 0,
     urnAshReady: false,
     location: 'COOLER',
@@ -619,6 +680,7 @@ export function generateRandomCase(now = gameNow()): DecedentCase {
     basePayout: payoutByDirective[directive],
     arrivedAt: now,
     tagExpiresAt: now + TAG_WINDOW_MS,
+    tagRemainingMs: TAG_WINDOW_MS,
     isTagged: false,
     nameExpired: false,
     decayLevel: 0,
@@ -833,6 +895,21 @@ function normalizeCase(c: DecedentCase): DecedentCase {
       (directiveNeedsUrn(c.directive) && !c.familyRequestedUrnId
         ? rollFamilyUrnDueAt(arrivedAt)
         : null),
+    familyUrnRemainingMs:
+      c.familyRequestedUrnId || !directiveNeedsUrn(c.directive)
+        ? null
+        : typeof c.familyUrnRemainingMs === 'number'
+          ? c.familyUrnRemainingMs
+          : rollFamilyUrnWaitMs(),
+    tagRemainingMs:
+      c.isTagged || c.nameExpired
+        ? 0
+        : typeof c.tagRemainingMs === 'number'
+          ? c.tagRemainingMs
+          : c.tagExpiresAt != null &&
+              c.tagExpiresAt - arrivedAt > TAG_WINDOW_MS + 1000
+            ? c.tagExpiresAt - arrivedAt
+            : TAG_WINDOW_MS,
     urnPourQuality: c.urnPourQuality ?? 0,
     cremainsQuality: c.cremainsQuality ?? 0,
     urnAshReady: c.urnAshReady ?? false,
@@ -917,15 +994,10 @@ function flowersFromLayout(
 
 /**
  * Random delay before the next automatic intake.
- * Normal is 3–5 minutes. SCI uses 5–10. Property flow and the news
- * volume factor still shorten or stretch that window.
+ * Normal is 4–8 hours. SCI uses 8–12. Flow and news nudge that, inside a day-scale floor.
  */
 export function nextIntakeDelayMs(clientFlow = 1, slow = false): number {
-  const min = slow ? SLOW_INTAKE_MIN_MS : INTAKE_MIN_MS;
-  const max = slow ? SLOW_INTAKE_MAX_MS : INTAKE_MAX_MS;
-  const base = min + Math.floor(Math.random() * (max - min + 1));
-  const flow = Math.max(0.5, Number.isFinite(clientFlow) ? clientFlow : 1);
-  return Math.max(20_000, Math.round(base / flow));
+  return rollIntakeGapMs(slow, clientFlow);
 }
 
 const defaultShowroomInventory: ShowroomItem[] = [
@@ -1045,6 +1117,7 @@ export function freshPersistedGameFields() {
     permitWrongStreak: 0,
     financeLedger: [] as FinanceLedgerEntry[],
     negativeCashSinceMs: null as number | null,
+    overdraftAccruedMs: 0,
     bankWarningIssued: false,
     bankForeclosed: false,
     ownedProperty: ownedFromListing(STARTER_PROPERTY, 0),
@@ -1057,6 +1130,18 @@ export function freshPersistedGameFields() {
     newsNextLiveAt: 0,
     newsCelebGate: 0,
     newsRecent: [] as string[],
+    intakeDayKey: '',
+    intakeSpawnedToday: 0,
+    nextIntakeAt: null as number | null,
+    intakeBootstrapped: false,
+    phoneDayKey: '',
+    phoneCasesToday: 0,
+    phoneCooldownUntil: {} as Record<string, number>,
+    phoneLastResult: null as PhoneCallResult | null,
+    careerXp: 0,
+    homesKept: 1,
+    repMilestonesClaimed: [] as number[],
+    rankFanfare: null as RankFanfare | null,
   };
 }
 
@@ -1413,6 +1498,7 @@ export const useGameStore = create<GameState>()(
           ...c,
           arrivedAt: now,
           tagExpiresAt: now + TAG_WINDOW_MS,
+          tagRemainingMs: TAG_WINDOW_MS,
           nameExpired: false,
         };
       });
@@ -1442,6 +1528,7 @@ export const useGameStore = create<GameState>()(
       directive: 'CREMATION_DIRECT',
       familyRelation: 'Mom',
       familyUrnDueAt: now + 45_000,
+      familyUrnRemainingMs: 45_000,
       familyRequestedUrnId: null,
       basePayout: basePayoutFor('CREMATION_DIRECT'),
       cremationPermitStatus: initialPermitStatus('CREMATION_DIRECT'),
@@ -1452,6 +1539,7 @@ export const useGameStore = create<GameState>()(
       isTagged: false,
       nameExpired: false,
       tagExpiresAt: now + TUTORIAL_TAG_HOLD_MS,
+      tagRemainingMs: TUTORIAL_TAG_HOLD_MS,
     };
     set({
       cases: [...state.cases, next],
@@ -1562,11 +1650,10 @@ export const useGameStore = create<GameState>()(
 
   tagBodyInCooler: (caseId) =>
     set((state) => {
-      const now = gameNow();
       const cases = state.cases.map((c) => {
         if (c.id !== caseId) return c;
-        if (c.isTagged || now >= c.tagExpiresAt) return c;
-        return { ...c, isTagged: true, nameExpired: false };
+        if (c.isTagged || c.nameExpired || c.tagRemainingMs <= 0) return c;
+        return { ...c, isTagged: true, nameExpired: false, tagRemainingMs: 0 };
       });
       const tagged = cases.find((c) => c.id === caseId);
       const lastCase =
@@ -1592,15 +1679,33 @@ export const useGameStore = create<GameState>()(
     })),
 
   setServiceDate: (caseId, serviceDateMs) =>
-    set((state) => ({
-      cases: updateCaseById(state.cases, caseId, (c) => ({
-        ...c,
-        serviceDateMs,
-      })),
-      inboxFiles: state.inboxFiles.map((f) =>
-        f.id === caseId ? { ...f, serviceDateMs, isRead: true } : f
-      ),
-    })),
+    set((state) => {
+      const now = gameNow();
+      if (serviceDateMs <= now) {
+        return {
+          legalAlert:
+            'Pick an hour that has not already passed. The family is keeping the calendar.',
+        };
+      }
+      const current = state.cases.find((c) => c.id === caseId);
+      const missed = serviceTiming(current?.serviceDateMs ?? null, now) === 'missed';
+      const reputation = missed
+        ? Math.max(0, state.reputation - SERVICE_RESCHEDULE_REP)
+        : state.reputation;
+      return {
+        reputation,
+        cases: updateCaseById(state.cases, caseId, (c) => ({
+          ...c,
+          serviceDateMs,
+        })),
+        inboxFiles: state.inboxFiles.map((f) =>
+          f.id === caseId ? { ...f, serviceDateMs, isRead: true } : f
+        ),
+        intakeToast: missed
+          ? `Rescheduled. The family will remember this — reputation −${SERVICE_RESCHEDULE_REP}.`
+          : state.intakeToast,
+      };
+    }),
 
   clearIntakeToast: () => set({ intakeToast: null }),
 
@@ -1609,18 +1714,33 @@ export const useGameStore = create<GameState>()(
 
   vaultCapacity: () => vaultSlotCapacity(get().facilityLevels.vault || 0),
 
-  receiveNewIntake: () => {
+  receiveNewIntake: (opts) => {
     const state = get();
     const coolerCount = state.cases.filter((c) => c.location === 'COOLER')
       .length;
     const cap = coolerBayCapacity(state.facilityLevels.cooler_bays || 0);
     if (coolerCount >= cap) return false;
-    const next = generateRandomCase();
+    let next = generateRandomCase();
+    if (opts?.directive && opts.directive !== next.directive) {
+      const wait = directiveNeedsUrn(opts.directive) ? rollFamilyUrnWaitMs() : null;
+      const now = next.arrivedAt;
+      next = {
+        ...next,
+        directive: opts.directive,
+        basePayout: basePayoutFor(opts.directive),
+        familyUrnRemainingMs: wait,
+        familyUrnDueAt: wait == null ? null : now + wait,
+        cremationPermitStatus: initialPermitStatus(opts.directive),
+        cremationPermitRejectReason: null,
+      };
+    }
     playIntakeBell();
     set({
       cases: [...state.cases, next],
       inboxFiles: [toInboxFile(next), ...state.inboxFiles],
-      intakeToast: 'New Remains Received in Cooler',
+      intakeToast: opts?.quiet
+        ? state.intakeToast
+        : (opts?.toast ?? 'New Remains Received in Cooler'),
       activeCaseId: state.activeCaseId ?? next.id,
       lastCase: {
         id: next.id,
@@ -1631,6 +1751,163 @@ export const useGameStore = create<GameState>()(
     });
     return true;
   },
+
+  tickIntake: (opts) => {
+    const state = get();
+    if (!state.hasStartedGame || state.titleGate || state.bankForeclosed) return;
+    if (state.tutorial === 'offer' || state.tutorial === 'new') return;
+    const career = grantCareer({
+      careerXp: state.careerXp,
+      homesKept: state.homesKept,
+      repMilestonesClaimed: state.repMilestonesClaimed,
+      reputation: state.reputation,
+      gain: 0,
+      fanfare: state.rankFanfare,
+    });
+    if (
+      career.careerXp !== state.careerXp ||
+      career.repMilestonesClaimed.length !== state.repMilestonesClaimed.length
+    ) {
+      set(career);
+    }
+    const dev = DEV_TOOLS
+      ? readIntakeDevOptions()
+      : { sci: false, pause: false };
+    const now = gameNow();
+    const coolerCount = state.cases.filter((c) => c.location === 'COOLER').length;
+    const cap = coolerBayCapacity(state.facilityLevels.cooler_bays || 0);
+    const flow =
+      (state.ownedProperty?.clientFlow ?? 1) *
+      intakeNewsFactor(state.newsWire, now);
+    const advanced = advanceIntakeSchedule({
+      now,
+      schedule: {
+        dayKey: state.intakeDayKey,
+        spawned: state.intakeSpawnedToday,
+        nextAt: state.nextIntakeAt,
+        bootstrapped: state.intakeBootstrapped,
+      },
+      pause: dev.pause,
+      slow: dev.sci && !dev.pause,
+      flow,
+      coolerEmpty: coolerCount === 0,
+      coolerFull: coolerCount >= cap,
+      catchUpLimit: opts?.catchUpLimit ?? 1,
+    });
+    let spawned = advanced.schedule.spawned;
+    let made = 0;
+    for (let i = 0; i < advanced.spawnCount; i += 1) {
+      if (!get().receiveNewIntake()) break;
+      made += 1;
+    }
+    if (made < advanced.spawnCount) {
+      spawned -= advanced.spawnCount - made;
+    }
+    const phoneDay = localDayKey(now);
+    const phoneReset = state.phoneDayKey !== phoneDay;
+    const nextSchedule = {
+      intakeDayKey: advanced.schedule.dayKey,
+      intakeSpawnedToday: spawned,
+      nextIntakeAt: advanced.schedule.nextAt,
+      intakeBootstrapped: advanced.schedule.bootstrapped,
+      phoneDayKey: phoneDay,
+      phoneCasesToday: phoneReset ? 0 : state.phoneCasesToday,
+    };
+    const same =
+      nextSchedule.intakeDayKey === state.intakeDayKey &&
+      nextSchedule.intakeSpawnedToday === state.intakeSpawnedToday &&
+      nextSchedule.nextIntakeAt === state.nextIntakeAt &&
+      nextSchedule.intakeBootstrapped === state.intakeBootstrapped &&
+      !phoneReset;
+    if (same && made === 0) return;
+    set(nextSchedule);
+  },
+
+  placePhoneCall: (contactId) => {
+    const state = get();
+    const contact = phoneContactById(contactId);
+    if (!contact) return;
+    const now = gameNow();
+    const day = localDayKey(now);
+    const casesToday = state.phoneDayKey === day ? state.phoneCasesToday : 0;
+    const held = titleAtXp(state.careerXp);
+    const access = contactAccess(contact, {
+      reputation: state.reputation,
+      homesOwned: state.homesKept,
+      rankIndex: held.index,
+      rankTitle: held.title,
+    });
+    const fail = (text: string, armCooldown: boolean) => {
+      set({
+        phoneDayKey: day,
+        phoneCasesToday: casesToday,
+        phoneCooldownUntil: armCooldown
+          ? { ...state.phoneCooldownUntil, [contact.id]: now + contact.cooldownMs }
+          : state.phoneCooldownUntil,
+        phoneLastResult: { contactId: contact.id, at: now, hit: false, text },
+      });
+    };
+    if (!access.unlocked) {
+      fail(access.reason, false);
+      return;
+    }
+    const readyAt = state.phoneCooldownUntil[contact.id] ?? 0;
+    if (now < readyAt) return;
+    const coolerCount = state.cases.filter((c) => c.location === 'COOLER').length;
+    const coolerCap = coolerBayCapacity(state.facilityLevels.cooler_bays || 0);
+    if (coolerCount >= coolerCap) {
+      fail('The cooler has no open bay. Make room, then call again.', false);
+      return;
+    }
+    if (casesToday >= PHONE_EXTRA_PER_DAY) {
+      fail(
+        'The extra line is full for today. Two calls already landed a case.',
+        false
+      );
+      return;
+    }
+    const hit = Math.random() < contact.odds;
+    if (!hit) {
+      fail(pickPhoneLine(contact.miss), true);
+      return;
+    }
+    const toast = pickPhoneLine(contact.hit);
+    const landed = get().receiveNewIntake({
+      toast,
+      directive: contact.directiveBias ?? undefined,
+      quiet: true,
+    });
+    if (!landed) {
+      fail('The cooler filled before the van arrived.', false);
+      return;
+    }
+    set({
+      phoneDayKey: day,
+      phoneCasesToday: casesToday + 1,
+      phoneCooldownUntil: {
+        ...get().phoneCooldownUntil,
+        [contact.id]: now + contact.cooldownMs,
+      },
+      phoneLastResult: { contactId: contact.id, at: now, hit: true, text: toast },
+    });
+  },
+
+  grantCareerXp: (gain) => {
+    const state = get();
+    if (!Number.isFinite(gain) || gain === 0) return;
+    set(
+      grantCareer({
+        careerXp: state.careerXp,
+        homesKept: state.homesKept,
+        repMilestonesClaimed: state.repMilestonesClaimed,
+        reputation: state.reputation,
+        gain,
+        fanfare: state.rankFanfare,
+      })
+    );
+  },
+
+  dismissRankFanfare: () => set({ rankFanfare: null }),
 
   tickNews: () => {
     const state = get();
@@ -1709,21 +1986,32 @@ export const useGameStore = create<GameState>()(
           holdTutorial &&
           c.id === state.tutorialCaseId &&
           !c.isTagged &&
-          (c.nameExpired ||
-            !tagWindowIsHeld(c.tagExpiresAt, TAG_WINDOW_MS, now))
+          (c.nameExpired || c.tagRemainingMs <= TAG_WINDOW_MS)
         ) {
           changed = true;
           return {
             ...c,
             nameExpired: false,
+            tagRemainingMs: TUTORIAL_TAG_HOLD_MS,
             tagExpiresAt: now + TUTORIAL_TAG_HOLD_MS,
           };
         }
-        if (!c.isTagged && !c.nameExpired && now >= c.tagExpiresAt) {
-          changed = true;
-          return { ...c, nameExpired: true };
+        if (c.isTagged || c.nameExpired) return c;
+        const left = c.tagRemainingMs - 1000;
+        changed = true;
+        if (left <= 0) {
+          return {
+            ...c,
+            tagRemainingMs: 0,
+            tagExpiresAt: now,
+            nameExpired: true,
+          };
         }
-        return c;
+        return {
+          ...c,
+          tagRemainingMs: left,
+          tagExpiresAt: now + left,
+        };
       });
       return changed ? { cases } : state;
     }),
@@ -2124,13 +2412,20 @@ export const useGameStore = create<GameState>()(
 
   tickFamilyUrnChoices: () =>
     set((state) => {
-      const now = gameNow();
       let toast: string | null = null;
       let any = false;
       const cases = state.cases.map((c) => {
         if (c.familyRequestedUrnId) return c;
-        if (c.familyUrnDueAt == null || now < c.familyUrnDueAt) return c;
         if (!directiveNeedsUrn(c.directive)) return c;
+        const left = c.familyUrnRemainingMs;
+        if (left == null) {
+          any = true;
+          return { ...c, familyUrnRemainingMs: rollFamilyUrnWaitMs() };
+        }
+        if (left > 0) {
+          any = true;
+          return { ...c, familyUrnRemainingMs: left - 1000 };
+        }
         const urnId = pickFamilyUrnRequest(c, state.reputation);
         const urn = getUrnById(urnId);
         any = true;
@@ -2141,6 +2436,7 @@ export const useGameStore = create<GameState>()(
           ...c,
           familyRequestedUrnId: urnId,
           familyUrnDueAt: null,
+          familyUrnRemainingMs: null,
         };
       });
       if (!any) return state;
@@ -2174,7 +2470,14 @@ export const useGameStore = create<GameState>()(
       let any = false;
 
       const submissions = state.permitSubmissions.map((sub) => {
-        if (sub.status !== 'PENDING' || now < sub.evaluatesAt) return sub;
+        if (sub.status !== 'PENDING') return sub;
+        const budget = Math.max(1000, sub.evaluatesAt - sub.submittedAt);
+        const left =
+          (typeof sub.remainingMs === 'number' ? sub.remainingMs : budget) - 1000;
+        if (left > 0) {
+          any = true;
+          return { ...sub, remainingMs: left };
+        }
         any = true;
         const approved =
           sub.caseId != null && sub.mismatchLabels.length === 0;
@@ -2285,6 +2588,7 @@ export const useGameStore = create<GameState>()(
       decedentName: exact ? matched.name : form.legalName.trim() || 'UNKNOWN',
       submittedAt: now,
       evaluatesAt,
+      remainingMs: Math.max(1000, evaluatesAt - now),
       evaluatedAt: null,
       status: 'PENDING',
       // Non-empty sentinel ⇒ evaluate as reject without leaking which fields
@@ -2338,40 +2642,48 @@ export const useGameStore = create<GameState>()(
   tickBankForeclosure: () =>
     set((state) => {
       if (!state.hasStartedGame || state.bankForeclosed) return state;
-      const now = gameNow();
 
       if (state.cash >= 0) {
-        if (state.negativeCashSinceMs == null && !state.bankWarningIssued) {
+        if (
+          state.negativeCashSinceMs == null &&
+          !state.bankWarningIssued &&
+          state.overdraftAccruedMs === 0
+        ) {
           return state;
         }
         return {
           negativeCashSinceMs: null,
+          overdraftAccruedMs: 0,
           bankWarningIssued: false,
         };
       }
 
-      let negativeCashSinceMs = state.negativeCashSinceMs;
-      if (negativeCashSinceMs == null) {
-        return { negativeCashSinceMs: now };
-      }
-
-      const elapsed = now - negativeCashSinceMs;
-      if (elapsed >= BANK_FORECLOSURE_AFTER_MS) {
+      const now = gameNow();
+      const negativeCashSinceMs = state.negativeCashSinceMs ?? now;
+      const accrued = state.overdraftAccruedMs + 1000;
+      if (accrued >= BANK_FORECLOSURE_AFTER_MS) {
         return {
+          negativeCashSinceMs,
+          overdraftAccruedMs: accrued,
           bankForeclosed: true,
           intakeToast: 'BANK FORECLOSURE — the funeral home has been seized.',
           legalAlert: null,
         };
       }
 
-      if (elapsed >= BANK_WARNING_AFTER_MS && !state.bankWarningIssued) {
+      if (accrued >= BANK_WARNING_AFTER_MS && !state.bankWarningIssued) {
         return {
+          negativeCashSinceMs,
+          overdraftAccruedMs: accrued,
           bankWarningIssued: true,
           intakeToast: BANK_WARNING_MESSAGE,
         };
       }
 
-      return state;
+      return {
+        negativeCashSinceMs,
+        overdraftAccruedMs: accrued,
+      };
     }),
 
   acknowledgeBankForeclosure: () => {
@@ -2694,6 +3006,14 @@ export const useGameStore = create<GameState>()(
         return { activeStation: 'URN_FILLING', activeCaseId: caseId };
       }
       const quality = Math.max(0, Math.min(100, Math.round(pourQuality)));
+      const career = grantCareer({
+        careerXp: state.careerXp,
+        homesKept: state.homesKept,
+        repMilestonesClaimed: state.repMilestonesClaimed,
+        reputation: state.reputation,
+        gain: XP_URN_SEALED,
+        fanfare: state.rankFanfare,
+      });
       return {
         activeCaseId: caseId,
         cases: updateCaseById(state.cases, caseId, (c) => ({
@@ -2705,6 +3025,10 @@ export const useGameStore = create<GameState>()(
         })),
         cash: state.cash + bonusCash,
         activeStation: 'URN_FILLING',
+        careerXp: career.careerXp,
+        homesKept: career.homesKept,
+        repMilestonesClaimed: career.repMilestonesClaimed,
+        rankFanfare: career.rankFanfare,
       };
     }),
 
@@ -3055,6 +3379,16 @@ export const useGameStore = create<GameState>()(
       activeLoans = [...activeLoans, makeMortgageLoan(listing, financed, now)];
     }
     const owned = ownedFromListing(listing, listing.price);
+    const nextReputation = state.reputation + listing.repBonus;
+    const career = grantCareer({
+      careerXp: state.careerXp,
+      homesKept: state.homesKept,
+      repMilestonesClaimed: state.repMilestonesClaimed,
+      reputation: nextReputation,
+      gain: XP_NEW_HOME,
+      homesDelta: 1,
+      fanfare: state.rankFanfare,
+    });
     const ledgerExtra: GameState['financeLedger'] = [];
     if (saleProceeds > 0) {
       ledgerExtra.push({
@@ -3078,7 +3412,11 @@ export const useGameStore = create<GameState>()(
       cash,
       ownedProperty: owned,
       activeLoans,
-      reputation: state.reputation + listing.repBonus,
+      reputation: nextReputation,
+      careerXp: career.careerXp,
+      homesKept: career.homesKept,
+      repMilestonesClaimed: career.repMilestonesClaimed,
+      rankFanfare: career.rankFanfare,
       financeLedger: [
         {
           id: `led_prop_${now}`,
@@ -3163,26 +3501,28 @@ export const useGameStore = create<GameState>()(
     const ledger = [...state.financeLedger];
     const activeLoans = state.activeLoans.map((loan) => {
       let next = { ...loan };
-      while (now >= next.nextPaymentDueAt && next.principalRemaining > 0) {
-        changed = true;
-        const pay = Math.min(next.paymentAmount, next.principalRemaining);
-        cash -= pay; // may overdraft → foreclosure timer
-        next.principalRemaining = Math.max(0, next.principalRemaining - pay);
-        if (cash < 0) {
-          next.missedPayments += 1;
-        } else {
-          next.missedPayments = 0;
-        }
-        next.nextPaymentDueAt += next.paymentEveryMs;
-        ledger.unshift({
-          id: `led_auto_${next.id}_${next.nextPaymentDueAt}`,
-          at: now,
-          label: `Auto draft — ${next.label}`,
-          amount: -pay,
-          kind: 'OTHER' as const,
-        });
-        if (next.principalRemaining <= 0) break;
+      if (now < next.nextPaymentDueAt || next.principalRemaining <= 0) {
+        return next;
       }
+      changed = true;
+      const pay = Math.min(next.paymentAmount, next.principalRemaining);
+      cash -= pay;
+      next.principalRemaining = Math.max(0, next.principalRemaining - pay);
+      if (cash < 0) {
+        next.missedPayments += 1;
+      } else {
+        next.missedPayments = 0;
+      }
+      const every = Math.max(next.paymentEveryMs, LOAN_INSTALLMENT_MS);
+      next.paymentEveryMs = every;
+      next.nextPaymentDueAt = now + every;
+      ledger.unshift({
+        id: `led_auto_${next.id}_${next.nextPaymentDueAt}`,
+        at: now,
+        label: `Auto draft — ${next.label}`,
+        amount: -pay,
+        kind: 'OTHER' as const,
+      });
       return next;
     }).filter((l) => l.principalRemaining > 0);
     if (!changed) return;
@@ -3465,11 +3805,15 @@ export const useGameStore = create<GameState>()(
 
       const offered = getUrnById(c.offeredUrnId);
       const offeredCasket = getCasketById(c.offeredCasketId);
+      const timing = urnHandoff ? 'upcoming' : serviceTiming(c.serviceDateMs, gameNow());
+      if (timing === 'missed') {
+        return {
+          legalAlert: `${displayCaseName(c)}'s hour has passed. Reschedule from the case file. Setting a new time costs ${SERVICE_RESCHEDULE_REP} reputation. There is no $900 failure.`,
+        };
+      }
       const failedService = fine > 0;
-      const lateService =
-        !urnHandoff && c.serviceDateMs != null && gameNow() > c.serviceDateMs;
-      const lateFine = lateService ? 900 : 0;
-      const serviceFailed = failedService || lateFine > 0;
+      const graceFine = timing === 'grace' ? SERVICE_GRACE_FINE : 0;
+      const serviceFailed = failedService;
 
       const layout = urnHandoff ? undefined : state.chapelLayouts[c.id];
       const theme = layout?.theme ?? {
@@ -3533,8 +3877,8 @@ export const useGameStore = create<GameState>()(
         !serviceFailed && casketMatch ? Math.round(casketSale * 0.2) : 0;
 
       const decayPenalty = Math.round(c.basePayout * (c.decayLevel / 100) * 0.8);
-      if (lateService && !alertMsg) {
-        alertMsg = `LATE SERVICE ($900): Viewing/service date missed — family satisfaction collapsed.`;
+      if (graceFine > 0 && !alertMsg) {
+        alertMsg = `GRACE WINDOW ($${SERVICE_GRACE_FINE}): The service ran a little late. A small courtesy comes off the fee.`;
       }
       if (c.decayLevel >= 40 && !alertMsg) {
         alertMsg = `FAMILY OUTRAGE: Remains showed advanced decomposition (decay ${Math.round(c.decayLevel)}%).`;
@@ -3653,8 +3997,8 @@ export const useGameStore = create<GameState>()(
         : Math.max(0, Math.round(houseRaw * salesMult));
       const propertyAdjust = serviceFailed ? 0 : housePaid - houseRaw;
       const netPayout = serviceFailed
-        ? -(fine + lateFine)
-        : housePaid + fleetCash + removalCash;
+        ? -fine
+        : housePaid + fleetCash + removalCash - graceFine;
 
       const pushLine = (
         lines: { label: string; amount: number }[],
@@ -3742,21 +4086,38 @@ export const useGameStore = create<GameState>()(
       const missed = prefMatches
         .filter((m) => !m.matched)
         .map((m) => `${m.label}: ${m.preferredName}`);
+      const nextReputation = Math.max(
+        0,
+        serviceFailed
+          ? state.reputation - 15 - decayRepHit
+          : state.reputation +
+              chapelRewards.reputationDelta +
+              urnRep +
+              casketRep +
+              fleetRep +
+              cremainsRep -
+              decayRepHit
+      );
+      const career = grantCareer({
+        careerXp: state.careerXp,
+        homesKept: state.homesKept,
+        repMilestonesClaimed: state.repMilestonesClaimed,
+        reputation: nextReputation,
+        gain: serviceCareerXp({
+          failed: serviceFailed,
+          grace: graceFine > 0,
+          urnSold: !serviceFailed && urnSale > 0,
+        }),
+        fanfare: state.rankFanfare,
+      });
 
       return {
         cash: state.cash + netPayout,
-        reputation: Math.max(
-          0,
-          serviceFailed
-            ? state.reputation - 15 - decayRepHit
-            : state.reputation +
-                chapelRewards.reputationDelta +
-                urnRep +
-                casketRep +
-                fleetRep +
-                cremainsRep -
-                decayRepHit
-        ),
+        reputation: nextReputation,
+        careerXp: career.careerXp,
+        homesKept: career.homesKept,
+        repMilestonesClaimed: career.repMilestonesClaimed,
+        rankFanfare: career.rankFanfare,
         intermentScore: intermentTotal,
         lastCase: {
           id: c.id,
@@ -3797,7 +4158,9 @@ export const useGameStore = create<GameState>()(
             },
         intakeToast: serviceFailed
           ? `${resolvePlayerName(state.playerName)}, the service for ${c.familyRelation || 'them'} did not go through.`
-          : `Service complete — $${netPayout.toLocaleString()}`,
+          : graceFine > 0
+            ? `Service complete — $${netPayout.toLocaleString()} (includes a $${graceFine} late courtesy)`
+            : `Service complete — $${netPayout.toLocaleString()}`,
         cases: remaining,
         inboxFiles: state.inboxFiles.filter((f) => f.id !== c.id),
         archivedCases,
@@ -3954,6 +4317,7 @@ export const useGameStore = create<GameState>()(
         permitWrongStreak: state.permitWrongStreak,
         financeLedger: state.financeLedger,
         negativeCashSinceMs: state.negativeCashSinceMs,
+        overdraftAccruedMs: state.overdraftAccruedMs,
         bankWarningIssued: state.bankWarningIssued,
         bankForeclosed: state.bankForeclosed,
         ownedProperty: state.ownedProperty,
@@ -3966,6 +4330,18 @@ export const useGameStore = create<GameState>()(
         newsNextLiveAt: state.newsNextLiveAt,
         newsCelebGate: state.newsCelebGate,
         newsRecent: state.newsRecent,
+        intakeDayKey: state.intakeDayKey,
+        intakeSpawnedToday: state.intakeSpawnedToday,
+        nextIntakeAt: state.nextIntakeAt,
+        intakeBootstrapped: state.intakeBootstrapped,
+        phoneDayKey: state.phoneDayKey,
+        phoneCasesToday: state.phoneCasesToday,
+        phoneCooldownUntil: state.phoneCooldownUntil,
+        phoneLastResult: state.phoneLastResult,
+        careerXp: state.careerXp,
+        homesKept: state.homesKept,
+        repMilestonesClaimed: state.repMilestonesClaimed,
+        rankFanfare: state.rankFanfare,
         playerName: state.playerName,
         tutorial: state.tutorial,
         tutorialStep: state.tutorialStep,
@@ -4097,6 +4473,36 @@ export const useGameStore = create<GameState>()(
             : priorLedger,
           negativeCashSinceMs:
             p.negativeCashSinceMs ?? current.negativeCashSinceMs ?? null,
+          overdraftAccruedMs:
+            typeof p.overdraftAccruedMs === 'number' ? p.overdraftAccruedMs : 0,
+          intakeDayKey: p.intakeDayKey ?? '',
+          intakeSpawnedToday:
+            typeof p.intakeSpawnedToday === 'number' ? p.intakeSpawnedToday : 0,
+          nextIntakeAt:
+            typeof p.nextIntakeAt === 'number' ? p.nextIntakeAt : null,
+          intakeBootstrapped: p.intakeBootstrapped === true,
+          phoneDayKey: p.phoneDayKey ?? '',
+          phoneCasesToday:
+            typeof p.phoneCasesToday === 'number' ? p.phoneCasesToday : 0,
+          phoneCooldownUntil: p.phoneCooldownUntil ?? {},
+          phoneLastResult: p.phoneLastResult ?? null,
+          careerXp: typeof p.careerXp === 'number' ? p.careerXp : 0,
+          homesKept:
+            typeof p.homesKept === 'number'
+              ? p.homesKept
+              : p.ownedProperty &&
+                  p.ownedProperty.listingId !== STARTER_PROPERTY.id
+                ? 2
+                : 1,
+          repMilestonesClaimed: Array.isArray(p.repMilestonesClaimed)
+            ? p.repMilestonesClaimed.filter((n) => typeof n === 'number')
+            : [],
+          rankFanfare:
+            p.rankFanfare &&
+            typeof p.rankFanfare.fromIndex === 'number' &&
+            typeof p.rankFanfare.toIndex === 'number'
+              ? p.rankFanfare
+              : null,
           bankWarningIssued:
             p.bankWarningIssued ?? current.bankWarningIssued ?? false,
           bankForeclosed: p.bankForeclosed ?? current.bankForeclosed ?? false,

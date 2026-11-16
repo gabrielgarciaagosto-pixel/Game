@@ -454,21 +454,32 @@ export const CaseInboxWidget: React.FC = () => {
                       <strong>
                         {formatDateTime12(activeFile.serviceDateMs)}
                       </strong>
-                      {gameNow() > activeFile.serviceDateMs ? (
-                        <span className="text-red-400 font-bold"> — OVERDUE</span>
-                      ) : (
-                        <span className="text-amber-300">
-                          {' '}
-                          —{' '}
-                          {Math.max(
-                            0,
-                            Math.ceil(
-                              (activeFile.serviceDateMs - gameNow()) / 60_000
-                            )
-                          )}{' '}
-                          min remaining
-                        </span>
-                      )}
+                      {(() => {
+                        const late = gameNow() - activeFile.serviceDateMs;
+                        if (late <= 0) {
+                          return (
+                            <span className="text-amber-300">
+                              {' '}
+                              —{' '}
+                              {Math.max(0, Math.ceil(-late / 60_000))} min
+                            </span>
+                          );
+                        }
+                        if (late <= 45 * 60_000) {
+                          return (
+                            <span className="text-amber-200 font-bold">
+                              {' '}
+                              — grace, $150 courtesy if held now
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="text-red-300 font-bold">
+                            {' '}
+                            — reschedule (−6 reputation)
+                          </span>
+                        );
+                      })()}
                       <button
                         type="button"
                         onClick={openSchedule}

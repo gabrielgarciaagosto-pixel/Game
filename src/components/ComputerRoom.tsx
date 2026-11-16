@@ -22,6 +22,7 @@ import { FuneraryEmporium } from './FuneraryEmporium';
 import { FleetBrowser } from './FleetBrowser';
 import { RealtyBrowser } from './RealtyBrowser';
 import { CrematoryCatalog } from './crematory/CrematoryCatalog';
+import { PhoneDesk } from './PhoneDesk';
 
 type DesktopApp =
   | 'DESKTOP'
@@ -30,7 +31,8 @@ type DesktopApp =
   | 'BANK'
   | 'REALTY'
   | 'FLEETS'
-  | 'CRAIGMILE';
+  | 'CRAIGMILE'
+  | 'PHONE';
 
 const BROWSER_APPS: DesktopApp[] = [
   'SHOP',
@@ -60,9 +62,11 @@ export const ComputerRoom: React.FC = () => {
   } = useGameStore();
 
   const [app, setApp] = useState<DesktopApp>(() =>
-    computerOpenApp && BROWSER_APPS.includes(computerOpenApp)
-      ? computerOpenApp
-      : 'DESKTOP'
+    computerOpenApp === 'PHONE'
+      ? 'PHONE'
+      : computerOpenApp && BROWSER_APPS.includes(computerOpenApp)
+        ? computerOpenApp
+        : 'DESKTOP'
   );
   const [clock, setClock] = useState(() => gameDate());
   const [form, setForm] = useState<PermitFormDraft>(emptyPermitForm());
@@ -71,6 +75,10 @@ export const ComputerRoom: React.FC = () => {
   const [filingFee, setFilingFee] = useState(() => rollPermitFilingFee());
 
   useEffect(() => {
+    if (computerOpenApp === 'PHONE') {
+      setApp('PHONE');
+      return;
+    }
     if (computerOpenApp && BROWSER_APPS.includes(computerOpenApp)) {
       setApp(computerOpenApp);
       return;
@@ -165,6 +173,7 @@ export const ComputerRoom: React.FC = () => {
           <DesktopAppIcon kind="REALTY" onOpen={() => openApp('REALTY')} />
           <DesktopAppIcon kind="FLEETS" onOpen={() => openApp('FLEETS')} />
           <DesktopAppIcon kind="CRAIGMILE" onOpen={() => openApp('CRAIGMILE')} />
+          <DesktopAppIcon kind="PHONE" onOpen={() => openApp('PHONE')} />
           <DesktopAppIcon kind="SETTINGS" onOpen={() => setSettingsOpen(true)} />
         </div>
 
@@ -185,6 +194,8 @@ export const ComputerRoom: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {app === 'PHONE' ? <PhoneDesk onClose={goDesktop} /> : null}
 
       {/* VR-441 always mounted so draft survives shop / FILES */}
       <div

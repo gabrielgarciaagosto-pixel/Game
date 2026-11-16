@@ -77,9 +77,9 @@ export const NewsTicker: React.FC = () => {
   return (
     <div
       data-hub-news
-      className="overflow-hidden rounded-lg border border-amber-900/50 bg-black/45"
+      className="flex h-[3.25rem] flex-col overflow-hidden rounded-lg border border-amber-900/50 bg-black/45"
     >
-      <div className="flex items-start gap-1.5 px-2 py-1.5">
+      <div className="flex h-[2.9rem] min-h-[2.9rem] items-start gap-1.5 px-2 pt-1.5">
         <span className="shrink-0 pt-0.5 text-[9px] font-black tracking-[0.16em] text-amber-200/90">
           NEWS
         </span>
@@ -96,13 +96,13 @@ export const NewsTicker: React.FC = () => {
             data-news-text={line?.text ?? ''}
             data-news-kind={line?.misc ? 'misc' : line?.spawn ? 'case' : 'effect'}
             title={line?.text}
-            className="news-swap text-[12px] leading-snug text-slate-100 line-clamp-3"
+            className="news-swap h-[2.3rem] text-[12px] leading-[1.15rem] text-slate-100 line-clamp-2"
           >
             {line?.text ?? 'The wire is quiet.'}
           </p>
         </div>
       </div>
-      <div className="news-track" aria-hidden />
+      <div className="news-track mt-auto shrink-0" aria-hidden />
     </div>
   );
 };

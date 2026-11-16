@@ -1,8 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { decayLabel, displayCaseName, friendlyToken } from '../types/game';
 import { TAG_WINDOW_MS, useGameStore } from '../store/useGameStore';
-import { tagWindowIsHeld } from '../tutorial/steps';
-import { gameNow } from '../utils/gameNow';
 
 /** Front face for each capacity. Doors match bays. */
 function coolerFace(bayCount: number): { cols: number; rows: number } {
@@ -20,22 +18,12 @@ export const CoolerRoom: React.FC = () => {
     activeCaseId,
     setActiveStation,
     takeCaseToStation,
-    expireUntaggedNames,
     coolerCapacity,
   } = useGameStore();
 
   const coolerCases = cases.filter((c) => c.location === 'COOLER');
   const bayCount = coolerCapacity();
   const face = coolerFace(bayCount);
-  const [now, setNow] = useState(gameNow());
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setNow(gameNow());
-      expireUntaggedNames();
-    }, 250);
-    return () => clearInterval(interval);
-  }, [expireUntaggedNames]);
 
   return (
     <div className="safe-screen fixed inset-0 z-40 bg-slate-950 text-slate-100 flex flex-col select-none overflow-hidden">
@@ -88,12 +76,10 @@ export const CoolerRoom: React.FC = () => {
             );
           }
 
-          const tagHeld =
-            !body.isTagged &&
-            tagWindowIsHeld(body.tagExpiresAt, TAG_WINDOW_MS, now);
+          const tagHeld = !body.isTagged && body.tagRemainingMs > TAG_WINDOW_MS;
           const secondsLeft = tagHeld
             ? 0
-            : Math.max(0, Math.ceil((body.tagExpiresAt - now) / 1000));
+            : Math.max(0, Math.ceil(body.tagRemainingMs / 1000));
           const canStillTag = !body.isTagged && (tagHeld || secondsLeft > 0);
           const isSelected = activeCaseId === body.id;
 

@@ -1,4 +1,4 @@
-import { FAMILY_HOUR_MS } from './bankForeclosure';
+import { LOAN_INSTALLMENT_MS } from './bankForeclosure';
 import { US_JURISDICTIONS } from './usPlaces';
 
 /** Personal / working-capital loan products at First National Mortuary Bank. */
@@ -78,8 +78,8 @@ export function makePersonalLoan(
     label: product.name,
     principalRemaining: product.principal,
     paymentAmount: product.paymentAmount,
-    paymentEveryMs: product.paymentEveryFamilyHours * FAMILY_HOUR_MS,
-    nextPaymentDueAt: nowMs + product.paymentEveryFamilyHours * FAMILY_HOUR_MS,
+    paymentEveryMs: LOAN_INSTALLMENT_MS,
+    nextPaymentDueAt: nowMs + LOAN_INSTALLMENT_MS,
     aprPct: product.aprPct,
     missedPayments: 0,
   };
@@ -228,8 +228,8 @@ export function makeMortgageLoan(
     label: `Mortgage — ${listing.label}`,
     principalRemaining: financed,
     paymentAmount: payment,
-    paymentEveryMs: 12 * FAMILY_HOUR_MS,
-    nextPaymentDueAt: nowMs + 12 * FAMILY_HOUR_MS,
+    paymentEveryMs: LOAN_INSTALLMENT_MS,
+    nextPaymentDueAt: nowMs + LOAN_INSTALLMENT_MS,
     aprPct: 8.75,
     missedPayments: 0,
     propertyId: listing.id,

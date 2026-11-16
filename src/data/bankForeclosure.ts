@@ -1,19 +1,23 @@
 import { FAMILY_MINUTE_MS } from './familyUrnTiming';
+import { HOUR_MS } from './pacing';
 
 /**
- * In-game time scale for bank debt (state choice):
- * 1 family hour = 60 family minutes ≈ 6 real minutes.
+ * Family hour stays on the old scale for anything that still speaks it.
+ * The overdraft clock does not. It counts open parlor time only.
  */
 export const FAMILY_HOUR_MS = 60 * FAMILY_MINUTE_MS;
 
-/** Continuous negative cash → bank warning + HUD countdown. */
-export const BANK_WARNING_AFTER_MS = 2 * FAMILY_HOUR_MS;
+/** Open-parlor time overdrawn before the warning. Pauses while the app is closed. */
+export const BANK_WARNING_AFTER_MS = 24 * HOUR_MS;
 
-/** Still negative after this → foreclosure game over. */
-export const BANK_FORECLOSURE_AFTER_MS = 4 * FAMILY_HOUR_MS;
+/** Still negative after this much open-parlor time → foreclosure. */
+export const BANK_FORECLOSURE_AFTER_MS = 72 * HOUR_MS;
+
+/** One real day between loan and mortgage drafts. */
+export const LOAN_INSTALLMENT_MS = 24 * HOUR_MS;
 
 export const BANK_WARNING_MESSAGE =
-  'BANK NOTICE: Your accounts are overdrawn. Restore a non-negative balance within 2 family hours or the bank will foreclose on Ossuarian.';
+  'BANK NOTICE: Your accounts are overdrawn. Restore a non-negative balance within a day of open parlor time or the bank will foreclose. This clock pauses while Ossuarian is closed.';
 
 export const BANK_FORECLOSURE_TITLE = 'FORECLOSED';
 export const BANK_FORECLOSURE_BODY =
@@ -36,6 +40,23 @@ export function bankMsUntilForeclosure(
     0,
     BANK_FORECLOSURE_AFTER_MS - bankDebtElapsedMs(negativeCashSinceMs, nowMs)
   );
+}
+
+/** Remaining open-parlor time before foreclosure. Ignores time the app was closed. */
+export function foreclosureMsRemaining(accruedMs: number): number {
+  return Math.max(0, BANK_FORECLOSURE_AFTER_MS - Math.max(0, accruedMs));
+}
+
+export function formatRealCountdown(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  if (h >= 48) {
+    const d = Math.floor(h / 24);
+    const rh = h % 24;
+    return rh > 0 ? `${d}d ${rh}h` : `${d}d`;
+  }
+  return `${h}h ${String(m).padStart(2, '0')}m`;
 }
 
 export function formatFamilyCountdown(ms: number): string {
