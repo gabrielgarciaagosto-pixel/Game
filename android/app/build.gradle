@@ -16,10 +16,28 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    def demoSigningFile = rootProject.file("demo-signing.properties")
+    if (!demoSigningFile.exists()) {
+        throw new GradleException("Missing android/demo-signing.properties. Demo APKs use the house demo keystore, not the platform debug certificate. That file is gitignored.")
+    }
+    def demoSigning = new Properties()
+    demoSigningFile.withInputStream { demoSigning.load(it) }
+    signingConfigs {
+        demo {
+            storeFile file(demoSigning.getProperty("storeFile"))
+            storePassword demoSigning.getProperty("storePassword")
+            keyAlias demoSigning.getProperty("keyAlias")
+            keyPassword demoSigning.getProperty("keyPassword")
+        }
+    }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.demo
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.demo
         }
     }
 }
