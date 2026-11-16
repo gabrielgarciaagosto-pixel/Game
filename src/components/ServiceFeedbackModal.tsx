@@ -18,6 +18,45 @@ export const ServiceFeedbackModal: React.FC = () => {
         <h3 className="text-lg font-bold text-emerald-100">
           {feedback.decedentName}
         </h3>
+        <div
+          data-house-rating
+          className="rounded-lg border border-amber-700/60 bg-amber-950/40 px-3 py-2 space-y-1"
+        >
+          <div className="flex items-baseline justify-between gap-3">
+            <div className="text-[10px] uppercase tracking-wider text-amber-300/80">
+              House rating
+            </div>
+            <div className="text-lg font-bold text-amber-50">
+              {feedback.ratingLetter} · {feedback.rating}
+            </div>
+          </div>
+          {feedback.ratingLines.length > 0 && (
+            <ul data-rating-lines className="text-sm text-amber-50 space-y-0.5">
+              {feedback.ratingLines.map((line) => (
+                <li key={line.label} className="flex justify-between gap-3">
+                  <span>{line.label}</span>
+                  <span className="font-mono tabular-nums">
+                    {line.delta > 0 ? '+' : '−'}
+                    {Math.abs(line.delta)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        {feedback.review ? (
+          <blockquote
+            data-family-review
+            className="rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2"
+          >
+            <p className="text-sm leading-relaxed text-slate-100">
+              {feedback.review}
+            </p>
+            <p className="mt-2 text-[11px] text-slate-400">
+              — {feedback.reviewSigner}
+            </p>
+          </blockquote>
+        ) : null}
         <p className="text-sm text-emerald-50">
           Thank you, {resolvePlayerName(playerName)}, for caring for{' '}
           {feedback.kinLabel}.
@@ -108,7 +147,7 @@ export const ServiceFeedbackModal: React.FC = () => {
         {feedback.missed.length > 0 && (
           <div>
             <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
-              Not matched (no penalty)
+              Not matched (optional — no penalty)
             </div>
             <ul className="text-sm text-slate-400 space-y-0.5">
               {feedback.missed.map((m) => (

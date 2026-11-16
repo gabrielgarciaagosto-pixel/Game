@@ -6,7 +6,11 @@ import {
 } from './chapelDecor';
 import { friendlyToken } from '../types/game';
 
-/** Family wishes for chapel dressing — matching is bonus-only. */
+/**
+ * Family chapel wishes.
+ * Roses and the musical selection are required and move the house rating
+ * by a couple of points either way. Every other wish is bonus-only.
+ */
 export interface FamilyChapelPreferences {
   wallId: string | null;
   floorId: string | null;
@@ -57,15 +61,20 @@ function pickDecorId(kind: string): string | null {
   return pool[Math.floor(Math.random() * pool.length)]!.id;
 }
 
+export function stableServiceMusicId(seed: string): string {
+  let hash = 0;
+  for (const ch of seed) hash = (hash * 33 + ch.charCodeAt(0)) >>> 0;
+  return SERVICE_MUSIC_OPTIONS[hash % SERVICE_MUSIC_OPTIONS.length]!.id;
+}
+
+/** Every family requires roses and one musical selection. Decor stays optional. */
 export function rollFamilyChapelPreferences(
-  preferredFlowers: FlowerKind
+  _preferredFlowers?: FlowerKind
 ): FamilyChapelPreferences {
   const music =
-    Math.random() < 0.15
-      ? null
-      : SERVICE_MUSIC_OPTIONS[
-          Math.floor(Math.random() * SERVICE_MUSIC_OPTIONS.length)
-        ]!.id;
+    SERVICE_MUSIC_OPTIONS[
+      Math.floor(Math.random() * SERVICE_MUSIC_OPTIONS.length)
+    ]!.id;
   return {
     wallId: pickDecorId('WALL'),
     floorId: pickDecorId('FLOOR'),
@@ -73,7 +82,7 @@ export function rollFamilyChapelPreferences(
     lightingId: pickDecorId('LIGHTING'),
     pewsId: pickDecorId('PEWS'),
     musicTrackId: music,
-    flowers: preferredFlowers,
+    flowers: 'ROSES',
   };
 }
 
@@ -134,9 +143,19 @@ export function evaluateChapelPrefMatches(opts: {
   return rows;
 }
 
-/** Bonus-only points from honored prefs (no penalty for misses). */
+const OPTIONAL_PREF_KEYS = new Set<keyof FamilyChapelPreferences>([
+  'wallId',
+  'floorId',
+  'draperyId',
+  'lightingId',
+  'pewsId',
+]);
+
+/** Bonus-only points from optional prefs. Roses and music are scored apart. */
 export function chapelPrefMatchBonus(matches: ChapelPrefMatch[]): number {
-  const honored = matches.filter((m) => m.matched).length;
+  const honored = matches.filter(
+    (m) => m.matched && OPTIONAL_PREF_KEYS.has(m.key)
+  ).length;
   if (honored === 0) return 0;
   // Soft curve: first match +5, then +4 each, cap 28
   let pts = 0;

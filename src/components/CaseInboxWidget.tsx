@@ -19,11 +19,14 @@ import {
   hour12Parts,
   hour24From12,
 } from '../utils/clock12';
-import {
-  decorPrefLabel,
-  serviceMusicLabel,
-} from '../data/familyChapelPrefs';
 import { getUrnById } from '../data/urnCatalog';
+import { getCasketById } from '../data/casketCatalog';
+import {
+  directiveNeedsCasket,
+  directiveNeedsUrn,
+} from '../data/familyUrnPick';
+import { inventoryUnits } from '../data/caseRating';
+import { FamilyPreferenceCard } from './FamilyPreferenceCard';
 import { gameNow } from '../utils/gameNow';
 import { audioManager } from '../utils/audioManager';
 import { DEV_TOOLS } from '../dev';
@@ -59,6 +62,8 @@ export const CaseInboxWidget: React.FC = () => {
     noteTutorialFile,
     cases,
     finalizeServiceAndNextCase,
+    urnInventory,
+    casketInventory,
   } = useGameStore();
   const [isOpen, setIsOpen] = useState(false);
   const [phoneOpen, setPhoneOpen] = useState(false);
@@ -412,54 +417,48 @@ export const CaseInboxWidget: React.FC = () => {
                       {directiveBlurb(activeFile.directive)}
                     </span>
                   </p>
-                  <p>
-                    <span className="text-slate-400">Flower Arrangement:</span>{' '}
-                    <strong className="text-emerald-300">
-                      {friendlyToken(activeFile.preferredFlowers)}
-                    </strong>
-                  </p>
                   {(() => {
                     const prefs =
                       linkedCase?.familyChapelPrefs ??
                       activeFile.familyChapelPrefs;
                     if (!prefs) return null;
-                    return (
-                      <div className="p-2 rounded-lg border border-violet-800/60 bg-violet-950/40 space-y-1">
-                        <div className="text-[10px] uppercase tracking-wider text-violet-300/80">
-                          Family chapel preferences
-                        </div>
-                        <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11px] text-violet-100/90">
-                          <span>Walls · {decorPrefLabel(prefs.wallId)}</span>
-                          <span>Floor · {decorPrefLabel(prefs.floorId)}</span>
-                          <span>
-                            Drapery · {decorPrefLabel(prefs.draperyId)}
-                          </span>
-                          <span>
-                            Lighting · {decorPrefLabel(prefs.lightingId)}
-                          </span>
-                          <span>Pews · {decorPrefLabel(prefs.pewsId)}</span>
-                          <span>
-                            Music · {serviceMusicLabel(prefs.musicTrackId)}
-                          </span>
-                          <span className="col-span-2">
-                            Flowers · {friendlyToken(prefs.flowers)}
-                          </span>
-                        </div>
-                        <p className="text-[9px] text-violet-400/80">
-                          Matching is a bonus only — no penalty if you miss.
-                        </p>
-                      </div>
-                    );
+                    return <FamilyPreferenceCard prefs={prefs} />;
                   })()}
                   {(() => {
-                    const requestedId =
+                    const requestedUrnId =
                       linkedCase?.familyRequestedUrnId ??
                       activeFile.familyRequestedUrnId;
-                    const urn = getUrnById(requestedId);
+                    const requestedCasketId =
+                      linkedCase?.familyRequestedCasketId ??
+                      activeFile.familyRequestedCasketId;
+                    const urn = getUrnById(requestedUrnId);
+                    const casket = getCasketById(requestedCasketId);
+                    const needsUrn = linkedCase
+                      ? directiveNeedsUrn(linkedCase.directive)
+                      : false;
+                    const needsCasket = linkedCase
+                      ? directiveNeedsCasket(linkedCase.directive)
+                      : false;
+                    const urnStock = inventoryUnits(
+                      urnInventory,
+                      linkedCase?.offeredUrnId ?? null
+                    );
+                    const casketStock = inventoryUnits(
+                      casketInventory,
+                      linkedCase?.offeredCasketId ?? null
+                    );
+                    const waitingUrn = needsUrn && !urn;
+                    const waitingCasket = needsCasket && !casket;
+                    const missing: string[] = [];
+                    if (waitingUrn && urnStock < 1) missing.push('an urn');
+                    if (waitingCasket && casketStock < 1) missing.push('a casket');
                     return (
-                      <div className="p-2 rounded-lg border border-slate-700 bg-slate-950/70">
-                        <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
-                          Family vessel
+                      <div
+                        className="p-2 rounded-lg border border-slate-700 bg-slate-950/70 space-y-2"
+                        data-family-choice
+                      >
+                        <div className="text-[10px] uppercase tracking-wider text-slate-500">
+                          Family choice — from your stock only
                         </div>
                         {urn ? (
                           <div className="flex items-center gap-2">
@@ -474,13 +473,34 @@ export const CaseInboxWidget: React.FC = () => {
                                 {urn.name}
                               </div>
                               <div className="text-[10px] text-slate-400">
-                                {friendlyToken(urn.material)} · ${urn.cost}
+                                Reserved from stock · {friendlyToken(urn.material)}
                               </div>
                             </div>
                           </div>
-                        ) : (
+                        ) : null}
+                        {casket ? (
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-amber-200 truncate">
+                              {casket.name}
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              Reserved from stock · {friendlyToken(casket.material)}
+                            </div>
+                          </div>
+                        ) : null}
+                        {!urn && !casket && (
                           <p className="text-[11px] text-slate-400 italic">
-                            Awaiting family selection
+                            Awaiting a choice from what you have stocked.
+                          </p>
+                        )}
+                        {missing.length > 0 && (
+                          <p
+                            data-stock-hint
+                            className="text-[11px] leading-snug text-amber-200"
+                          >
+                            The family is waiting on {missing.join(' and ')}.
+                            Nothing suitable is in stock. Buy some in the
+                            Emporium. Urns can also be shaped on the bench.
                           </p>
                         )}
                       </div>

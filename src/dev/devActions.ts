@@ -7,9 +7,11 @@ import {
   type FacilityUpgradeLevels,
 } from '../data/facilityUpgrades';
 import {
+  directiveNeedsCasket,
   directiveNeedsUrn,
-  pickFamilyUrnRequest,
+  pickOwnedUrn,
 } from '../data/familyUrnPick';
+import { getUrnById, URN_CATALOG } from '../data/urnCatalog';
 import {
   createShopRotation,
   RARE_SCHEDULE,
@@ -17,7 +19,6 @@ import {
 } from '../data/shopRotation';
 import { FLEET_CATALOG } from '../data/funeralFleets';
 import { titleProgress } from '../data/rankProgression';
-import { URN_CATALOG } from '../data/urnCatalog';
 import { IDLE_RETORT } from '../retort/retortTypes';
 import {
   basePayoutFor,
@@ -105,10 +106,15 @@ export function spawnDirective(directive: DispositionDirective) {
   const next = {
     ...base,
     directive,
-    familyUrnDueAt: directiveNeedsUrn(directive)
-      ? now + 45_000
-      : null,
-    familyUrnRemainingMs: directiveNeedsUrn(directive) ? 45_000 : null,
+    familyUrnDueAt:
+      directiveNeedsUrn(directive) || directiveNeedsCasket(directive)
+        ? now + 45_000
+        : null,
+    familyUrnRemainingMs:
+      directiveNeedsUrn(directive) || directiveNeedsCasket(directive)
+        ? 45_000
+        : null,
+    familyRequestedCasketId: null,
     tagRemainingMs: base.tagRemainingMs,
     familyRequestedUrnId: null as string | null,
     basePayout: basePayoutFor(directive),
@@ -485,11 +491,28 @@ export function forcePickFamilyUrnForActive() {
     toast('Active case does not need a family urn');
     return;
   }
-  const urnId = pickFamilyUrnRequest(active, state.reputation);
+  const urnId = pickOwnedUrn(active, state.urnInventory);
+  if (!urnId) {
+    toast('No urns in stock — buy or shape one first');
+    return;
+  }
+  const name = getUrnById(urnId)?.name ?? urnId;
   useGameStore.setState((s) => ({
+    urnInventory: {
+      ...s.urnInventory,
+      [urnId]: Math.max(0, (s.urnInventory[urnId] ?? 1) - 1),
+    },
     cases: s.cases.map((c) =>
       c.id === active.id
-        ? { ...c, familyRequestedUrnId: urnId, familyUrnDueAt: null }
+        ? {
+            ...c,
+            familyRequestedUrnId: urnId,
+            offeredUrnId: c.offeredUrnId ?? urnId,
+            familyUrnDueAt: null,
+            familyUrnRemainingMs: directiveNeedsCasket(c.directive)
+              ? c.familyUrnRemainingMs
+              : null,
+          }
         : c
     ),
     inboxFiles: s.inboxFiles.map((f) =>
@@ -497,7 +520,7 @@ export function forcePickFamilyUrnForActive() {
         ? { ...f, familyRequestedUrnId: urnId, isRead: false }
         : f
     ),
-    intakeToast: `[DEV] Family urn → ${urnId}`,
+    intakeToast: `[DEV] Family chose ${name} from stock`,
   }));
 }
 

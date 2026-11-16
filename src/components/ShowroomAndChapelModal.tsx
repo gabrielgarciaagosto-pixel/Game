@@ -25,6 +25,7 @@ import {
   serviceMusicOptions,
 } from '../data/familyChapelPrefs';
 import { caseUsesUrnStand } from '../data/familyUrnPick';
+import { FamilyPreferenceCard } from './FamilyPreferenceCard';
 import { directiveLabel, friendlyToken } from '../types/game';
 import { ChapelMourners } from './ChapelMourners';
 import { UrnVessel } from './urns/UrnVessel';
@@ -273,6 +274,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
       </div>
 
       <div className="flex-1 flex flex-col gap-3 mt-3 pb-4">
+        <FamilyPreferenceCard prefs={currentCase.familyChapelPrefs} />
         {/* Floor */}
         <div
           className={`relative h-72 rounded-xl border-2 border-violet-700 overflow-hidden bg-gradient-to-b ${wallGrad} touch-none shadow-[inset_0_18px_40px_rgba(0,0,0,0.45)]`}
@@ -430,11 +432,12 @@ export const ShowroomAndChapelModal: React.FC = () => {
         )}
 
         <div className="space-y-1">
-          <div className="text-[10px] uppercase tracking-wider text-violet-300/70">
-            Service music
-            {currentCase.familyChapelPrefs.musicTrackId
-              ? ` · prefers ${serviceMusicLabel(currentCase.familyChapelPrefs.musicTrackId)}`
-              : ''}
+          <div className="text-[10px] uppercase tracking-wider text-amber-200">
+            Required music ·{' '}
+            {serviceMusicLabel(currentCase.familyChapelPrefs.musicTrackId)}
+            <span className="ml-1 rounded bg-amber-400 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-950">
+              Non-negotiable
+            </span>
           </div>
           <div className="flex flex-wrap gap-1.5">
             <button
@@ -465,7 +468,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
               >
                 {t.label}
                 {currentCase.familyChapelPrefs.musicTrackId === t.id
-                  ? ' ★'
+                  ? ' · required'
                   : ''}
               </button>
             ))}
@@ -622,7 +625,8 @@ export const ShowroomAndChapelModal: React.FC = () => {
                 }`}
               >
                 Place {friendlyToken(flower)}
-                {preferred ? ' ★' : ''} ({inv?.ownedCount ?? 0})
+                {flower === 'ROSES' ? ' · required' : preferred ? ' ★' : ''} (
+                {inv?.ownedCount ?? 0})
               </button>
             );
           })}

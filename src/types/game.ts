@@ -179,10 +179,12 @@ export interface DecedentCase {
   /** Catalog casket offered/sold for burial services */
   offeredCasketId: string | null;
   /**
-   * Urn the family requested after arrival (null until notified / non-cremation).
-   * Distinct from offeredUrnId (what the player actually staged).
+   * Urn the family reserved from stock (null until they choose, or when no urn is required).
+   * Distinct from offeredUrnId only if the player later swaps the staged vessel.
    */
   familyRequestedUrnId: string | null;
+  /** Casket the family reserved from stock. Null until they choose, or when none is required. */
+  familyRequestedCasketId: string | null;
   /** Legacy stamp. The wait that runs is familyUrnRemainingMs. */
   familyUrnDueAt: number | null;
   /**
@@ -276,6 +278,8 @@ export interface CaseInboxFile {
   serviceDateMs: number | null;
   /** Mirrors case.familyRequestedUrnId for the case file UI */
   familyRequestedUrnId: string | null;
+  /** Mirrors case.familyRequestedCasketId for the case file UI */
+  familyRequestedCasketId?: string | null;
   dateOfBirthMs: number;
   dateOfDeathMs: number;
   timeOfDeathHour: number;

@@ -3,6 +3,7 @@ import { DEFAULT_PLAYER_NAME } from '../data/playerName';
 import { resetGame } from '../dev/devActions';
 import { useGameStore } from '../store/useGameStore';
 import { audioManager } from '../utils/audioManager';
+import { requestHouseNotificationPermission } from '../utils/houseNotifications';
 import { useSheetOpen } from './useSheetOpen';
 
 export const HouseSettings: React.FC = () => {
@@ -12,12 +13,15 @@ export const HouseSettings: React.FC = () => {
   const setPlayerName = useGameStore((s) => s.setPlayerName);
   const setSettingsOpen = useGameStore((s) => s.setSettingsOpen);
   const replayTutorial = useGameStore((s) => s.replayTutorial);
+  const notificationsEnabled = useGameStore((s) => s.notificationsEnabled);
+  const setNotificationsEnabled = useGameStore((s) => s.setNotificationsEnabled);
   const [draft, setDraft] = useState(playerName);
   const [music, setMusic] = useState(1);
   const [musicMuted, setMusicMuted] = useState(false);
   const [interfaceVol, setInterfaceVol] = useState(1);
   const [interfaceMuted, setInterfaceMuted] = useState(false);
   const [confirmErase, setConfirmErase] = useState(false);
+  const [notifyNote, setNotifyNote] = useState<string | null>(null);
   useSheetOpen(open);
 
   useEffect(() => {
@@ -117,6 +121,64 @@ export const HouseSettings: React.FC = () => {
                   }
                 }}
               />
+            </div>
+
+            <div className="mt-4 border-t border-[#3a3228] pt-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] text-[#b7aa98]">Phone notices</p>
+                  <p className="mt-1 text-[11px] leading-snug text-[#6e675c]">
+                    When a body arrives, or a family chooses an urn or a casket
+                    from your stock, the phone can ping you. The on-screen
+                    notice still shows while the house is open.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  data-notify-toggle
+                  aria-pressed={notificationsEnabled}
+                  onClick={() => {
+                    if (notificationsEnabled) {
+                      setNotificationsEnabled(false);
+                      setNotifyNote('Phone notices are off. The house still shows them on screen.');
+                      return;
+                    }
+                    setNotifyNote('Asking the phone for permission…');
+                    void requestHouseNotificationPermission().then((result) => {
+                      if (result === 'granted') {
+                        setNotificationsEnabled(true);
+                        setNotifyNote(
+                          'On. Arrivals and family choices will ping this phone.'
+                        );
+                        return;
+                      }
+                      if (result === 'unsupported') {
+                        setNotificationsEnabled(true);
+                        setNotifyNote(
+                          'This screen cannot post a system notice. The preference is saved for the phone, and the house still shows them here.'
+                        );
+                        return;
+                      }
+                      setNotificationsEnabled(false);
+                      setNotifyNote(
+                        'Permission was declined. Notices stay on screen until the phone allows them.'
+                      );
+                    });
+                  }}
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold ${
+                    notificationsEnabled
+                      ? 'bg-[#c4a574] text-[#1a140e]'
+                      : 'border border-[#3a3228] text-[#d9cbb8]'
+                  }`}
+                >
+                  {notificationsEnabled ? 'On' : 'Off'}
+                </button>
+              </div>
+              {notifyNote ? (
+                <p className="mt-2 text-[11px] leading-snug text-[#d9cbb8]">
+                  {notifyNote}
+                </p>
+              ) : null}
             </div>
 
             <button

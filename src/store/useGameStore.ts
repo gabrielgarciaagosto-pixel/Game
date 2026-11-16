@@ -149,6 +149,8 @@ import {
   chapelPrefMatchBonus,
   evaluateChapelPrefMatches,
   rollFamilyChapelPreferences,
+  serviceMusicLabel,
+  stableServiceMusicId,
   type FamilyChapelPreferences,
 } from '../data/familyChapelPrefs';
 import {
@@ -173,9 +175,23 @@ import {
 } from '../data/familyUrnTiming';
 import {
   caseUsesUrnStand,
+  directiveNeedsCasket,
   directiveNeedsUrn,
-  pickFamilyUrnRequest,
+  pickOwnedCasket,
+  pickOwnedUrn,
 } from '../data/familyUrnPick';
+import {
+  REQUIRED_PREF_DELTA,
+  THIN_SELECTION_MIN,
+  THIN_SELECTION_PENALTY,
+  clampRating,
+  inventoryUnits,
+} from '../data/caseRating';
+import { pickFamilyReview } from '../data/familyReviews';
+import {
+  notifyHouse,
+  setNotificationGate,
+} from '../utils/houseNotifications';
 import { gameNow } from '../utils/gameNow';
 import { DEV_TOOLS } from '../dev/flags';
 import { readIntakeDevOptions } from '../dev/intakeOptions';
@@ -258,6 +274,8 @@ interface GameState {
   /** Finished case files. Newest first. Wiped on Reset Game. */
   archivedCases: ArchivedCaseFile[];
   intakeToast: string | null;
+  /** System notices for arrivals and family vessel choices. Off until the player allows them. */
+  notificationsEnabled: boolean;
   showroomInventory: ShowroomItem[];
   /** Owned counts keyed by urn catalog id */
   urnInventory: Record<string, number>;
@@ -299,6 +317,12 @@ interface GameState {
     payoutNet: number;
     /** Fuel taken when the retort fired. Already off the balance; not in the net. */
     fuelMetered: number;
+    /** House rating after required prefs and thin-stock adjustments, 0–100. */
+    rating: number;
+    ratingLetter: string;
+    ratingLines: { label: string; delta: number }[];
+    review: string;
+    reviewSigner: string;
   } | null;
   /** Computer portal — cremation permit filing history (wiped on Reset Game) */
   permitSubmissions: PermitSubmissionRecord[];
@@ -534,6 +558,7 @@ interface GameState {
   ) => void;
   clearLegalAlert: () => void;
   clearServiceFeedback: () => void;
+  setNotificationsEnabled: (enabled: boolean) => void;
   damageCremulator: () => void;
   buyReplacementCremulator: () => boolean;
   coolerCapacity: () => number;
@@ -633,11 +658,6 @@ export function generateRandomCase(now = gameNow()): DecedentCase {
     'VIEWING_THEN_CREMATION',
     'CREMATION_THEN_VIEWING',
   ];
-  const flowers: DecedentCase['preferredFlowers'][] = [
-    'LILIES',
-    'ROSES',
-    'WREATH',
-  ];
   const urnMats = URN_MATERIALS as PreferredUrnMaterial[];
   const casketMats = CASKET_MATERIALS as PreferredCasketMaterial[];
 
@@ -650,9 +670,10 @@ export function generateRandomCase(now = gameNow()): DecedentCase {
     CREMATION_THEN_VIEWING: basePayoutFor('CREMATION_THEN_VIEWING'),
   };
   const vitals = generateDecedentVitals(now);
-  const preferredFlowers =
-    flowers[Math.floor(Math.random() * flowers.length)]!;
-  const urnWaitMs = directiveNeedsUrn(directive) ? rollFamilyUrnWaitMs() : null;
+  const preferredFlowers = 'ROSES' as const;
+  const needsVessel =
+    directiveNeedsUrn(directive) || directiveNeedsCasket(directive);
+  const urnWaitMs = needsVessel ? rollFamilyUrnWaitMs() : null;
   return {
     id: Math.random().toString(36).substring(2, 8).toUpperCase(),
     name: randomDecedentName(),
@@ -669,6 +690,7 @@ export function generateRandomCase(now = gameNow()): DecedentCase {
     offeredUrnId: null,
     offeredCasketId: null,
     familyRequestedUrnId: null,
+    familyRequestedCasketId: null,
     familyUrnDueAt: urnWaitMs == null ? null : now + urnWaitMs,
     familyUrnRemainingMs: urnWaitMs,
     urnPourQuality: 0,
@@ -719,7 +741,10 @@ function generateHeadlineCase(h: NewsHeadline, now = gameNow()): DecedentCase {
     name: stageName,
     directive,
     basePayout: basePayoutFor(directive),
-    familyUrnDueAt: directiveNeedsUrn(directive) ? base.familyUrnDueAt : null,
+    familyUrnDueAt: base.familyUrnDueAt,
+    familyUrnRemainingMs: base.familyUrnRemainingMs,
+    familyRequestedUrnId: null,
+    familyRequestedCasketId: null,
     cremationPermitStatus: initialPermitStatus(directive),
     cremationPermitRejectReason: null,
     headlineCase: { headlineId: h.id, stageName },
@@ -739,6 +764,7 @@ export function toInboxFile(c: DecedentCase): CaseInboxFile {
     isRead: false,
     serviceDateMs: c.serviceDateMs,
     familyRequestedUrnId: c.familyRequestedUrnId,
+    familyRequestedCasketId: c.familyRequestedCasketId,
     dateOfBirthMs: c.dateOfBirthMs,
     dateOfDeathMs: c.dateOfDeathMs,
     timeOfDeathHour: c.timeOfDeathHour,
@@ -875,32 +901,35 @@ function normalizeCase(c: DecedentCase): DecedentCase {
       : generateDecedentVitals(arrivedAt);
   const permitStatus: CremationPermitStatus =
     c.cremationPermitStatus ?? initialPermitStatus(c.directive);
-  const flowers = (c.preferredFlowers ?? 'LILIES') as FlowerKind;
   const prefs: FamilyChapelPreferences =
-    c.familyChapelPrefs ?? rollFamilyChapelPreferences(flowers);
+    c.familyChapelPrefs ?? rollFamilyChapelPreferences('ROSES');
+  const urnPending =
+    directiveNeedsUrn(c.directive) && !c.familyRequestedUrnId;
+  const casketPending =
+    directiveNeedsCasket(c.directive) && !c.familyRequestedCasketId;
+  const vesselPending = urnPending || casketPending;
   return {
     ...c,
-    preferredFlowers: flowers,
+    preferredFlowers: 'ROSES',
     familyChapelPrefs: {
       ...prefs,
-      flowers: prefs.flowers ?? flowers,
+      flowers: 'ROSES',
+      musicTrackId: prefs.musicTrackId || stableServiceMusicId(c.id || 'house'),
     },
     preferredUrnMaterial: c.preferredUrnMaterial ?? URN_MATERIALS[0],
     preferredCasketMaterial: c.preferredCasketMaterial ?? CASKET_MATERIALS[0],
     offeredUrnId: c.offeredUrnId ?? null,
     offeredCasketId: c.offeredCasketId ?? null,
     familyRequestedUrnId: c.familyRequestedUrnId ?? null,
+    familyRequestedCasketId: c.familyRequestedCasketId ?? null,
     familyUrnDueAt:
       c.familyUrnDueAt ??
-      (directiveNeedsUrn(c.directive) && !c.familyRequestedUrnId
-        ? rollFamilyUrnDueAt(arrivedAt)
-        : null),
-    familyUrnRemainingMs:
-      c.familyRequestedUrnId || !directiveNeedsUrn(c.directive)
-        ? null
-        : typeof c.familyUrnRemainingMs === 'number'
-          ? c.familyUrnRemainingMs
-          : rollFamilyUrnWaitMs(),
+      (vesselPending ? rollFamilyUrnDueAt(arrivedAt) : null),
+    familyUrnRemainingMs: !vesselPending
+      ? null
+      : typeof c.familyUrnRemainingMs === 'number'
+        ? c.familyUrnRemainingMs
+        : rollFamilyUrnWaitMs(),
     tagRemainingMs:
       c.isTagged || c.nameExpired
         ? 0
@@ -1125,6 +1154,7 @@ export function freshPersistedGameFields() {
     ownedFleetIds: [] as string[],
     fleetAssignment: { ...EMPTY_FLEET_ASSIGNMENT },
     intermentScore: 0,
+    notificationsEnabled: false,
     lastCase: null as LastCaseNote | null,
     newsWire: [] as NewsWireItem[],
     newsNextLiveAt: 0,
@@ -1607,6 +1637,7 @@ export const useGameStore = create<GameState>()(
       familyUrnDueAt: now + 45_000,
       familyUrnRemainingMs: 45_000,
       familyRequestedUrnId: null,
+      familyRequestedCasketId: null,
       basePayout: basePayoutFor('CREMATION_DIRECT'),
       cremationPermitStatus: initialPermitStatus('CREMATION_DIRECT'),
       cremationPermitSubmittedAt: null,
@@ -1826,6 +1857,12 @@ export const useGameStore = create<GameState>()(
         at: next.arrivedAt,
       },
     });
+    if (!(opts?.quiet && !opts?.toast)) {
+      notifyHouse(
+        'New remains',
+        `${next.name} has arrived. Tag them in the cooler within 60 seconds.`
+      );
+    }
     return true;
   },
 
@@ -2024,6 +2061,10 @@ export const useGameStore = create<GameState>()(
         item === spawnSlot ? { ...item, caseId: next.id } : item
       );
       intakeToast = `${next.name} — headline intake`;
+      notifyHouse(
+        'New remains',
+        `${next.name} has arrived — a headline intake. Tag them within 60 seconds.`
+      );
       activeCaseId = activeCaseId ?? next.id;
       lastCase = {
         id: next.id,
@@ -2490,10 +2531,15 @@ export const useGameStore = create<GameState>()(
   tickFamilyUrnChoices: () =>
     set((state) => {
       let toast: string | null = null;
+      let notice: string | null = null;
       let any = false;
+      let urnInventory = state.urnInventory;
+      let casketInventory = state.casketInventory;
       const cases = state.cases.map((c) => {
-        if (c.familyRequestedUrnId) return c;
-        if (!directiveNeedsUrn(c.directive)) return c;
+        const needUrn = directiveNeedsUrn(c.directive) && !c.familyRequestedUrnId;
+        const needCasket =
+          directiveNeedsCasket(c.directive) && !c.familyRequestedCasketId;
+        if (!needUrn && !needCasket) return c;
         const left = c.familyUrnRemainingMs;
         if (left == null) {
           any = true;
@@ -2503,34 +2549,83 @@ export const useGameStore = create<GameState>()(
           any = true;
           return { ...c, familyUrnRemainingMs: left - 1000 };
         }
-        const urnId = pickFamilyUrnRequest(c, state.reputation);
-        const urn = getUrnById(urnId);
         any = true;
-        toast = urn
-          ? `${resolvePlayerName(state.playerName)}, the family selected ${urn.name} for ${c.isTagged ? c.name : 'their loved one'}`
-          : `${resolvePlayerName(state.playerName)}, the family sent a vessel request`;
-        return {
-          ...c,
-          familyRequestedUrnId: urnId,
-          familyUrnDueAt: null,
-          familyUrnRemainingMs: null,
-        };
+        const next = { ...c };
+        const chosen: string[] = [];
+        const waiting: string[] = [];
+        if (needUrn) {
+          const urnId = pickOwnedUrn(c, urnInventory);
+          const urn = urnId ? getUrnById(urnId) : null;
+          if (!urnId || !urn || (urnInventory[urnId] ?? 0) < 1) {
+            waiting.push('an urn');
+          } else {
+            urnInventory = {
+              ...urnInventory,
+              [urnId]: (urnInventory[urnId] ?? 0) - 1,
+            };
+            next.familyRequestedUrnId = urnId;
+            if (!next.offeredUrnId) next.offeredUrnId = urnId;
+            chosen.push(urn.name);
+          }
+        }
+        if (needCasket) {
+          const casketId = pickOwnedCasket(c, casketInventory);
+          const casket = casketId ? getCasketById(casketId) : undefined;
+          if (!casketId || !casket || (casketInventory[casketId] ?? 0) < 1) {
+            waiting.push('a casket');
+          } else {
+            casketInventory = {
+              ...casketInventory,
+              [casketId]: (casketInventory[casketId] ?? 0) - 1,
+            };
+            next.familyRequestedCasketId = casketId;
+            if (!next.offeredCasketId) next.offeredCasketId = casketId;
+            chosen.push(casket.name);
+          }
+        }
+        const who = c.isTagged ? c.name : 'their loved one';
+        if (waiting.length > 0) {
+          next.familyUrnRemainingMs = rollFamilyUrnWaitMs();
+        } else {
+          next.familyUrnDueAt = null;
+          next.familyUrnRemainingMs = null;
+        }
+        const player = resolvePlayerName(state.playerName);
+        if (chosen.length > 0 && waiting.length > 0) {
+          toast = `${player}, the family chose ${chosen.join(' and ')} for ${who}, and is waiting on ${waiting.join(' and ')}. Nothing else suitable is in stock — buy it in the Emporium. Urns can also be shaped on the bench.`;
+          notice = `${player}, the family chose ${chosen.join(' and ')} for ${who}.`;
+        } else if (chosen.length > 0) {
+          toast = `${player}, the family chose ${chosen.join(' and ')} for ${who}.`;
+          notice = toast;
+        } else if (waiting.length > 0) {
+          toast = `${player}, the family is waiting on ${waiting.join(' and ')} for ${who}. Nothing suitable is in stock — buy it in the Emporium. Urns can also be shaped on the bench.`;
+        }
+        return next;
       });
       if (!any) return state;
+      if (notice) notifyHouse('Family choice', notice);
       const inboxFiles = state.inboxFiles.map((f) => {
         const match = cases.find((c) => c.id === f.id);
-        if (!match || match.familyRequestedUrnId === f.familyRequestedUrnId) {
+        if (!match) return f;
+        if (
+          match.familyRequestedUrnId === f.familyRequestedUrnId &&
+          (match.familyRequestedCasketId ?? null) ===
+            (f.familyRequestedCasketId ?? null)
+        ) {
           return f;
         }
         return {
           ...f,
           familyRequestedUrnId: match.familyRequestedUrnId,
+          familyRequestedCasketId: match.familyRequestedCasketId,
           isRead: false,
         };
       });
       return {
         cases,
         inboxFiles,
+        urnInventory,
+        casketInventory,
         intakeToast: toast ?? state.intakeToast,
       };
     }),
@@ -3928,7 +4023,92 @@ export const useGameStore = create<GameState>()(
             urnPrestige: offered?.prestigeBonus ?? 0,
             familyPrefBonus: prefBonusPts,
           });
-      const chapelRewards = satisfactionToRewards(chapelScore.total);
+      const chapelService =
+        !urnHandoff &&
+        !serviceFailed &&
+        (c.directive === 'BURIAL_VIEWING' ||
+          c.directive === 'VIEWING_THEN_CREMATION' ||
+          c.directive === 'CREMATION_THEN_VIEWING');
+      const rosesMet = flowerKinds.includes('ROSES');
+      const musicId = c.familyChapelPrefs?.musicTrackId ?? null;
+      const musicMet =
+        !!musicId && (layout?.serviceMusicId ?? null) === musicId;
+      const thinUrns =
+        inventoryUnits(state.urnInventory, c.offeredUrnId) < THIN_SELECTION_MIN;
+      const thinCaskets =
+        inventoryUnits(state.casketInventory, c.offeredCasketId) <
+        THIN_SELECTION_MIN;
+      const ratingLines: { label: string; delta: number }[] = [];
+      if (chapelService) {
+        ratingLines.push({
+          label: rosesMet
+            ? 'Roses — required, met'
+            : 'Roses — required, missing',
+          delta: rosesMet ? REQUIRED_PREF_DELTA : -REQUIRED_PREF_DELTA,
+        });
+        ratingLines.push({
+          label: musicMet ? 'Music — required, met' : 'Music — required, missed',
+          delta: musicMet ? REQUIRED_PREF_DELTA : -REQUIRED_PREF_DELTA,
+        });
+      }
+      if (!serviceFailed && thinUrns) {
+        ratingLines.push({
+          label: 'Urn selection a little small',
+          delta: -THIN_SELECTION_PENALTY,
+        });
+      }
+      if (!serviceFailed && thinCaskets) {
+        ratingLines.push({
+          label: 'Casket selection a little small',
+          delta: -THIN_SELECTION_PENALTY,
+        });
+      }
+      const ratingDelta = ratingLines.reduce((sum, line) => sum + line.delta, 0);
+      const baseRating = serviceFailed
+        ? 0
+        : chapelService
+          ? chapelScore.total
+          : clampRating(70 + Math.round((c.cremainsQuality ?? 0) / 5));
+      const rating = clampRating(baseRating + (serviceFailed ? 0 : ratingDelta));
+      const chapelRewards = satisfactionToRewards(
+        chapelService ? rating : chapelScore.total
+      );
+      const vesselBits: string[] = [];
+      if (offered) vesselBits.push(offered.name);
+      if (
+        offeredCasket &&
+        (c.directive === 'BURIAL_VIEWING' ||
+          c.directive === 'VIEWING_THEN_CREMATION')
+      ) {
+        vesselBits.push(offeredCasket.name);
+      }
+      const familyReview = serviceFailed
+        ? null
+        : pickFamilyReview(rating, {
+            name: c.name,
+            roses: chapelService
+              ? rosesMet
+                ? 'The roses were there, just as we asked'
+                : 'The roses we asked for were not in the room'
+              : 'We had not asked for a chapel of flowers',
+            music: chapelService
+              ? musicMet
+                ? `${serviceMusicLabel(musicId)} was the music we wanted`
+                : `The music was not ${serviceMusicLabel(musicId)}`
+              : 'Quiet was what this farewell needed',
+            vessel:
+              vesselBits.length > 0
+                ? vesselBits.join(' and ')
+                : 'what you had on hand',
+            stock:
+              thinUrns && thinCaskets
+                ? 'both the urn shelf and the casket selection felt a little small'
+                : thinUrns
+                  ? 'the urn shelf felt a little small'
+                  : thinCaskets
+                    ? 'the casket selection felt a little small'
+                    : 'the selection had room to choose',
+          });
 
       // Chapel score is the single source of truth (preview matches payout)
       const flowerBonus = serviceFailed
@@ -4157,10 +4337,13 @@ export const useGameStore = create<GameState>()(
         )
       );
 
-      const honored = prefMatches
+      const optionalMatches = prefMatches.filter(
+        (m) => m.key !== 'flowers' && m.key !== 'musicTrackId'
+      );
+      const honored = optionalMatches
         .filter((m) => m.matched)
         .map((m) => `${m.label}: ${m.preferredName}`);
-      const missed = prefMatches
+      const missed = optionalMatches
         .filter((m) => !m.matched)
         .map((m) => `${m.label}: ${m.preferredName}`);
       const nextReputation = Math.max(
@@ -4232,6 +4415,13 @@ export const useGameStore = create<GameState>()(
               payoutLines,
               payoutNet: netPayout,
               fuelMetered,
+              rating,
+              ratingLetter: familyReview?.tier ?? 'F',
+              ratingLines,
+              review: familyReview?.text ?? '',
+              reviewSigner: familyReview
+                ? `${familyReview.signer}, ${familyReview.relation}`
+                : '',
             },
         intakeToast: serviceFailed
           ? `${resolvePlayerName(state.playerName)}, the service for ${c.familyRelation || 'them'} did not go through.`
@@ -4253,6 +4443,8 @@ export const useGameStore = create<GameState>()(
 
   clearLegalAlert: () => set({ legalAlert: null }),
   clearServiceFeedback: () => set({ serviceFeedback: null }),
+
+  setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
 
   damageCremulator: () =>
     set({
@@ -4303,6 +4495,10 @@ export const useGameStore = create<GameState>()(
             ...f,
             familyRequestedUrnId:
               f.familyRequestedUrnId ?? match?.familyRequestedUrnId ?? null,
+            familyRequestedCasketId:
+              f.familyRequestedCasketId ??
+              match?.familyRequestedCasketId ??
+              null,
             dateOfBirthMs: f.dateOfBirthMs ?? match?.dateOfBirthMs ?? 0,
             dateOfDeathMs: f.dateOfDeathMs ?? match?.dateOfDeathMs ?? 0,
             timeOfDeathHour:
@@ -4421,6 +4617,7 @@ export const useGameStore = create<GameState>()(
         repMilestonesClaimed: state.repMilestonesClaimed,
         rankFanfare: state.rankFanfare,
         playerName: state.playerName,
+        notificationsEnabled: state.notificationsEnabled,
         tutorial: state.tutorial,
         tutorialStep: state.tutorialStep,
         tutorialCaseId: state.tutorialCaseId,
@@ -4449,6 +4646,10 @@ export const useGameStore = create<GameState>()(
             ...f,
             familyRequestedUrnId:
               f.familyRequestedUrnId ?? match?.familyRequestedUrnId ?? null,
+            familyRequestedCasketId:
+              f.familyRequestedCasketId ??
+              match?.familyRequestedCasketId ??
+              null,
             dateOfBirthMs: f.dateOfBirthMs ?? match?.dateOfBirthMs ?? 0,
             dateOfDeathMs: f.dateOfDeathMs ?? match?.dateOfDeathMs ?? 0,
             timeOfDeathHour:
@@ -4508,6 +4709,7 @@ export const useGameStore = create<GameState>()(
             ? 'SHOP'
             : current.computerOpenApp ?? null,
           urnInventory: p.urnInventory ?? current.urnInventory,
+          notificationsEnabled: p.notificationsEnabled ?? false,
           casketInventory: p.casketInventory ?? current.casketInventory,
           chapelOwnedDecor: p.chapelOwnedDecor ?? current.chapelOwnedDecor,
           facilityLevels: {
@@ -4633,6 +4835,8 @@ export const useGameStore = create<GameState>()(
     }
   )
 );
+
+setNotificationGate(() => useGameStore.getState().notificationsEnabled);
 
 if (import.meta.env.DEV) {
   Object.assign(globalThis, { __ossuarian: useGameStore });
