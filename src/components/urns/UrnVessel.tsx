@@ -31,27 +31,272 @@ function BodyPath(silhouette: UrnSilhouette): string {
   }
 }
 
+type LeafMotif = 'laurel' | 'lotus' | 'vine';
+
+function leafMotif(decoration: string): LeafMotif | null {
+  const d = decoration.toLowerCase();
+  if (d.includes('laurel') || d.includes('wreath')) return 'laurel';
+  if (d.includes('lotus')) return 'lotus';
+  if (d.includes('vine')) return 'vine';
+  return null;
+}
+
+function FinishedLeaf({
+  x,
+  y,
+  rot,
+  color,
+  ink,
+  scale = 1,
+}: {
+  x: number;
+  y: number;
+  rot: number;
+  color: string;
+  ink: string;
+  scale?: number;
+}) {
+  return (
+    <g transform={`translate(${x} ${y}) rotate(${rot}) scale(${scale})`}>
+      <path
+        d="M0 0 C2.4 0.2 4.4 -2.6 3.4 -6.4 C2.6 -8.8 1.2 -10 0 -10.6 C-1.2 -10 -2.6 -8.8 -3.4 -6.4 C-4.4 -2.6 -2.4 0.2 0 0 Z"
+        fill={color}
+        stroke={ink}
+        strokeWidth="0.45"
+      />
+      <path d="M0 -1.4 V-8.6" stroke={ink} strokeWidth="0.35" opacity="0.55" fill="none" />
+    </g>
+  );
+}
+
+function LaurelWreath({
+  color,
+  ink,
+  cx,
+  cy,
+}: {
+  color: string;
+  ink: string;
+  cx: number;
+  cy: number;
+}) {
+  const leaves = [];
+  for (let i = 0; i < 5; i++) {
+    const t = i / 4;
+    const y = cy - 18 + t * 36;
+    const spread = 9 + Math.sin(t * Math.PI) * 4;
+    leaves.push(
+      <FinishedLeaf key={`l${i}`} x={cx - spread} y={y} rot={-58 + t * 28} color={color} ink={ink} />,
+    );
+    leaves.push(
+      <FinishedLeaf key={`r${i}`} x={cx + spread} y={y} rot={58 - t * 28} color={color} ink={ink} />,
+    );
+  }
+  return (
+    <g>
+      {leaves}
+      <FinishedLeaf x={cx - 3.5} y={cy + 20} rot={18} color={color} ink={ink} scale={0.7} />
+      <FinishedLeaf x={cx + 3.5} y={cy + 20} rot={-18} color={color} ink={ink} scale={0.7} />
+    </g>
+  );
+}
+
+function LotusBloom({
+  color,
+  ink,
+  cx,
+  cy,
+}: {
+  color: string;
+  ink: string;
+  cx: number;
+  cy: number;
+}) {
+  return (
+    <g>
+      {Array.from({ length: 8 }, (_, i) => {
+        const scale = i % 2 === 0 ? 1.05 : 0.68;
+        return (
+          <g key={i} transform={`translate(${cx} ${cy}) rotate(${i * 45}) scale(${scale})`}>
+            <path
+              d="M0 0 C3.2 -0.6 5.4 -6 0 -13 C-5.4 -6 -3.2 -0.6 0 0 Z"
+              fill={color}
+              stroke={ink}
+              strokeWidth="0.4"
+              opacity={i % 2 === 0 ? 0.95 : 0.78}
+            />
+          </g>
+        );
+      })}
+      <circle cx={cx} cy={cy} r="2.5" fill="#fff" stroke={ink} strokeWidth="0.4" />
+    </g>
+  );
+}
+
+function VineCollar({
+  color,
+  ink,
+  cx,
+  cy,
+}: {
+  color: string;
+  ink: string;
+  cx: number;
+  cy: number;
+}) {
+  const left = cx - 16;
+  const right = cx + 16;
+  return (
+    <g>
+      <path d={`M${left} ${cy} H${right}`} stroke={color} strokeWidth="1.7" fill="none" />
+      <path
+        d={`M${left + 2} ${cy + 2.2} H${right - 2}`}
+        stroke="#fff"
+        strokeWidth="0.45"
+        opacity="0.45"
+        fill="none"
+      />
+      {[-12, -6, 0, 6, 12].map((dx, i) => (
+        <FinishedLeaf
+          key={dx}
+          x={cx + dx}
+          y={i % 2 === 0 ? cy - 0.6 : cy + 0.8}
+          rot={i % 2 === 0 ? 0 : 180}
+          color={color}
+          ink={ink}
+          scale={0.62}
+        />
+      ))}
+    </g>
+  );
+}
+
+function LeafMotifMark({
+  kind,
+  color,
+  ink,
+  cx,
+  cy,
+}: {
+  kind: LeafMotif;
+  color: string;
+  ink: string;
+  cx: number;
+  cy: number;
+}) {
+  if (kind === 'laurel') return <LaurelWreath color={color} ink={ink} cx={cx} cy={cy} />;
+  if (kind === 'lotus') return <LotusBloom color={color} ink={ink} cx={cx} cy={cy} />;
+  return <VineCollar color={color} ink={ink} cx={cx} cy={cy} />;
+}
+
+interface SeamBox {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+}
+
+/** Shoulder seam, light bevel, and foot band. Horizontal, so they cannot read as stems. */
+function ConstructionSeams({ box, tone }: { box: SeamBox; tone: string }) {
+  const span = box.bottom - box.top;
+  const shoulder = box.top + span * 0.22;
+  const foot = box.top + span * 0.66;
+  const left = box.left + 3;
+  const right = box.right - 3;
+  return (
+    <g fill="none" strokeLinecap="butt">
+      <path d={`M${left} ${shoulder} H${right}`} stroke={tone} strokeWidth="1.05" opacity="0.72" />
+      <path d={`M${left} ${shoulder + 1.8} H${right}`} stroke="#fff" strokeWidth="0.5" opacity="0.4" />
+      <path d={`M${left - 1} ${foot} H${right + 1}`} stroke={tone} strokeWidth="1.85" opacity="0.58" />
+      <path d={`M${left} ${foot + 2.2} H${right}`} stroke="#fff" strokeWidth="0.45" opacity="0.34" />
+    </g>
+  );
+}
+
+function TurnedRings({ box, tone }: { box: SeamBox; tone: string }) {
+  const span = box.bottom - box.top;
+  const count = span < 36 ? 3 : 4;
+  const left = box.left + 4;
+  const right = box.right - 4;
+  return (
+    <g fill="none" stroke={tone} strokeLinecap="butt">
+      {Array.from({ length: count }, (_, i) => {
+        const y = box.top + (span * (i + 1)) / (count + 1);
+        const foot = i === count - 1;
+        return (
+          <path key={i} d={`M${left} ${y} H${right}`} strokeWidth={foot ? 1.45 : 0.7} opacity={foot ? 0.55 : 0.42} />
+        );
+      })}
+    </g>
+  );
+}
+
+function classicBox(silhouette: UrnSilhouette): SeamBox {
+  switch (silhouette) {
+    case 'TOWER':
+      return { top: 42, bottom: 116, left: 38, right: 62 };
+    case 'TEAR':
+      return { top: 50, bottom: 116, left: 34, right: 66 };
+    case 'CUBE':
+      return { top: 54, bottom: 114, left: 30, right: 70 };
+    case 'VASE':
+      return { top: 60, bottom: 112, left: 32, right: 68 };
+    case 'KEEPSAKE':
+      return { top: 62, bottom: 106, left: 42, right: 58 };
+    case 'TEMPLE':
+      return { top: 58, bottom: 106, left: 30, right: 70 };
+    case 'ART_DECO':
+      return { top: 52, bottom: 114, left: 36, right: 64 };
+    default:
+      return { top: 54, bottom: 114, left: 34, right: 66 };
+  }
+}
+
+function statedBand(decoration: string): boolean {
+  const d = decoration.toLowerCase();
+  return d.includes('band') || d.includes('ring') || d.includes('belt');
+}
+
 function MaterialMarks({
   material,
   silhouette,
   accent,
+  decoration,
+  ink,
 }: {
   material: UrnMaterial;
   silhouette: UrnSilhouette;
   accent: string;
+  decoration: string;
+  ink: string;
 }) {
+  const motif = leafMotif(decoration);
+  const box = classicBox(silhouette);
+  const cy = motif === 'vine' ? box.top + 8 : (box.top + box.bottom) / 2;
+  if (motif) return <LeafMotifMark kind={motif} color={accent} ink={ink} cx={50} cy={cy} />;
+  if (silhouette === 'ART_DECO') {
+    return (
+      <g stroke={accent} fill="none">
+        <path d="M38 70 H62" strokeWidth="1.5" />
+        <path d="M40 86 H60" strokeWidth="1" />
+        <path d="M42 102 H58" strokeWidth="1" />
+      </g>
+    );
+  }
+  const band = statedBand(decoration) ? (
+    <path d={`M${box.left + 4} ${cy} H${box.right - 4}`} stroke={accent} strokeWidth="2.1" fill="none" />
+  ) : null;
   if (material === 'MARBLE' || material === 'STONE') {
     return (
-      <g fill="none" stroke={material === 'STONE' ? '#44403c' : '#78716c'} strokeLinecap="round">
-        <path d="M38 52 C44 66 42 84 48 112" strokeWidth="1.6" opacity="0.7" />
-        <path d="M58 46 C54 68 62 90 57 114" strokeWidth="1.15" opacity="0.55" />
-        <path d="M44 70 C52 78 48 96 53 108" strokeWidth="0.7" opacity="0.4" />
+      <g>
+        <ConstructionSeams box={box} tone={material === 'STONE' ? '#44403c' : '#78716c'} />
+        {band}
         {material === 'STONE' && (
-          <>
-            <circle cx="46" cy="80" r="1.1" fill="#57534e" stroke="none" opacity="0.55" />
-            <circle cx="60" cy="96" r="0.8" fill="#44403c" stroke="none" opacity="0.5" />
-            <circle cx="42" cy="100" r="0.7" fill="#292524" stroke="none" opacity="0.45" />
-          </>
+          <g>
+            <circle cx="46" cy="80" r="1.1" fill="#57534e" opacity="0.55" />
+            <circle cx="60" cy="96" r="0.8" fill="#44403c" opacity="0.5" />
+            <circle cx="42" cy="100" r="0.7" fill="#292524" opacity="0.45" />
+          </g>
         )}
       </g>
     );
@@ -59,58 +304,68 @@ function MaterialMarks({
   if (material === 'BRONZE') {
     return (
       <g>
-        <path d="M36 70 C44 78 42 96 48 112" stroke="#3f6212" strokeWidth="2.2" fill="none" opacity="0.55" />
-        <path d="M58 60 C56 82 64 98 60 114" stroke="#65a30d" strokeWidth="1.4" fill="none" opacity="0.4" />
-        <path d="M34 86 H66" stroke={accent} strokeWidth="1.6" opacity="0.75" />
+        <ConstructionSeams box={box} tone="#d9f99d" />
+        {band}
       </g>
     );
   }
   if (material === 'STEEL') {
+    const flutes = decoration.toLowerCase().includes('flute');
     return (
-      <g stroke="#e2e8f0" strokeWidth="0.45" opacity="0.55">
-        {Array.from({ length: 10 }, (_, i) => (
-          <line key={i} x1="32" x2="68" y1={58 + i * 5} y2={58 + i * 5} />
-        ))}
-        <path d="M40 48 C46 70 46 96 42 116" stroke="#fff" strokeWidth="2.2" opacity="0.35" fill="none" />
+      <g>
+        {flutes ? (
+          <g stroke={accent} strokeWidth="0.8" opacity="0.5">
+            {[0, 1, 2, 3].map((i) => {
+              const x = box.left + 5 + (i * (box.right - box.left - 10)) / 3;
+              return <path key={i} d={`M${x} ${box.top + 4} V${box.bottom - 4}`} fill="none" />;
+            })}
+          </g>
+        ) : (
+          <g stroke="#e2e8f0" strokeWidth="0.45" opacity="0.55">
+            {Array.from({ length: 8 }, (_, i) => (
+              <line
+                key={i}
+                x1={box.left}
+                x2={box.right}
+                y1={box.top + 6 + i * 6}
+                y2={box.top + 6 + i * 6}
+              />
+            ))}
+          </g>
+        )}
+        {band}
       </g>
     );
   }
   if (material === 'CERAMIC' || material === 'PORCELAIN') {
     return (
       <g>
-        <path d="M40 50 C48 58 44 64 50 70 C56 76 52 84 58 92" stroke="#fff" strokeWidth="2" fill="none" opacity="0.35" />
-        <path d="M46 62 C44 78 50 90 48 108" stroke={accent} strokeWidth="1.3" fill="none" opacity="0.45" />
-        <ellipse cx="44" cy="78" rx="3" ry="1.2" fill="#fff" opacity="0.35" />
-        <ellipse cx="58" cy="96" rx="2" ry="0.8" fill="#fff" opacity="0.28" />
+        <ConstructionSeams box={box} tone={accent} />
+        {band}
       </g>
     );
   }
   if (material === 'WOOD') {
     return (
-      <g fill="none" stroke="#3f2a16" strokeWidth="0.7" opacity="0.45">
-        <path d="M40 54 C48 62 46 86 54 112" />
-        <path d="M52 50 C50 70 46 92 44 114" />
-        <path d="M46 60 C54 72 50 94 56 110" opacity="0.7" />
+      <g>
+        <TurnedRings box={box} tone="#3f2a16" />
+        {band}
       </g>
     );
   }
   if (material === 'GLASS') {
+    const bubbles = decoration.toLowerCase().includes('bubble');
     return (
-      <path
-        d="M40 50 C46 72 44 96 42 114"
-        stroke="#fff"
-        strokeWidth="2.4"
-        fill="none"
-        opacity="0.55"
-      />
-    );
-  }
-  if (silhouette === 'ART_DECO') {
-    return (
-      <g stroke={accent} fill="none">
-        <path d="M38 70 H62" strokeWidth="1.5" />
-        <path d="M40 86 H60" strokeWidth="1" />
-        <path d="M42 102 H58" strokeWidth="1" />
+      <g>
+        <ConstructionSeams box={box} tone="#fff" />
+        {bubbles && (
+          <g fill="#fff">
+            <circle cx="46" cy={cy - 6} r="1.6" opacity="0.45" />
+            <circle cx="58" cy={cy + 8} r="1.1" opacity="0.35" />
+            <circle cx="42" cy={cy + 10} r="0.8" opacity="0.3" />
+          </g>
+        )}
+        {band}
       </g>
     );
   }
@@ -138,6 +393,7 @@ export const UrnVessel: React.FC<{
   const body = `urn-body-${uid}`;
   const shade = `urn-shade-${uid}`;
   const shine = `urn-shine-${uid}`;
+  const clip = `urn-clip-${uid}`;
   const height = size === 'lg' ? 'h-56' : size === 'sm' ? 'h-28' : 'h-40';
   const bodyPath = BodyPath(urn.silhouette);
 
@@ -164,6 +420,9 @@ export const UrnVessel: React.FC<{
           <stop offset="0.35" stopColor="#fff" stopOpacity="0.05" />
           <stop offset="1" stopColor="#000" stopOpacity="0.2" />
         </linearGradient>
+        <clipPath id={clip}>
+          <path d={bodyPath} />
+        </clipPath>
       </defs>
 
       <ellipse cx="50" cy="136" rx="30" ry="7" fill="#000" opacity="0.32" />
@@ -180,11 +439,15 @@ export const UrnVessel: React.FC<{
       <path d={bodyPath} fill={`url(#${shade})`} />
       <path d={bodyPath} fill={`url(#${shine})`} opacity="0.45" />
 
-      <MaterialMarks
-        material={urn.material}
-        silhouette={urn.silhouette}
-        accent={urn.palette.accent}
-      />
+      <g clipPath={`url(#${clip})`}>
+        <MaterialMarks
+          material={urn.material}
+          silhouette={urn.silhouette}
+          accent={urn.palette.accent}
+          decoration={urn.decoration}
+          ink={urn.palette.bodyDeep}
+        />
+      </g>
 
       {urn.silhouette === 'TEMPLE' && (
         <>
@@ -197,13 +460,6 @@ export const UrnVessel: React.FC<{
           />
         </>
       )}
-      {urn.silhouette === 'ART_DECO' && urn.material !== 'CERAMIC' && (
-        <g stroke={urn.palette.accent} fill="none">
-          <path d="M38 70 H62" strokeWidth="1.4" />
-          <path d="M40 86 H60" strokeWidth="1" />
-        </g>
-      )}
-
       {urn.silhouette !== 'TEMPLE' && (
         <>
           <ellipse
@@ -416,7 +672,13 @@ function ModularUrn({
         ) : (
           <path d={geom.path} fill={`url(#${shine})`} opacity={shineOpacity} />
         )}
-        <FinishSkin finishId={modular.finishId} accent={urn.palette.accent} />
+        <FinishSkin
+          finishId={modular.finishId}
+          accent={urn.palette.accent}
+          decoration={urn.decoration}
+          ink={urn.palette.bodyDeep}
+          geom={geom}
+        />
         <AccentMark kind={modular.accent} geom={geom} color={urn.palette.accent} />
         {modular.body === 'CUBE' && (
           <path d="M64 70 V118" stroke="#fff" strokeOpacity="0.22" />
@@ -452,17 +714,55 @@ function ModularUrn({
   );
 }
 
-function FinishSkin({ finishId, accent }: { finishId: UrnFinishId; accent: string }) {
+function modernBox(geom: BodyGeom): SeamBox {
+  if (geom.orb) return { top: 62, bottom: 110, left: 28, right: 72 };
+  return {
+    top: geom.top + 6,
+    bottom: geom.bottom - 4,
+    left: geom.left + 2,
+    right: geom.right - 2,
+  };
+}
+
+function FinishSkin({
+  finishId,
+  accent,
+  decoration,
+  ink,
+  geom,
+}: {
+  finishId: UrnFinishId;
+  accent: string;
+  decoration: string;
+  ink: string;
+  geom: BodyGeom;
+}) {
+  const motif = leafMotif(decoration);
+  const box = modernBox(geom);
+  if (motif) {
+    const cy = motif === 'vine' ? box.top + 6 : geom.orb ? 86 : (box.top + box.bottom) / 2;
+    return <LeafMotifMark kind={motif} color={accent} ink={ink} cx={50} cy={cy} />;
+  }
   if (
     finishId === 'MARBLE_WHITE' ||
     finishId === 'MARBLE_BEIGE' ||
     finishId === 'MARBLE_BLACK_GOLD'
   ) {
-    const vein = finishId === 'MARBLE_WHITE' ? '#a8a29e' : finishId === 'MARBLE_BEIGE' ? '#a8845a' : accent;
+    const tone =
+      finishId === 'MARBLE_WHITE' ? '#a8a29e' : finishId === 'MARBLE_BEIGE' ? '#a8845a' : '#6b5a3e';
+    const veinY = box.top + (box.bottom - box.top) * 0.46;
     return (
-      <g fill="none" stroke={vein} strokeLinecap="round" opacity="0.75">
-        <path d="M38 60 C46 78 42 96 48 118" strokeWidth="1.3" />
-        <path d="M58 54 C52 76 62 98 56 120" strokeWidth="0.8" />
+      <g>
+        <ConstructionSeams box={box} tone={tone} />
+        {finishId === 'MARBLE_BLACK_GOLD' && (
+          <path
+            d={`M${box.left + 4} ${veinY} H${box.right - 4}`}
+            stroke={accent}
+            strokeWidth="1.15"
+            fill="none"
+            opacity="0.9"
+          />
+        )}
       </g>
     );
   }
@@ -486,15 +786,14 @@ function FinishSkin({ finishId, accent }: { finishId: UrnFinishId; accent: strin
     );
   }
   if (finishId === 'MAPLE' || finishId === 'WALNUT' || finishId === 'CHERRY' || finishId === 'BAMBOO' || finishId === 'SABLE') {
-    return (
-      <g fill="none" stroke="#3f2a16" strokeWidth="0.7" opacity="0.4">
-        <path d="M40 62 C48 74 44 96 52 118" />
-        <path d="M56 58 C52 80 58 100 54 120" />
-      </g>
-    );
+    return <TurnedRings box={box} tone="#3f2a16" />;
   }
   if (finishId === 'GLASS') {
-    return <path d="M40 58 C46 78 44 100 42 120" stroke="#fff" strokeWidth="2.2" fill="none" opacity="0.55" />;
+    return (
+      <g>
+        <ConstructionSeams box={box} tone="#fff" />
+      </g>
+    );
   }
   if (finishId === 'BIO') {
     return (
@@ -506,7 +805,13 @@ function FinishSkin({ finishId, accent }: { finishId: UrnFinishId; accent: strin
     );
   }
   if (finishId === 'GLAZE') {
-    return <path d="M32 78 C44 70 56 90 70 80" stroke={accent} strokeWidth="3" fill="none" opacity="0.45" />;
+    const y = box.top + (box.bottom - box.top) * 0.42;
+    return (
+      <g fill="none">
+        <path d={`M${box.left + 2} ${y} H${box.right - 2}`} stroke={accent} strokeWidth="1.35" opacity="0.62" />
+        <path d={`M${box.left + 4} ${y + 2.4} H${box.right - 4}`} stroke="#fff" strokeWidth="0.5" opacity="0.4" />
+      </g>
+    );
   }
   return null;
 }
