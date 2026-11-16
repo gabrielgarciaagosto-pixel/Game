@@ -1145,8 +1145,85 @@ export function freshPersistedGameFields() {
   };
 }
 
+type SavedSlice = { state: unknown; version?: number };
+
+let saveTimer: number | null = null;
+let savePending: { name: string; value: SavedSlice } | null = null;
+
+function writePendingSave() {
+  const job = savePending;
+  savePending = null;
+  if (!job) return;
+  try {
+    localStorage.setItem(job.name, JSON.stringify(job.value));
+  } catch {
+    /* Quota or a locked WebView store. The parlor keeps going in memory. */
+  }
+}
+
+function cancelPendingSave() {
+  if (saveTimer != null) {
+    window.clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  savePending = null;
+}
+
+/** Stringify and write on a later turn, unless the page is going away. */
+function flushGameSaveNow() {
+  if (saveTimer != null) {
+    window.clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  writePendingSave();
+}
+
+/**
+ * Save storage that does not stringify on the same turn as a game update.
+ * The parlor tick and the retort used to write the whole save on the
+ * WebView UI thread several times in one burst. Android treats a blocked
+ * UI thread as "isn't responding."
+ */
+const yieldingSaveStorage = {
+  getItem: (name: string): SavedSlice | null => {
+    try {
+      const raw = localStorage.getItem(name);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as SavedSlice;
+      if (!parsed || typeof parsed !== 'object' || !('state' in parsed)) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  },
+  setItem: (name: string, value: SavedSlice) => {
+    savePending = { name, value };
+    if (saveTimer != null) return;
+    saveTimer = window.setTimeout(() => {
+      saveTimer = null;
+      writePendingSave();
+    }, 50);
+  },
+  removeItem: (name: string) => {
+    cancelPendingSave();
+    try {
+      localStorage.removeItem(name);
+    } catch {
+      /* ignore */
+    }
+  },
+};
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', flushGameSaveNow);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushGameSaveNow();
+  });
+}
+
 /** Pause Zustand persist writes (Capacitor-safe wipe). */
 export function pauseGamePersistWrites() {
+  cancelPendingSave();
   useGameStore.persist.setOptions({
     storage: createJSONStorage(() => ({
       getItem: () => null,
@@ -1171,7 +1248,7 @@ function normalizeLastCase(raw: unknown): LastCaseNote | null {
 /** Restore default localStorage persist after a wipe cycle. */
 export function resumeGamePersistWrites() {
   useGameStore.persist.setOptions({
-    storage: createJSONStorage(() => localStorage),
+    storage: yieldingSaveStorage,
   });
 }
 
@@ -4200,6 +4277,7 @@ export const useGameStore = create<GameState>()(
     {
       name: 'ossuarian-first-urn-v1',
       version: 5,
+      storage: yieldingSaveStorage,
       migrate: (persisted, version) => {
         const p = (persisted ?? {}) as Record<string, unknown>;
         const rawCases = (p.cases as DecedentCase[] | undefined) ?? [];

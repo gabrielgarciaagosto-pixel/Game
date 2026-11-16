@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 
 declare global {
   interface Window {
@@ -143,6 +143,29 @@ function App() {
     return () => window.clearTimeout(id);
   }, [intakeToast]);
 
+  const onHub = hasStartedGame && !titleGate && activeStation === 'OVERVIEW';
+  const [hubToastTop, setHubToastTop] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    if (!intakeToast || !onHub) {
+      setHubToastTop((prev) => (prev == null ? prev : null));
+      return;
+    }
+    const measure = () => {
+      const rank = document.querySelector('[data-rank-display]');
+      const news = document.querySelector('[data-hub-news]');
+      if (!rank) return;
+      const floor = Math.max(
+        rank.getBoundingClientRect().bottom,
+        news ? news.getBoundingClientRect().bottom : 0
+      );
+      const next = Math.ceil(floor + 2);
+      setHubToastTop((prev) => (prev === next ? prev : next));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [intakeToast, onHub]);
+
   // Wait for persist merge so returning players don't flash splash + theme
   if (!hydrated) {
     return (
@@ -262,27 +285,27 @@ function App() {
       )}
 
       {/* Toast above title + hub so Reset Game feedback is visible on splash */}
-      {intakeToast && (
+      {intakeToast && (!onHub || hubToastTop != null) && (
         <div
-          className="toast-rise fixed z-[10000] w-[min(16rem,calc(100%-7.5rem))]"
+          data-intake-toast
+          className="toast-rise fixed z-[10000]"
           style={
-            activeStation === 'OVERVIEW' && !titleGate
-              ? { top: 'calc(var(--safe-top) + 3.25rem + 0.15rem)', right: '0.7rem' }
+            onHub
+              ? { top: hubToastTop ?? 0, left: '0.75rem', right: '0.75rem' }
               : {
                   bottom: 'calc(var(--files-clearance) + 0.35rem)',
                   left: '0.75rem',
                   right: '0.75rem',
-                  width: 'auto',
                 }
           }
         >
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-cyan-400 bg-cyan-900/95 px-3 py-2 text-cyan-50 shadow-xl">
-            <span className="text-xs font-semibold leading-snug">{intakeToast}</span>
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-cyan-400 bg-cyan-950 px-2.5 py-0.5 text-cyan-50 shadow-xl">
+            <span className="truncate text-[11px] font-semibold leading-none">{intakeToast}</span>
             <button
               type="button"
               onPointerDown={clearIntakeToast}
               onClick={clearIntakeToast}
-              className="text-xs px-2 py-1 bg-cyan-700 rounded active:bg-cyan-600"
+              className="shrink-0 rounded bg-cyan-700 px-2 py-0.5 text-[11px] leading-none active:bg-cyan-600"
             >
               Dismiss
             </button>

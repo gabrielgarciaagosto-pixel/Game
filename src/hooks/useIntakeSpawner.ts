@@ -23,20 +23,52 @@ export function useIntakeSpawner() {
   useEffect(() => {
     if (!hasStartedGame || titleGate) return;
     catchUp.current = 2;
-    const tick = () => {
-      tickIntake({ catchUpLimit: catchUp.current });
-      catchUp.current = 1;
-      expireUntaggedNames();
-      tickDecay();
-      tickFamilyUrnChoices();
-      tickPermitEvaluations();
-      tickBankLoans();
-      tickBankForeclosure();
-      tickNews();
+    let cancelled = false;
+    let running = false;
+
+    // One system per turn. Running the whole clock inside the effect, and
+    // again every second, held the WebView UI thread through intake, tag
+    // expiry, decay, permits, the bank, and the news wire at once.
+    const runChain = () => {
+      if (cancelled || running) return;
+      running = true;
+      const limit = catchUp.current;
+      const steps: Array<() => void> = [
+        () => tickIntake({ catchUpLimit: limit }),
+        () => {
+          catchUp.current = 1;
+        },
+        () => expireUntaggedNames(),
+        () => tickDecay(),
+        () => tickFamilyUrnChoices(),
+        () => tickPermitEvaluations(),
+        () => tickBankLoans(),
+        () => tickBankForeclosure(),
+        () => tickNews(),
+      ];
+      let index = 0;
+      const step = () => {
+        if (cancelled) {
+          running = false;
+          return;
+        }
+        steps[index]();
+        index += 1;
+        if (index < steps.length) {
+          window.setTimeout(step, 0);
+          return;
+        }
+        running = false;
+      };
+      window.setTimeout(step, 0);
     };
-    tick();
-    const id = window.setInterval(tick, 1000);
-    return () => window.clearInterval(id);
+
+    runChain();
+    const id = window.setInterval(runChain, 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
   }, [
     hasStartedGame,
     titleGate,
