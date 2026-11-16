@@ -55,6 +55,44 @@ function ownedFrom<T extends { id: string }>(
 }
 
 /**
+ * Shelf counts plus a vessel already staged on the case.
+ * Staging removed that unit from inventory; it is still the house's.
+ */
+export function stockIncludingStaged(
+  inventory: Record<string, number>,
+  stagedId: string | null
+): Record<string, number> {
+  if (!stagedId) return inventory;
+  return { ...inventory, [stagedId]: (inventory[stagedId] ?? 0) + 1 };
+}
+
+export type FamilyReservation =
+  | { ok: false }
+  | { ok: true; inventory: Record<string, number>; offeredId: string };
+
+/**
+ * Hold exactly one unit for the family's choice.
+ * A vessel already staged is that unit: picking it again does not
+ * take a second one. Picking a different stocked vessel swaps them.
+ */
+export function reserveFamilyChoice(
+  inventory: Record<string, number>,
+  stagedId: string | null,
+  pickedId: string | null
+): FamilyReservation {
+  if (!pickedId) return { ok: false };
+  const visible = stockIncludingStaged(inventory, stagedId);
+  if ((visible[pickedId] ?? 0) < 1) return { ok: false };
+  if (stagedId === pickedId) {
+    return { ok: true, inventory, offeredId: pickedId };
+  }
+  const next = { ...inventory };
+  if (stagedId) next[stagedId] = (next[stagedId] ?? 0) + 1;
+  next[pickedId] = (next[pickedId] ?? 0) - 1;
+  return { ok: true, inventory: next, offeredId: pickedId };
+}
+
+/**
  * Family urn, drawn only from units the house currently holds.
  * Null when the shelf has no urn. Never falls through to the Emporium catalog.
  */

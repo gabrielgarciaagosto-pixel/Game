@@ -179,13 +179,15 @@ import {
   directiveNeedsUrn,
   pickOwnedCasket,
   pickOwnedUrn,
+  reserveFamilyChoice,
+  stockIncludingStaged,
 } from '../data/familyUrnPick';
 import {
   REQUIRED_PREF_DELTA,
-  THIN_SELECTION_MIN,
   THIN_SELECTION_PENALTY,
   clampRating,
   inventoryUnits,
+  thinSelectionHit,
 } from '../data/caseRating';
 import { pickFamilyReview } from '../data/familyReviews';
 import {
@@ -2554,32 +2556,37 @@ export const useGameStore = create<GameState>()(
         const chosen: string[] = [];
         const waiting: string[] = [];
         if (needUrn) {
-          const urnId = pickOwnedUrn(c, urnInventory);
+          const staged = c.offeredUrnId;
+          const urnId = pickOwnedUrn(c, stockIncludingStaged(urnInventory, staged));
           const urn = urnId ? getUrnById(urnId) : null;
-          if (!urnId || !urn || (urnInventory[urnId] ?? 0) < 1) {
+          const reserved = reserveFamilyChoice(urnInventory, staged, urn ? urnId : null);
+          if (!urn || !reserved.ok) {
             waiting.push('an urn');
           } else {
-            urnInventory = {
-              ...urnInventory,
-              [urnId]: (urnInventory[urnId] ?? 0) - 1,
-            };
-            next.familyRequestedUrnId = urnId;
-            if (!next.offeredUrnId) next.offeredUrnId = urnId;
+            urnInventory = reserved.inventory;
+            next.familyRequestedUrnId = reserved.offeredId;
+            next.offeredUrnId = reserved.offeredId;
             chosen.push(urn.name);
           }
         }
         if (needCasket) {
-          const casketId = pickOwnedCasket(c, casketInventory);
+          const staged = c.offeredCasketId;
+          const casketId = pickOwnedCasket(
+            c,
+            stockIncludingStaged(casketInventory, staged)
+          );
           const casket = casketId ? getCasketById(casketId) : undefined;
-          if (!casketId || !casket || (casketInventory[casketId] ?? 0) < 1) {
+          const reserved = reserveFamilyChoice(
+            casketInventory,
+            staged,
+            casket ? casketId : null
+          );
+          if (!casket || !reserved.ok) {
             waiting.push('a casket');
           } else {
-            casketInventory = {
-              ...casketInventory,
-              [casketId]: (casketInventory[casketId] ?? 0) - 1,
-            };
-            next.familyRequestedCasketId = casketId;
-            if (!next.offeredCasketId) next.offeredCasketId = casketId;
+            casketInventory = reserved.inventory;
+            next.familyRequestedCasketId = reserved.offeredId;
+            next.offeredCasketId = reserved.offeredId;
             chosen.push(casket.name);
           }
         }
@@ -4033,11 +4040,14 @@ export const useGameStore = create<GameState>()(
       const musicId = c.familyChapelPrefs?.musicTrackId ?? null;
       const musicMet =
         !!musicId && (layout?.serviceMusicId ?? null) === musicId;
-      const thinUrns =
-        inventoryUnits(state.urnInventory, c.offeredUrnId) < THIN_SELECTION_MIN;
-      const thinCaskets =
-        inventoryUnits(state.casketInventory, c.offeredCasketId) <
-        THIN_SELECTION_MIN;
+      const thinUrns = thinSelectionHit(
+        directiveNeedsUrn(c.directive),
+        inventoryUnits(state.urnInventory, c.offeredUrnId)
+      );
+      const thinCaskets = thinSelectionHit(
+        directiveNeedsCasket(c.directive),
+        inventoryUnits(state.casketInventory, c.offeredCasketId)
+      );
       const ratingLines: { label: string; delta: number }[] = [];
       if (chapelService) {
         ratingLines.push({
@@ -4070,9 +4080,10 @@ export const useGameStore = create<GameState>()(
           ? chapelScore.total
           : clampRating(70 + Math.round((c.cremainsQuality ?? 0) / 5));
       const rating = clampRating(baseRating + (serviceFailed ? 0 : ratingDelta));
-      const chapelRewards = satisfactionToRewards(
-        chapelService ? rating : chapelScore.total
-      );
+      // Cash, tip, and chapel reputation stay on the arrangement score
+      // the chapel preview already showed. `rating` is the house letter
+      // and the thank-you review only.
+      const chapelRewards = satisfactionToRewards(chapelScore.total);
       const vesselBits: string[] = [];
       if (offered) vesselBits.push(offered.name);
       if (
@@ -4305,6 +4316,8 @@ export const useGameStore = create<GameState>()(
 
       const inventory = { ...state.urnInventory };
       const casketInv = { ...state.casketInventory };
+      // The case holds one staged unit of each vessel. Failure puts that
+      // unit back. A family choice never took a second one off the shelf.
       if (serviceFailed && c.offeredUrnId) {
         inventory[c.offeredUrnId] = (inventory[c.offeredUrnId] ?? 0) + 1;
       }

@@ -9,6 +9,11 @@ export const THIN_SELECTION_PENALTY = 2;
 /** Meeting a required preference, or missing it. Small on purpose. */
 export const REQUIRED_PREF_DELTA = 2;
 
+/** Thin-shelf hit only when this case actually uses that vessel. */
+export function thinSelectionHit(needed: boolean, units: number): boolean {
+  return needed && units < THIN_SELECTION_MIN;
+}
+
 /**
  * Units on the shelf, plus the vessel already reserved for this case.
  * Reserving pulls one out of the count; it still belongs to the selection

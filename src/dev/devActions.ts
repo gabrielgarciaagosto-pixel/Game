@@ -10,6 +10,8 @@ import {
   directiveNeedsCasket,
   directiveNeedsUrn,
   pickOwnedUrn,
+  reserveFamilyChoice,
+  stockIncludingStaged,
 } from '../data/familyUrnPick';
 import { getUrnById, URN_CATALOG } from '../data/urnCatalog';
 import {
@@ -491,23 +493,22 @@ export function forcePickFamilyUrnForActive() {
     toast('Active case does not need a family urn');
     return;
   }
-  const urnId = pickOwnedUrn(active, state.urnInventory);
-  if (!urnId) {
+  const staged = active.offeredUrnId;
+  const urnId = pickOwnedUrn(active, stockIncludingStaged(state.urnInventory, staged));
+  const reserved = reserveFamilyChoice(state.urnInventory, staged, urnId);
+  if (!reserved.ok) {
     toast('No urns in stock — buy or shape one first');
     return;
   }
-  const name = getUrnById(urnId)?.name ?? urnId;
+  const name = getUrnById(reserved.offeredId)?.name ?? reserved.offeredId;
   useGameStore.setState((s) => ({
-    urnInventory: {
-      ...s.urnInventory,
-      [urnId]: Math.max(0, (s.urnInventory[urnId] ?? 1) - 1),
-    },
+    urnInventory: reserved.inventory,
     cases: s.cases.map((c) =>
       c.id === active.id
         ? {
             ...c,
-            familyRequestedUrnId: urnId,
-            offeredUrnId: c.offeredUrnId ?? urnId,
+            familyRequestedUrnId: reserved.offeredId,
+            offeredUrnId: reserved.offeredId,
             familyUrnDueAt: null,
             familyUrnRemainingMs: directiveNeedsCasket(c.directive)
               ? c.familyUrnRemainingMs
@@ -517,7 +518,7 @@ export function forcePickFamilyUrnForActive() {
     ),
     inboxFiles: s.inboxFiles.map((f) =>
       f.id === active.id
-        ? { ...f, familyRequestedUrnId: urnId, isRead: false }
+        ? { ...f, familyRequestedUrnId: reserved.offeredId, isRead: false }
         : f
     ),
     intakeToast: `[DEV] Family chose ${name} from stock`,
