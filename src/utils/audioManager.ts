@@ -409,6 +409,13 @@ class AudioManager {
     return pending?.id === id && pending.generation === this.generation;
   }
 
+  /** Fallback bed waiting for play(), if that attempt is still the current one. */
+  pendingBedId(): MusicBedId | null {
+    const pending = this.pendingPlay;
+    if (!pending || pending.generation !== this.generation) return null;
+    return pending.id;
+  }
+
   /**
    * Ramp the live music bed. Does not restart the clip, touch SFX, or
    * unmute a muted bus. Caller passes the player level (playlist volume

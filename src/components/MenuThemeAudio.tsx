@@ -97,7 +97,13 @@ export const MenuThemeAudio: React.FC = () => {
       durationMs: fadeMs,
     });
     if (token !== playTokenRef.current) return;
-    if (isStale(gen) && audioManager.getCurrentId() === 'theme') {
+    if (isStale(gen) && audioManager.bedIsCurrent('theme')) {
+      // A room change can land while fallback play() is still pending.
+      // If the menu still owns the opener, duck it. Don't fade it to silence.
+      if (playingRef.current) {
+        audioManager.setCurrentVolume(manifest.volume * gainScaleRef.current, fadeMs);
+        return;
+      }
       playingRef.current = false;
       void audioManager.fadeOut(fadeMs);
     }
@@ -119,6 +125,7 @@ export const MenuThemeAudio: React.FC = () => {
       // StrictMode remounts the opener. Don't replace Ossuarian with a random track.
       playingRef.current = true;
       if (freshThemeDue()) markFreshThemePlayed();
+      audioManager.setCurrentVolume(manifest.volume * gainScaleRef.current, fadeMs);
       return;
     } else if (freshThemeDue()) {
       await playTheme(fadeMs, gen);
@@ -175,13 +182,14 @@ export const MenuThemeAudio: React.FC = () => {
   useEffect(() => {
     const chapelFade = manifestRef.current?.crossfadeMs ?? CROSSFADE_MS;
 
+    const liveId = audioManager.getCurrentId() ?? audioManager.pendingBedId();
+
     if (!menuShouldPlay) {
       // Chapel owns the bus. Let the service playlist crossfade in.
       genRef.current += 1;
-      if (playingRef.current || isMenuOrThemeBedId(audioManager.getCurrentId())) {
+      if (playingRef.current || isMenuOrThemeBedId(liveId)) {
         playingRef.current = false;
-        const id = audioManager.getCurrentId();
-        if (id == null || isMenuOrThemeBedId(id)) {
+        if (liveId == null || isMenuOrThemeBedId(liveId)) {
           void audioManager.fadeOut(chapelFade);
         }
       }
@@ -192,7 +200,9 @@ export const MenuThemeAudio: React.FC = () => {
     const target = manifestVol * gainScale;
 
     // Same clip, new level: hub is full, every other non-chapel room is ducked.
-    if (playingRef.current && isMenuOrThemeBedId(audioManager.getCurrentId())) {
+    // A fallback play() leaves currentId null until it resolves. That bed is
+    // still the menu, so duck it instead of starting a second copy.
+    if (playingRef.current && isMenuOrThemeBedId(liveId)) {
       audioManager.setCurrentVolume(target, DUCK_FADE_MS);
       return;
     }
