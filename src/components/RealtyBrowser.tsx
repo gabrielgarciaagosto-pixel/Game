@@ -114,7 +114,7 @@ export const RealtyBrowser: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3 pb-16">
+      <main className="fab-scroll-pad flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
         {flash && (
           <div className="rounded border border-[#8a6b3d]/50 bg-[#fff8e8] px-3 py-2 text-[12px] text-[#5c4020]">
             {flash}

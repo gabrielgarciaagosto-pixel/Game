@@ -135,6 +135,14 @@ function App() {
   const activeCase =
     cases.find((c) => c.id === activeCaseId) ?? cases[0] ?? null;
 
+  useEffect(() => {
+    if (!intakeToast) return;
+    const id = window.setTimeout(() => {
+      useGameStore.getState().clearIntakeToast();
+    }, 8000);
+    return () => window.clearTimeout(id);
+  }, [intakeToast]);
+
   // Wait for persist merge so returning players don't flash splash + theme
   if (!hydrated) {
     return (
@@ -256,14 +264,24 @@ function App() {
       {/* Toast above title + hub so Reset Game feedback is visible on splash */}
       {intakeToast && (
         <div
-          className="fixed left-1/2 -translate-x-1/2 z-[10000] max-w-lg w-[calc(100%-2rem)]"
-          style={{ top: 'calc(var(--safe-top) + 0.5rem)' }}
+          className="toast-rise fixed z-[10000] w-[min(16rem,calc(100%-7.5rem))]"
+          style={
+            activeStation === 'OVERVIEW' && !titleGate
+              ? { top: 'calc(var(--safe-top) + 3.25rem + 0.15rem)', right: '0.7rem' }
+              : {
+                  bottom: 'calc(var(--files-clearance) + 0.35rem)',
+                  left: '0.75rem',
+                  right: '0.75rem',
+                  width: 'auto',
+                }
+          }
         >
-          <div className="bg-cyan-900/95 border border-cyan-400 text-cyan-50 px-4 py-3 rounded-xl shadow-xl flex items-center justify-between gap-3">
-            <span className="font-semibold text-sm">{intakeToast}</span>
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-cyan-400 bg-cyan-900/95 px-3 py-2 text-cyan-50 shadow-xl">
+            <span className="text-xs font-semibold leading-snug">{intakeToast}</span>
             <button
               type="button"
               onPointerDown={clearIntakeToast}
+              onClick={clearIntakeToast}
               className="text-xs px-2 py-1 bg-cyan-700 rounded active:bg-cyan-600"
             >
               Dismiss

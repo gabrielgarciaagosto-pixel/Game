@@ -111,7 +111,7 @@ export const UrnVaultRoom: React.FC = () => {
           </h3>
           {!bench ? (
             <p className="text-stone-600 text-sm px-1">
-              Own a modern vessel, then add a band, change the finish, or engrave it here.
+              Buy a modern vessel in the Emporium — a cylinder, cube, orb, or vase — then add a band, change the finish, or engrave it here.
             </p>
           ) : (
             <div className="rounded-2xl border border-amber-900/50 bg-stone-900/80 p-2">

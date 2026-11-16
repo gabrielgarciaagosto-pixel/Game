@@ -238,7 +238,7 @@ export const ComputerRoom: React.FC = () => {
                 </span>
               </div>
             </header>
-            <main className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3 pb-20">
+            <main className="fab-scroll-pad flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
               <p className="text-[11px] text-[#9bb8a4] leading-snug rounded border border-[#2f6b4f]/50 bg-[#0c1f16]/70 px-3 py-2">
                 {resolvePlayerName(playerName)}, open{' '}
                 <strong className="text-[#e8f5e9]">FILES</strong> to copy

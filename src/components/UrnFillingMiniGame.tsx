@@ -504,15 +504,24 @@ export const UrnFillingMiniGame: React.FC = () => {
     return (
       <div className="fixed inset-0 z-50 bg-zinc-950/95 text-zinc-100 flex flex-col items-center justify-center gap-4 p-6 pb-28">
         <p className="text-center text-sm max-w-sm">
-          No cremains ready. Complete a cremation and transfer the tray here.
+          No cremains on the tray yet. Finish a cremation, then open the processor.
         </p>
-        <button
-          type="button"
-          onPointerDown={() => setActiveStation('CREMATION')}
-          className="px-4 py-2 bg-orange-700 rounded font-semibold"
-        >
-          Open Crematory
-        </button>
+        <div className="flex flex-wrap justify-center gap-2">
+          <button
+            type="button"
+            onPointerDown={() => setActiveStation('CREMATION')}
+            className="px-4 py-2 bg-orange-700 rounded font-semibold"
+          >
+            Open Crematory
+          </button>
+          <button
+            type="button"
+            onPointerDown={() => setActiveStation('OVERVIEW')}
+            className="px-4 py-2 bg-slate-800 rounded font-semibold"
+          >
+            Back to hub
+          </button>
+        </div>
       </div>
     );
   }

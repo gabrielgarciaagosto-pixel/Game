@@ -78,6 +78,18 @@ export const CaseInboxWidget: React.FC = () => {
   const [pickupOpen, setPickupOpen] = useState(false);
   const [pickHour, setPickHour] = useState(14);
   const [scheduleNote, setScheduleNote] = useState<string | null>(null);
+  const activeStation = useGameStore((s) => s.activeStation);
+  const stationRef = useRef(activeStation);
+  useEffect(() => {
+    if (stationRef.current === activeStation) return;
+    stationRef.current = activeStation;
+    setIsOpen(false);
+    setPhoneOpen(false);
+    setArchivesOpen(false);
+    setPickupOpen(false);
+    setCalendarOpen(false);
+    setScheduleNote(null);
+  }, [activeStation]);
   const devSummoned = useDevSummoned();
 
   useEffect(() => {

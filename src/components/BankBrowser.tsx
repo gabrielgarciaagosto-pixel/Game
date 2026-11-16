@@ -134,7 +134,7 @@ export const BankBrowser: React.FC = () => {
         ))}
       </nav>
 
-      <main className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3 pb-16">
+      <main className="fab-scroll-pad flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
         {flash && (
           <div className="rounded border border-amber-700/60 bg-amber-950/40 px-2 py-1.5 text-[11px] text-amber-100">
             {flash}

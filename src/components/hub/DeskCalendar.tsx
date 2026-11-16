@@ -81,6 +81,8 @@ export const DeskCalendar: React.FC = () => {
   useSheetOpen(open);
   React.useEffect(() => {
     if (!open) return;
+    window.__ossuarianCloseFiles?.();
+    window.__ossuarianClosePhone?.();
     const close = () => setOpen(false);
     window.__ossuarianCloseCalendar = close;
     return () => {

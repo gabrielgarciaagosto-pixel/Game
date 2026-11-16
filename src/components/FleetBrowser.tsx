@@ -107,7 +107,7 @@ export const FleetBrowser: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-3 pb-16">
+      <main className="fab-scroll-pad flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-3">
         {flash && (
           <div className="rounded border border-[#c4a574]/50 bg-[#2a2118] px-3 py-2 text-[12px] text-[#f6efe2]">
             {flash}

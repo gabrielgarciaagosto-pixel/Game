@@ -96,6 +96,8 @@ function screenObstacles(): BellObstacle[] {
   };
   const header = document.querySelector('.safe-hub > .relative.z-40');
   if (header && shown(header)) push(header.getBoundingClientRect());
+  const fabs = document.querySelector('.files-fab-anchor');
+  if (fabs && shown(fabs)) push(fabs.getBoundingClientRect());
   document.querySelectorAll('button').forEach((button) => {
     if (button.closest('[data-tutorial-layer]')) return;
     if (!shown(button)) return;

@@ -170,6 +170,29 @@ html[data-sheet-open] .dev-summon-panel {
   );
 }
 
+/* Absolute computer apps ignore the shell pad, so the last row clears PHONE/FILES. */
+.fab-scroll-pad {
+  padding-bottom: calc(
+    var(--files-fab-bottom) + var(--fab-stack-height) - var(--safe-bottom) + 0.85rem
+  ) !important;
+}
+
+@keyframes toast-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.toast-rise {
+  animation: toast-rise 220ms ease-out;
+}
+
+@keyframes tag-nudge {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+.cooler-tag {
+  animation: tag-nudge 1.15s ease-in-out infinite;
+}
+
 /* Keep touch gestures on the WebGL canvas only — not global UI buttons */
 canvas {
   touch-action: none;
@@ -1038,7 +1061,9 @@ canvas {
 }
 @media (prefers-reduced-motion: reduce) {
   .news-swap,
-  .news-track {
+  .news-track,
+  .toast-rise,
+  .cooler-tag {
     animation: none;
   }
 }
@@ -1207,6 +1232,26 @@ canvas {
 }
 .cooler-shell[data-cooler-rows='5'] .cooler-door {
   min-height: 5.35rem;
+}
+.cooler-shell[data-cooler-cols='3'] .cooler-door {
+  overflow: hidden;
+}
+.cooler-shell[data-cooler-cols='3'] .cooler-actions {
+  flex-direction: column;
+}
+.cooler-shell[data-cooler-cols='3'] .cooler-plate {
+  margin: 0.3rem 0.95rem 0.3rem 0.4rem;
+  padding: 0.25rem 0.28rem 0.3rem;
+  overflow: hidden;
+  min-width: 0;
+}
+.cooler-shell[data-cooler-cols='3'] .cooler-bayhead {
+  flex-direction: column;
+  align-items: flex-start;
+}
+.cooler-shell[data-cooler-cols='3'] .cooler-name {
+  font-size: 11px;
+  line-height: 1.15;
 }
 .cooler-kick {
   height: 0.85rem;

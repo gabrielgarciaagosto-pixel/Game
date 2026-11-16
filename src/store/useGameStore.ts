@@ -1946,7 +1946,7 @@ export const useGameStore = create<GameState>()(
       wire = wire.map((item) =>
         item === spawnSlot ? { ...item, caseId: next.id } : item
       );
-      intakeToast = `${next.name} — headline intake`;
+      intakeToast = `${displayCaseName(next)} — headline intake`;
       activeCaseId = activeCaseId ?? next.id;
       lastCase = {
         id: next.id,
@@ -2108,7 +2108,7 @@ export const useGameStore = create<GameState>()(
       bays[i] = { ...bay, queueCaseId: caseId };
       return {
         retortBays: bays,
-        intakeToast: `${queued.name} queued on retort ${String.fromCharCode(65 + i)}`,
+        intakeToast: `${displayCaseName(queued)} queued on retort ${String.fromCharCode(65 + i)}`,
       };
     }),
 

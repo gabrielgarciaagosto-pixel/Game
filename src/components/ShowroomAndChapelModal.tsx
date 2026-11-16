@@ -152,11 +152,10 @@ export const ShowroomAndChapelModal: React.FC = () => {
     return (
       <div className="fixed inset-0 z-50 bg-violet-950/95 text-violet-50 flex flex-col items-center justify-center gap-4 p-6">
         <p className="text-center max-w-md">
-          No case staged for chapel. Move remains here with Chapel / Move to
-          Chapel — hub tiles only open rooms. Buy décor in Emporium → Chapel
-          Decor.
+          The chapel is empty. In the cooler, tap the bay, then Chapel. Décor
+          is in the Emporium.
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-center gap-2">
           <button
             type="button"
             onPointerDown={() => setActiveStation('EMPORIUM')}
@@ -170,6 +169,13 @@ export const ShowroomAndChapelModal: React.FC = () => {
             className="px-4 py-2 bg-cyan-700 rounded font-semibold"
           >
             Open Cooler
+          </button>
+          <button
+            type="button"
+            onPointerDown={() => setActiveStation('OVERVIEW')}
+            className="px-4 py-2 bg-slate-800 rounded font-semibold"
+          >
+            Back to hub
           </button>
         </div>
       </div>

@@ -249,6 +249,7 @@ export const MainHubMenu: React.FC = () => {
     overdraftAccruedMs,
     bankForeclosed,
     careerXp,
+    coolerCapacity,
   } = useGameStore();
 
   const coolerCases = cases.filter((c) => c.location === 'COOLER');
@@ -291,7 +292,7 @@ export const MainHubMenu: React.FC = () => {
     {
       id: 'COOLER',
       title: 'COOLER',
-      subtitle: `${coolerCases.length} / 6 Bays Occupied`,
+      subtitle: `${coolerCases.length} / ${coolerCapacity()} Bays Occupied`,
       badge: untaggedUrgentCount > 0 ? `${untaggedUrgentCount} UNTAGGED` : undefined,
       color: 'from-cyan-950/80 via-slate-950/65 to-slate-950/80 border-cyan-500/45',
     },

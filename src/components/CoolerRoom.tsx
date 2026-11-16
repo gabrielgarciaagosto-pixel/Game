@@ -104,7 +104,7 @@ export const CoolerRoom: React.FC = () => {
                     tagBodyInCooler(body.id);
                     selectActiveCase(body.id);
                   }}
-                  className="absolute -top-3 left-1/2 -translate-x-1/2 z-20 bg-amber-400 text-slate-950 px-3 py-1.5 rounded-full font-extrabold text-xs shadow-xl animate-bounce whitespace-nowrap border-2 border-white"
+                  className="cooler-tag relative z-20 mx-2 mt-2 bg-amber-400 text-slate-950 px-2 py-1 rounded-2xl font-extrabold text-[10px] leading-tight shadow-xl border-2 border-white text-center"
                 >
                   TAP TO TAG: &quot;{body.name}&quot;
                   {tagHeld ? '' : ` (${secondsLeft}s)`}
@@ -112,27 +112,29 @@ export const CoolerRoom: React.FC = () => {
               )}
 
               <div className="cooler-plate">
-              <div className="flex justify-between items-center text-xs font-mono text-slate-400">
+              <div className="cooler-bayhead flex justify-between items-center gap-1 text-[10px] font-mono leading-tight text-slate-400">
                 <span>BAY #{index + 1}</span>
                 {body.isTagged ? (
                   <span className="text-emerald-400 font-bold">✓ TAGGED</span>
                 ) : !tagHeld && secondsLeft === 0 ? (
                   <span className="text-red-400 font-bold">UNTAGGED</span>
                 ) : (
-                  <span className="text-amber-300">AWAITING TAG</span>
+                  <span className="text-amber-300">{face.cols >= 3 ? 'TAG' : 'AWAITING TAG'}</span>
                 )}
               </div>
 
-              <div className="my-auto text-center">
-                <div className="text-base font-bold text-white">
+              <div className="my-auto text-center min-w-0">
+                <div className="cooler-name text-base font-bold leading-tight text-white">
                   {displayCaseName(body)}
                 </div>
-                <div className="text-xs text-cyan-300 font-mono mt-1">
-                  Measured Weight: {body.weightLbs} lbs | {friendlyToken(body.tissueCondition)}
+                <div className="mt-1 font-mono text-[10px] leading-tight text-cyan-300">
+                  {face.cols >= 3
+                    ? `${body.weightLbs} lbs · ${friendlyToken(body.tissueCondition)}`
+                    : `Measured Weight: ${body.weightLbs} lbs | ${friendlyToken(body.tissueCondition)}`}
                 </div>
               </div>
 
-              <div className="text-[11px] text-slate-400 flex justify-between gap-1">
+              <div className="cooler-status flex flex-wrap justify-between gap-x-1 text-[10px] leading-tight text-slate-400">
                 <span>
                   {body.isEmbalmed
                     ? `Embalmed ${body.embalmRank ?? '✓'}`
@@ -148,7 +150,7 @@ export const CoolerRoom: React.FC = () => {
               </div>
 
               {isSelected && (
-                <div className="flex gap-1 mt-1">
+                <div className="cooler-actions flex gap-1 mt-1">
                   <button
                     type="button"
                     onPointerDown={(e) => {

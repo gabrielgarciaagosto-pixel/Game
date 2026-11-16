@@ -117,16 +117,24 @@ export const EmbalmingMiniGame: React.FC = () => {
     return (
       <div className="fixed inset-0 z-50 bg-slate-950/95 text-slate-100 flex flex-col items-center justify-center gap-4 p-6">
         <p className="text-center max-w-md">
-          No body on the prep table. Move remains here from the Cooler (Prep) or
-          with Move to Cooler / transfer buttons — hub tiles only open rooms.
+          The prep table is empty. In the cooler, tap the bay, then Prep.
         </p>
-        <button
-          type="button"
-          onPointerDown={() => setActiveStation('COOLER')}
-          className="px-4 py-2 bg-cyan-700 rounded font-semibold"
-        >
-          Open Cooler
-        </button>
+        <div className="flex flex-wrap justify-center gap-2">
+          <button
+            type="button"
+            onPointerDown={() => setActiveStation('COOLER')}
+            className="px-4 py-2 bg-cyan-700 rounded font-semibold"
+          >
+            Open Cooler
+          </button>
+          <button
+            type="button"
+            onPointerDown={() => setActiveStation('OVERVIEW')}
+            className="px-4 py-2 bg-slate-800 rounded font-semibold"
+          >
+            Back to hub
+          </button>
+        </div>
       </div>
     );
   }
