@@ -65,7 +65,11 @@ export const ToolDrawer: React.FC<{
                 <div className="w-14 h-20 shrink-0 rounded-lg bg-gradient-to-b from-zinc-700 to-zinc-950 border border-zinc-600 flex items-center justify-center overflow-hidden">
                   <ToolArt
                     tool={tool.id}
-                    className="h-[4.6rem] w-auto rotate-180"
+                    className={
+                      tool.id === 'BRISTLE_BRUSH'
+                        ? 'h-[4.6rem] w-auto'
+                        : 'h-[4.6rem] w-auto rotate-180'
+                    }
                   />
                 </div>
                 <div className="min-w-0">

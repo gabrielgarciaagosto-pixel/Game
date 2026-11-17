@@ -17,6 +17,7 @@ import {
   type MetalKind,
 } from './urns/BoneArt';
 import { startAshPourSfx, stopAshPourSfx } from '../utils/soundEffects';
+import { extractorSfx } from '../audio/extractorSfx';
 
 type Phase =
   | 'CRUSH'
@@ -218,6 +219,11 @@ export const UrnFillingMiniGame: React.FC = () => {
 
   const allMetalsCleared = fragments.every((f) => f.collected);
 
+  useEffect(() => {
+    void extractorSfx.preload();
+    return () => extractorSfx.stop();
+  }, []);
+
   // Dust builds while crushing without extractor; extractor clears continuously
   useEffect(() => {
     if (extractorOn) {
@@ -350,6 +356,7 @@ export const UrnFillingMiniGame: React.FC = () => {
 
   const startExtractor = () => {
     setExtractorOn(true);
+    extractorSfx.start();
     setDustLevel((d) => Math.max(0, d - 40));
     if (hatchLoaded) setLoadingSorting(true);
   };

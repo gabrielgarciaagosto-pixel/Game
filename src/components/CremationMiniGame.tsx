@@ -409,7 +409,11 @@ export const CremationMiniGame: React.FC = () => {
   const [panelZoomed, setPanelZoomed] = useState(false);
   const [toolMenuOpen, setToolMenuOpen] = useState(false);
   const [toolHeld, setToolHeld] = useState(false);
-  const [toolPos, setToolPos] = useState({ x: 52, y: 40 });
+  const [toolPos, setToolPos] = useState(() =>
+    useGameStore.getState().retort.activeTool === 'BRISTLE_BRUSH'
+      ? { x: 52, y: 86 }
+      : { x: 52, y: 40 }
+  );
   const [brushFlex, setBrushFlex] = useState({ lean: 0, push: 0 });
   const [toolGlide, setToolGlide] = useState(false);
   const [boneNudge, setBoneNudge] = useState(0);
@@ -729,7 +733,13 @@ export const CremationMiniGame: React.FC = () => {
     setToolHeld(false);
     setToolGlide(true);
     setToolPos({ x: 18, y: 86 });
-    window.setTimeout(() => setToolPos({ x: 54, y: 70 }), 40);
+    window.setTimeout(
+      () =>
+        setToolPos(
+          tool === 'BRISTLE_BRUSH' ? { x: 52, y: 86 } : { x: 54, y: 70 }
+        ),
+      40
+    );
     window.setTimeout(() => setToolGlide(false), 520);
   };
 
@@ -1407,16 +1417,23 @@ export const CremationMiniGame: React.FC = () => {
               {activeTool && (
                 <div
                   className={`absolute z-50 touch-none ${
-                    toolHeld || toolGlide ? '' : 'tool-bob'
+                    toolHeld || toolGlide
+                      ? ''
+                      : activeTool === 'BRISTLE_BRUSH'
+                        ? 'tool-bob-brush'
+                        : 'tool-bob'
                   }`}
                   style={{
                     left: `${toolPos.x}%`,
                     top: `${toolPos.y}%`,
-                    // Rotate 180° so tips point up/forward into the chamber
-                    // (handle toward the operator). Tip sits near the finger.
+                    // Other tools flip so the working end points up into the
+                    // chamber. The hand brush stays as in the photo: handle
+                    // up, bristles down on the ash, tips at the finger.
                     transform:
                       toolHeld || toolGlide
-                        ? 'translate(-50%, -18%) rotate(180deg)'
+                        ? activeTool === 'BRISTLE_BRUSH'
+                          ? 'translate(-50%, -100%)'
+                          : 'translate(-50%, -18%) rotate(180deg)'
                         : undefined,
                     transition: toolHeld
                       ? 'none'
@@ -1470,7 +1487,11 @@ export const CremationMiniGame: React.FC = () => {
                 >
                   <ToolArt
                     tool={activeTool}
-                    className="h-48 w-auto max-w-[11rem] pointer-events-none"
+                    className={
+                      activeTool === 'BRISTLE_BRUSH'
+                        ? 'h-44 w-auto max-w-[12rem] pointer-events-none'
+                        : 'h-48 w-auto max-w-[11rem] pointer-events-none'
+                    }
                     flex={
                       activeTool === 'BRISTLE_BRUSH' || activeTool === 'HAND_BRUSH'
                         ? brushFlex

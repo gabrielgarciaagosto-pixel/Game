@@ -96,9 +96,56 @@ export type BrushFlex = {
   push: number;
 };
 
+/** Handle up, bristles down. The head matches the hearth brush in the reference photos. */
+const BRUSH_CX = 120;
+const BRUSH_ROOT_Y = 172;
+
+function brushTip(t: number, jitter = 0): { x: number; y: number } {
+  const spread = t - 0.5;
+  const edge = Math.abs(spread) * 2;
+  return {
+    x: BRUSH_CX + spread * 214,
+    y: 334 - Math.pow(edge, 1.45) * 52 + jitter,
+  };
+}
+
+function brushMassPath(): string {
+  let d = '';
+  for (let i = 0; i <= 24; i += 1) {
+    const p = brushTip(i / 24);
+    d += `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+  }
+  return `${d}L206 176L34 176Z`;
+}
+
+const BRUSH_MASS = brushMassPath();
+const BRUSH_HAIRS = Array.from({ length: 56 }, (_, i) => {
+  const t = i / 55;
+  const a = { x: 26 + t * 188, y: BRUSH_ROOT_Y };
+  const b = brushTip(t, (i % 3 - 1) * 1.4);
+  const spread = t - 0.5;
+  const mid = {
+    x: a.x + (b.x - a.x) * 0.46,
+    y: a.y + (b.y - a.y) * 0.46,
+  };
+  const pale = {
+    x: a.x + (b.x - a.x) * 0.42,
+    y: a.y + (b.y - a.y) * 0.42,
+  };
+  return {
+    pale: `M${a.x.toFixed(1)} ${a.y} Q${((a.x + pale.x) / 2).toFixed(1)} ${((a.y + pale.y) / 2).toFixed(1)} ${pale.x.toFixed(1)} ${pale.y.toFixed(1)}`,
+    scorch: `M${mid.x.toFixed(1)} ${mid.y.toFixed(1)} Q${((mid.x + b.x) / 2 + spread * 4).toFixed(1)} ${((mid.y + b.y) / 2).toFixed(1)} ${b.x.toFixed(1)} ${b.y.toFixed(1)}`,
+    paleWide: i % 6 === 0,
+    scorchWide: i % 5 === 0,
+    paleLight: i % 2 === 0,
+    scorchDark: i % 4 === 0,
+    tip: b,
+  };
+});
+
 /**
- * Plain hearth brush. Wooden handle, natural hair, tips a little singed.
- * This replaced the iron brush. The bristle group flexes against the stroke.
+ * The bench brush from the reference photos. Handle stays up.
+ * Only the bristle fan flexes, against the stroke.
  */
 export function PlainHandBrushArt({
   className,
@@ -108,12 +155,15 @@ export function PlainHandBrushArt({
   flex?: BrushFlex;
 }) {
   const uid = useId().replace(/:/g, '');
-  const wood = `plain-wood-${uid}`;
+  const block = `brush-block-${uid}`;
+  const bare = `brush-bare-${uid}`;
+  const red = `brush-red-${uid}`;
+  const hair = `brush-hair-${uid}`;
   const lean = Math.max(-1, Math.min(1, flex?.lean ?? 0));
   const push = Math.max(0, Math.min(1, flex?.push ?? 0));
   return (
     <svg
-      viewBox="0 0 96 248"
+      viewBox="0 0 240 360"
       className={className}
       aria-hidden
       data-tool-art="hand-brush"
@@ -121,69 +171,150 @@ export function PlainHandBrushArt({
       data-brush-push={push.toFixed(2)}
     >
       <defs>
-        <linearGradient id={wood} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#4a2c1a" />
-          <stop offset="0.45" stopColor="#c4a574" />
-          <stop offset="1" stopColor="#3f2414" />
+        <linearGradient id={block} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#cbb89a" />
+          <stop offset="0.12" stopColor="#f4e7d2" />
+          <stop offset="0.48" stopColor="#e6d5b8" />
+          <stop offset="0.78" stopColor="#f8f0e2" />
+          <stop offset="1" stopColor="#b9a488" />
+        </linearGradient>
+        <linearGradient id={bare} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#c4a574" />
+          <stop offset="0.45" stopColor="#f3e2c4" />
+          <stop offset="1" stopColor="#a8845c" />
+        </linearGradient>
+        <linearGradient id={red} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#7a1418" />
+          <stop offset="0.28" stopColor="#c43834" />
+          <stop offset="0.55" stopColor="#9a1c20" />
+          <stop offset="1" stopColor="#5c1014" />
+        </linearGradient>
+        <linearGradient
+          id={hair}
+          x1="0"
+          y1="168"
+          x2="0"
+          y2="340"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop offset="0" stopColor="#f3e4c8" />
+          <stop offset="0.22" stopColor="#e4c896" />
+          <stop offset="0.46" stopColor="#8d5a32" />
+          <stop offset="0.68" stopColor="#3a2418" />
+          <stop offset="1" stopColor="#120c0a" />
         </linearGradient>
       </defs>
-      <rect x="34" y="8" width="28" height="126" rx="12" fill={`url(#${wood})`} />
-      <path d="M40 22v96" stroke="#fff" strokeWidth="1.4" opacity="0.22" />
       <path
-        d="M56 28c5 20 5 44 0 68"
-        stroke="#4a2c1a"
-        strokeWidth="1.1"
-        fill="none"
-        opacity="0.4"
+        d="M120 10 C102 10 98 24 101 38 C104 50 108 58 109 78 L112 168 L128 168 L131 78 C132 58 136 50 139 38 C142 24 138 10 120 10 Z"
+        fill={`url(#${bare})`}
       />
-      <ellipse cx="48" cy="14" rx="15" ry="8" fill="#c4a574" />
-      <ellipse cx="48" cy="14" rx="8" ry="3.2" fill="#4a2c1a" opacity="0.35" />
-      <rect x="26" y="128" width="44" height="18" rx="4" fill="#6b4428" />
-      <path d="M30 134c12 3 24 3 36 0" stroke="#4a2c1a" strokeWidth="1" fill="none" opacity="0.45" />
+      <path
+        d="M120 16 C106 16 104 28 106 38 L112 160 L128 160 L134 38 C136 28 134 16 120 16 Z"
+        fill={`url(#${red})`}
+      />
+      <path
+        d="M108 36 C109 80 110 120 112 156"
+        stroke="#f3e6cf"
+        strokeWidth="2.4"
+        fill="none"
+        strokeLinecap="round"
+        opacity="0.9"
+      />
+      <path
+        d="M133 32 C131 78 129 124 126 158"
+        stroke="#e7d3b0"
+        strokeWidth="1.6"
+        fill="none"
+        strokeLinecap="round"
+        opacity="0.75"
+      />
+      <path
+        d="M116 48 l3 22 M122 70 l-2 16"
+        stroke="#f6efe2"
+        strokeWidth="1"
+        opacity="0.45"
+        strokeLinecap="round"
+      />
+      <circle cx="120" cy="32" r="9" fill="#e8d4b4" />
+      <circle cx="120" cy="32" r="5.6" fill="#16110e" />
+      <path
+        d="M116 29.5 a4.2 4.2 0 0 1 7 -1.2"
+        stroke="#6a5344"
+        strokeWidth="1"
+        fill="none"
+      />
       <g
         className="brush-bristles"
         style={{
-          transformOrigin: '48px 146px',
-          transform: `rotate(${lean * 22}deg) scaleY(${1 - push * 0.28})`,
+          transformOrigin: '120px 172px',
+          transform: `rotate(${lean * 16}deg) scaleY(${1 - push * 0.2})`,
         }}
       >
-        {Array.from({ length: 9 }).map((_, i) => {
-          const x = 16 + i * 8;
-          const tip = 208 + (i % 3) * 10;
-          const bow = (i - 4) * 1.8;
-          const mid = 148 + (tip - 148) * 0.72;
-          return (
-            <g key={i}>
-              <path
-                d={`M${x} 146 q${bow} ${(mid - 146) / 2} ${bow * 0.35} ${mid - 146}`}
-                stroke="#e6d2b0"
-                strokeWidth="4.6"
-                fill="none"
-                strokeLinecap="round"
-              />
-              <path
-                d={`M${x + bow * 0.35} ${mid} q${bow * 0.2} ${(tip - mid) / 2} 0 ${tip - mid}`}
-                stroke="#1c1410"
-                strokeWidth="4.2"
-                fill="none"
-                strokeLinecap="round"
-              />
-            </g>
-          );
-        })}
+        <path d={BRUSH_MASS} fill={`url(#${hair})`} />
+        {BRUSH_HAIRS.map((strand, i) => (
+          <g key={i}>
+            <path
+              d={strand.pale}
+              stroke={strand.paleLight ? '#f7edd8' : '#ecd9b4'}
+              strokeWidth={strand.paleWide ? 2.2 : 1.45}
+              fill="none"
+              strokeLinecap="round"
+              opacity="0.7"
+            />
+            <path
+              d={strand.scorch}
+              stroke={strand.scorchDark ? '#140e0c' : '#241610'}
+              strokeWidth={strand.scorchWide ? 2.6 : 1.9}
+              fill="none"
+              strokeLinecap="round"
+            />
+          </g>
+        ))}
         {push > 0.15
-          ? [0, 1, 2].map((i) => (
-              <circle
-                key={`ash-${i}`}
-                cx={28 + i * 16}
-                cy={198 + (i % 2) * 10}
-                r="2.4"
-                fill="#d6d3d1"
-                opacity={0.35 + push * 0.5}
-              />
-            ))
+          ? [0.18, 0.38, 0.55, 0.72, 0.86].map((t, i) => {
+              const p = brushTip(t, 0);
+              return (
+                <circle
+                  key={i}
+                  cx={p.x}
+                  cy={p.y + 4}
+                  r={1.8 + (i % 2)}
+                  fill="#d6d3d1"
+                  opacity={0.35 + push * 0.5}
+                />
+              );
+            })
           : null}
       </g>
+      <rect x="14" y="150" width="212" height="38" rx="16" fill={`url(#${block})`} />
+      <path d="M30 178 H210" stroke="#8d7356" strokeWidth="1.4" opacity="0.35" />
+      <path
+        d="M36 160 C80 156 160 156 206 164"
+        stroke="#fff"
+        strokeWidth="1.1"
+        fill="none"
+        opacity="0.22"
+      />
+      <path
+        d="M52 160 h128 c2 0 3 2 2 4 l-2 12 c-8 1 -120 2 -128 0 l-1 -12 c0 -2 1 -4 1 -4 Z"
+        fill="#ddd6c8"
+        opacity="0.9"
+      />
+      <path d="M168 160 l12 2 v12 l-14 -1 Z" fill="#e6d3b4" />
+      <path
+        d="M58 164 h14 M78 166 h9 M94 163 h20 M120 167 h12 M138 164 h16"
+        stroke="#5e5952"
+        strokeWidth="1.15"
+        opacity="0.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M64 172 h10 M108 171 h18 M146 173 h8"
+        stroke="#7a756c"
+        strokeWidth="0.9"
+        opacity="0.4"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
