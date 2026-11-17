@@ -5,7 +5,7 @@ import {
   clampTutorialBell,
   defaultTutorialBell,
   snapTutorialBell,
-  TUTORIAL_BELL_SIZE,
+  TUTORIAL_SPIRIT_SIZE,
   type BellBounds,
   type BellObstacle,
   type BellPoint,
@@ -15,6 +15,42 @@ import { useGameStore } from '../store/useGameStore';
 
 const DRAG_THRESHOLD = 8;
 const LONG_PRESS_MS = 380;
+
+const TICKLES = [
+  'Hey, that tickles!',
+  'Oh, that tickles.',
+  'Hee, that tickles!',
+  'Careful, that tickles.',
+  'Alright, that tickles.',
+];
+
+function tickleLine(): string {
+  return TICKLES[Math.floor(Math.random() * TICKLES.length)] ?? TICKLES[0];
+}
+
+/** The control this step is teaching. Particles circle it. */
+function targetSelector(stepId: string): string | null {
+  switch (stepId) {
+    case 'tag':
+      return '[data-tutorial-target="cooler"]';
+    case 'files':
+      return '[data-tutorial-target="files"]';
+    case 'directive':
+      return '[data-tutorial-target="directive"]';
+    case 'computer':
+      return '[data-tutorial-target="computer"]';
+    case 'vr441':
+      return '[data-tutorial-target="vr441"]';
+    case 'permit':
+      return '[data-tutorial-target="permit"]';
+    case 'crematory':
+      return '[data-tutorial-target="crematory"]';
+    case 'archives':
+      return '[data-tutorial-target="archives"], [data-tutorial-target="files"]';
+    default:
+      return null;
+  }
+}
 
 function cssLengthPx(name: string, fallback: number): number {
   const probe = document.createElement('div');
@@ -150,12 +186,14 @@ export const TutorialLayer: React.FC = () => {
   const tutorialCaseId = useGameStore((s) => s.tutorialCaseId);
   const cases = useGameStore((s) => s.cases);
   const permitSubmissions = useGameStore((s) => s.permitSubmissions);
-  const tutorialBell = useGameStore((s) => s.tutorialBell);
+  const tutorialSpirit = useGameStore((s) => s.tutorialSpirit);
+  const tutorialSpiritMoved = useGameStore((s) => s.tutorialSpiritMoved);
   const beginTutorial = useGameStore((s) => s.beginTutorial);
   const skipTutorial = useGameStore((s) => s.skipTutorial);
   const skipTutorialStep = useGameStore((s) => s.skipTutorialStep);
   const completeTutorialStep = useGameStore((s) => s.completeTutorialStep);
-  const setTutorialBell = useGameStore((s) => s.setTutorialBell);
+  const setTutorialSpirit = useGameStore((s) => s.setTutorialSpirit);
+  const setTutorialSpiritMoved = useGameStore((s) => s.setTutorialSpiritMoved);
   const [hintOpen, setHintOpen] = useState(true);
   const [dragPos, setDragPos] = useState<BellPoint | null>(null);
   const [armed, setArmed] = useState(false);
@@ -163,6 +201,13 @@ export const TutorialLayer: React.FC = () => {
     typeof document === 'undefined' ? null : readBounds()
   );
   const [obstacles, setObstacles] = useState<BellObstacle[]>([]);
+  const [tickle, setTickle] = useState<string | null>(null);
+  const [target, setTarget] = useState<{
+    cx: number;
+    cy: number;
+    orbit: number;
+  } | null>(null);
+  const tickleTimer = useRef<number | null>(null);
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -181,6 +226,7 @@ export const TutorialLayer: React.FC = () => {
       : tutorialCase.cremationPermitStatus !== 'NONE' ||
         permitSubmissions.some((s) => s.caseId === tutorialCase.id);
   const tagged = tutorialCase == null ? false : tutorialCase.isTagged;
+  const nameExpired = tutorialCase?.nameExpired === true;
   const step = TUTORIAL_STEPS[tutorialStep];
 
   useEffect(() => {
@@ -196,6 +242,8 @@ export const TutorialLayer: React.FC = () => {
     computerOpenApp,
     permitFiled,
     tagged,
+    nameExpired,
+    tutorialSpiritMoved,
     completeTutorialStep,
   ]);
 
@@ -232,8 +280,51 @@ export const TutorialLayer: React.FC = () => {
       if (longPressRef.current != null) {
         window.clearTimeout(longPressRef.current);
       }
+      if (tickleTimer.current != null) {
+        window.clearTimeout(tickleTimer.current);
+      }
     };
   }, []);
+
+  const showTickle = () => {
+    setTickle(tickleLine());
+    if (tickleTimer.current != null) window.clearTimeout(tickleTimer.current);
+    tickleTimer.current = window.setTimeout(() => {
+      tickleTimer.current = null;
+      setTickle(null);
+    }, 1600);
+  };
+
+  useLayoutEffect(() => {
+    if (tutorial !== 'active' || !step) {
+      setTarget(null);
+      return;
+    }
+    const selector = targetSelector(step.id);
+    const el = selector ? document.querySelector(selector) : null;
+    if (!el) {
+      setTarget(null);
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    const origin = rootOrigin();
+    const orbit = Math.max(22, Math.min(46, Math.max(rect.width, rect.height) / 2 + 8));
+    setTarget({
+      cx: rect.left - origin.x + rect.width / 2,
+      cy: rect.top - origin.y + rect.height / 2,
+      orbit,
+    });
+  }, [
+    tutorial,
+    step,
+    tutorialStep,
+    activeStation,
+    filesPanelOpen,
+    archivesPanelOpen,
+    computerOpenApp,
+    bounds,
+    hintOpen,
+  ]);
 
   if (titleGate || !hasStartedGame) return null;
 
@@ -251,8 +342,8 @@ export const TutorialLayer: React.FC = () => {
             A short walkthrough, {name}?
           </h2>
           <p className="mt-3 text-sm leading-relaxed text-[#d9cbb8]">
-            One case, from the file to the permit, through the rooms, and into
-            Archives. You can skip it.
+            The Tutorial Spirit walks one case with you, from a drag, to the
+            cooler tag, and on into the files. You can skip it.
           </p>
           <div className="mt-5 flex flex-col gap-2">
             <button
@@ -277,10 +368,10 @@ export const TutorialLayer: React.FC = () => {
 
   if (tutorial !== 'active' || !step || !bounds) return null;
 
-  const resting = placeBell(tutorialBell, bounds, obstacles);
+  const resting = placeBell(tutorialSpirit, bounds, obstacles);
   const pos = dragPos ?? resting;
   const side = bellSide(pos, bounds.width);
-  const roomBelow = bounds.height - (pos.y + TUTORIAL_BELL_SIZE);
+  const roomBelow = bounds.height - (pos.y + TUTORIAL_SPIRIT_SIZE);
   const openUp = roomBelow < 150;
   const panelWidth = Math.min(288, Math.max(160, bounds.width - 24));
 
@@ -322,6 +413,7 @@ export const TutorialLayer: React.FC = () => {
     const dx = e.clientX - origin.x - drag.startX;
     const dy = e.clientY - origin.y - drag.startY;
     if (!drag.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+    if (!drag.moved) showTickle();
     drag.moved = true;
     setArmed(true);
     setDragPos(
@@ -341,10 +433,14 @@ export const TutorialLayer: React.FC = () => {
     }
     if (!drag || drag.pointerId !== e.pointerId) return;
     if (!drag.moved) {
-      if (!drag.long) setHintOpen((open) => !open);
+      if (!drag.long) {
+        showTickle();
+        setHintOpen((open) => !open);
+      }
       setDragPos(null);
       return;
     }
+    setTutorialSpiritMoved(true);
     const origin = rootOrigin();
     const next = snapTutorialBell(
       clampTutorialBell(
@@ -358,8 +454,18 @@ export const TutorialLayer: React.FC = () => {
       screenObstacles()
     );
     setDragPos(null);
-    setTutorialBell(next);
+    setTutorialSpirit(next);
   };
+
+  const spiritCx = pos.x + TUTORIAL_SPIRIT_SIZE / 2;
+  const spiritCy = pos.y + TUTORIAL_SPIRIT_SIZE / 2;
+  const trickle =
+    target == null
+      ? null
+      : {
+          dx: target.cx - spiritCx,
+          dy: target.cy - spiritCy,
+        };
 
   return (
     <div
@@ -369,29 +475,71 @@ export const TutorialLayer: React.FC = () => {
       } ${side === 'right' ? 'items-end' : 'items-start'}`}
       style={{
         left: side === 'left' ? pos.x : undefined,
-        right: side === 'right' ? bounds.width - (pos.x + TUTORIAL_BELL_SIZE) : undefined,
+        right: side === 'right' ? bounds.width - (pos.x + TUTORIAL_SPIRIT_SIZE) : undefined,
         top: openUp ? undefined : pos.y,
-        bottom: openUp ? bounds.height - (pos.y + TUTORIAL_BELL_SIZE) : undefined,
+        bottom: openUp ? bounds.height - (pos.y + TUTORIAL_SPIRIT_SIZE) : undefined,
         width: panelWidth,
       }}
     >
+      {target && (
+        <div
+          className="tutorial-spirit-ring"
+          data-tutorial-particles
+          style={{
+            left: target.cx,
+            top: target.cy,
+            ['--orbit' as string]: `${target.orbit}px`,
+          }}
+        >
+          {Array.from({ length: 8 }, (_, i) => (
+            <i key={i} style={{ ['--i' as string]: String(i) }} />
+          ))}
+        </div>
+      )}
+      {target && trickle && (
+        <div
+          className="tutorial-spirit-trickle"
+          style={{ left: spiritCx, top: spiritCy }}
+        >
+          {Array.from({ length: 4 }, (_, i) => (
+            <i
+              key={i}
+              style={{
+                ['--i' as string]: String(i),
+                ['--dx' as string]: `${trickle.dx}px`,
+                ['--dy' as string]: `${trickle.dy}px`,
+              }}
+            />
+          ))}
+        </div>
+      )}
       <button
         type="button"
-        aria-label="Tutorial hint"
-        data-tutorial-bell
+        aria-label="Tutorial Spirit"
+        data-tutorial-spirit
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        className={`pointer-events-auto w-11 h-11 rounded-full border-2 bg-zinc-950/90 text-amber-200 shadow-lg shadow-black/50 flex items-center justify-center touch-none select-none ${
-          armed
-            ? 'border-amber-100 scale-110'
-            : 'border-amber-300/80'
+        className={`tutorial-spirit pointer-events-auto touch-none select-none ${
+          armed ? 'scale-105' : ''
         }`}
-        style={{ width: TUTORIAL_BELL_SIZE, height: TUTORIAL_BELL_SIZE }}
+        style={{ width: TUTORIAL_SPIRIT_SIZE, height: TUTORIAL_SPIRIT_SIZE }}
       >
-        <span className="text-lg leading-none" aria-hidden>
-          🔔
+        {tickle ? <span className="tutorial-spirit-tickle">{tickle}</span> : null}
+        <span
+          className="tutorial-spirit-art"
+          style={{
+            ['--spirit-h' as string]: '36',
+            ['--trail-x' as string]: '16px',
+            ['--trail-y' as string]: '-8px',
+          }}
+        >
+          <span className="hub-spirit-glow" />
+          <span className="hub-spirit-core" />
+          <span className="hub-spirit-mote" style={{ ['--m' as string]: '0.45' }} />
+          <span className="hub-spirit-mote" style={{ ['--m' as string]: '0.75' }} />
+          <span className="hub-spirit-mote" style={{ ['--m' as string]: '1' }} />
         </span>
       </button>
       {!dragPos && hintOpen && (

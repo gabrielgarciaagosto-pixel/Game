@@ -152,6 +152,17 @@ function isSpawnItem(item: NewsWireItem): boolean {
   return item.live && isSpawnHeadline(headlineById(item.headlineId));
 }
 
+/** A celebrity file is on the wire and still has no body in the house. */
+export function waitingSpawn(
+  wire: readonly NewsWireItem[]
+): { item: NewsWireItem; headline: NewsHeadline } | null {
+  const item = wire.find((row) => isSpawnItem(row) && !row.caseId);
+  if (!item) return null;
+  const headline = headlineById(item.headlineId);
+  if (!headline) return null;
+  return { item, headline };
+}
+
 function miscCount(wire: readonly NewsWireItem[]): number {
   return wire.filter((item) => !isEconomicId(item.headlineId) && !isSpawnItem(item)).length;
 }
@@ -230,10 +241,10 @@ export function advanceNewsWire(input: NewsTickInput): NewsTickResult {
   }
 
   const spawnBusy = wire.some(isSpawnItem) || input.headlineCaseOpen === true;
-  if (!spawnBusy && input.now >= celebGate) {
+  if (!spawnBusy && input.now >= celebGate && !input.coolerFull) {
     celebGate = input.now + NEWS_DAY_MS;
     changed = true;
-    if (rng() < CELEB_ROLL && !input.coolerFull) {
+    if (rng() < CELEB_ROLL) {
       const blocked = blockedIds(wire, recent);
       const h = pickSpawn(blocked, rng);
       if (h) {

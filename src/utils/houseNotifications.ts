@@ -64,6 +64,11 @@ export function notifyHouse(title: string, body: string) {
   void deliver(title, body);
 }
 
+const SMALL_ICON = 'ic_stat_ossuarian';
+const INTAKE_ALARM = 81001;
+const FAMILY_ALARM_BASE = 82000;
+const FAMILY_ALARM_SLOTS = 12;
+
 async function deliver(title: string, body: string) {
   try {
     if (Capacitor.isNativePlatform()) {
@@ -80,7 +85,8 @@ async function deliver(title: string, body: string) {
             title,
             body,
             channelId: CHANNEL_ID,
-            schedule: { at: new Date(Date.now() + 400) },
+            smallIcon: SMALL_ICON,
+            schedule: { at: new Date(Date.now() + 800), allowWhileIdle: true },
           },
         ],
       });
@@ -91,5 +97,70 @@ async function deliver(title: string, body: string) {
     }
   } catch {
     // A missing channel or a denied prompt should not stop the service.
+  }
+}
+
+export interface HouseAlarmPlan {
+  enabled: boolean;
+  /** Wall-clock ms. Null when nothing is due later. */
+  intakeAt: number | null;
+  families: { at: number; name: string }[];
+}
+
+/**
+ * Hand future arrivals and family choices to Android so they still
+ * ping if the WebView is asleep. Foreground races (the toe tag, decay,
+ * the retort) are not scheduled.
+ */
+export async function syncHouseAlarms(plan: HouseAlarmPlan) {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    const local = await localPlugin();
+    const ids = [{ id: INTAKE_ALARM }];
+    for (let i = 0; i < FAMILY_ALARM_SLOTS; i += 1) {
+      ids.push({ id: FAMILY_ALARM_BASE + i });
+    }
+    await local.cancel({ notifications: ids });
+    if (!plan.enabled || !gate()) return;
+    const perm = await local.checkPermissions();
+    if (perm.display !== 'granted') return;
+    await ensureChannel(local);
+    const now = Date.now();
+    const queued: {
+      id: number;
+      title: string;
+      body: string;
+      at: number;
+    }[] = [];
+    if (plan.intakeAt != null && plan.intakeAt > now + 2000) {
+      queued.push({
+        id: INTAKE_ALARM,
+        title: 'New remains',
+        body: 'A body is due at the house. Tag them in the cooler when you open the door.',
+        at: plan.intakeAt,
+      });
+    }
+    plan.families.slice(0, FAMILY_ALARM_SLOTS).forEach((family, index) => {
+      if (family.at <= now + 2000) return;
+      queued.push({
+        id: FAMILY_ALARM_BASE + index,
+        title: 'Family choice',
+        body: `${family.name} is ready to choose from what you have in stock.`,
+        at: family.at,
+      });
+    });
+    if (queued.length === 0) return;
+    await local.schedule({
+      notifications: queued.map((item) => ({
+        id: item.id,
+        title: item.title,
+        body: item.body,
+        channelId: CHANNEL_ID,
+        smallIcon: SMALL_ICON,
+        schedule: { at: new Date(item.at), allowWhileIdle: true },
+      })),
+    });
+  } catch {
+    // Scheduling must not stall intake.
   }
 }

@@ -187,9 +187,15 @@ import {
   THIN_SELECTION_PENALTY,
   clampRating,
   inventoryUnits,
+  ratingTier,
   thinSelectionHit,
 } from '../data/caseRating';
 import { pickFamilyReview } from '../data/familyReviews';
+import {
+  LEGENDARY_CROSS_REP,
+  LEGENDARY_VESSEL_CHANCE,
+  rollLegendaryVisit,
+} from '../data/legendarySpirits';
 import {
   notifyHouse,
   setNotificationGate,
@@ -225,6 +231,7 @@ import {
   headlineFeeDelta,
   intakeNewsFactor,
   quotedPrice,
+  waitingSpawn,
   type NewsWireItem,
 } from '../news/newsWire';
 
@@ -247,12 +254,29 @@ interface GameState {
   titleGate: boolean;
   /** What families and the state call the player. Blank resolves to Mortician. */
   playerName: string;
-  /** new until the first game; offer on the hub; active while the bell is up; done when finished or skipped. */
+  /** new until the first game; offer on the hub; active while the Tutorial Spirit is up; done when finished or skipped. */
   tutorial: TutorialPhase;
   tutorialStep: number;
   tutorialCaseId: string | null;
-  /** Snapped tutorial-bell position. Null uses the left-edge default. */
-  tutorialBell: { x: number; y: number } | null;
+  /** The player has dragged the Tutorial Spirit. The first step waits on this. */
+  tutorialSpiritMoved: boolean;
+  /** Snapped Tutorial Spirit position. Null uses the left-edge default. */
+  tutorialSpirit: { x: number; y: number } | null;
+  /**
+   * A Legendary Spirit waiting on stay or cross over.
+   * Only rolled after an S+ farewell. Not persisted through a missed choice
+   * if the player has not answered; it is saved so a reload keeps the visit.
+   */
+  legendaryOffer: {
+    spiritId: string;
+    decedentName: string;
+    die: number;
+    showSecret: boolean;
+    vesselKind: 'urn' | 'casket';
+    vesselId: string;
+  } | null;
+  /** Spirits who chose to stay. Quiet. No mischief. */
+  legendaryKept: { spiritId: string }[];
   /** Runtime only — which case-file panels are open. */
   filesPanelOpen: boolean;
   archivesPanelOpen: boolean;
@@ -420,7 +444,14 @@ interface GameState {
   skipTutorialStep: () => void;
   completeTutorialStep: () => void;
   replayTutorial: () => void;
-  setTutorialBell: (pos: { x: number; y: number } | null) => void;
+  setTutorialSpirit: (pos: { x: number; y: number } | null) => void;
+  setTutorialSpiritMoved: (moved: boolean) => void;
+  /** Wall clock when the parlor last went to the background. Runtime only. */
+  parlorHiddenAt: number | null;
+  noteParlorHidden: () => void;
+  noteParlorShown: () => void;
+  keepLegendarySpirit: () => void;
+  crossLegendarySpirit: () => void;
   noteTutorialFile: (caseId: string) => void;
   setCaseFilePanels: (filesOpen: boolean, archivesOpen: boolean) => void;
   /**
@@ -1112,7 +1143,10 @@ export function freshPersistedGameFields() {
     tutorial: 'new' as TutorialPhase,
     tutorialStep: 0,
     tutorialCaseId: null as string | null,
-    tutorialBell: null as { x: number; y: number } | null,
+    tutorialSpiritMoved: false,
+    tutorialSpirit: null as { x: number; y: number } | null,
+    legendaryOffer: null as GameState['legendaryOffer'],
+    legendaryKept: [] as { spiritId: string }[],
     showroomInventory: defaultShowroomInventory.map((i) => ({ ...i })),
     urnInventory: {
       urn_carrara_classic: 1,
@@ -1525,6 +1559,7 @@ function tutorialGateOf(state: GameState) {
     (row.cremationPermitStatus !== 'NONE' ||
       state.permitSubmissions.some((sub) => sub.caseId === row.id));
   return {
+    spiritMoved: state.tutorialSpiritMoved,
     filesOpen: state.filesPanelOpen,
     archivesOpen: state.archivesPanelOpen,
     fileRead: state.tutorialFileRead,
@@ -1532,6 +1567,7 @@ function tutorialGateOf(state: GameState) {
     computerOpenApp: state.computerOpenApp,
     permitFiled,
     tagged: row?.isTagged === true,
+    nameExpired: row?.nameExpired === true,
   };
 }
 
@@ -1579,11 +1615,15 @@ function readTutorialBell(value: unknown): { x: number; y: number } | null {
   return { x: pos.x, y: pos.y };
 }
 
+/** One notice per time the cooler fills, not once a second. */
+let coolerHoldAnnounced = false;
+
 export const useGameStore = create<GameState>()(
   persist(
     (set, get) => ({
   ...freshPersistedGameFields(),
   titleGate: true,
+  parlorHiddenAt: null,
   filesPanelOpen: false,
   archivesPanelOpen: false,
   tutorialFileRead: false,
@@ -1658,6 +1698,7 @@ export const useGameStore = create<GameState>()(
       tutorialStep: 0,
       tutorialCaseId: next.id,
       tutorialFileRead: false,
+      tutorialSpiritMoved: false,
       intakeToast: null,
     });
   },
@@ -1681,8 +1722,86 @@ export const useGameStore = create<GameState>()(
       tutorialStep: 0,
       tutorialCaseId: null,
       tutorialFileRead: false,
+      tutorialSpiritMoved: false,
     }),
-  setTutorialBell: (pos) => set({ tutorialBell: pos }),
+  setTutorialSpirit: (pos) => set({ tutorialSpirit: pos }),
+  setTutorialSpiritMoved: (moved) => set({ tutorialSpiritMoved: moved }),
+  noteParlorHidden: () => set({ parlorHiddenAt: gameNow() }),
+  noteParlorShown: () => {
+    const state = get();
+    const hidden = state.parlorHiddenAt;
+    if (hidden == null) return;
+    const gap = Math.max(0, gameNow() - hidden);
+    set({ parlorHiddenAt: null });
+    if (gap < 2000) return;
+    // Family choices and permits live on the real clock. The toe tag,
+    // decay, and the retort do not: those stay foreground races.
+    set({
+      cases: state.cases.map((c) => {
+        if (c.familyUrnRemainingMs == null) return c;
+        return {
+          ...c,
+          familyUrnRemainingMs: Math.max(0, c.familyUrnRemainingMs - gap),
+        };
+      }),
+      permitSubmissions: state.permitSubmissions.map((sub) => {
+        if (sub.status !== 'PENDING' || typeof sub.remainingMs !== 'number') {
+          return sub;
+        }
+        return { ...sub, remainingMs: Math.max(0, sub.remainingMs - gap) };
+      }),
+    });
+  },
+  keepLegendarySpirit: () => {
+    const offer = get().legendaryOffer;
+    if (!offer) return;
+    const kept = get().legendaryKept.some((row) => row.spiritId === offer.spiritId)
+      ? get().legendaryKept
+      : [...get().legendaryKept, { spiritId: offer.spiritId }];
+    set({
+      legendaryKept: kept,
+      legendaryOffer: null,
+      intakeToast: 'They will stay with the house. No one has to leave before they are ready.',
+    });
+  },
+  crossLegendarySpirit: () => {
+    const state = get();
+    const offer = state.legendaryOffer;
+    if (!offer) return;
+    const gifted = Math.random() < LEGENDARY_VESSEL_CHANCE;
+    const urnInventory = { ...state.urnInventory };
+    const casketInventory = { ...state.casketInventory };
+    let toast = 'They crossed over. The house stands a little higher for it.';
+    if (gifted && offer.vesselKind === 'urn') {
+      urnInventory[offer.vesselId] = (urnInventory[offer.vesselId] ?? 0) + 1;
+      const name = getUrnById(offer.vesselId)?.name ?? 'a vessel';
+      toast = `They crossed over and left ${name} with the house.`;
+    } else if (gifted) {
+      casketInventory[offer.vesselId] = (casketInventory[offer.vesselId] ?? 0) + 1;
+      const name = getCasketById(offer.vesselId)?.name ?? 'a vessel';
+      toast = `They crossed over and left ${name} with the house.`;
+    }
+    const nextReputation = state.reputation + LEGENDARY_CROSS_REP;
+    const career = grantCareer({
+      careerXp: state.careerXp,
+      homesKept: state.homesKept,
+      repMilestonesClaimed: state.repMilestonesClaimed,
+      reputation: nextReputation,
+      gain: 0,
+      fanfare: state.rankFanfare,
+    });
+    set({
+      legendaryOffer: null,
+      reputation: nextReputation,
+      careerXp: career.careerXp,
+      homesKept: career.homesKept,
+      repMilestonesClaimed: career.repMilestonesClaimed,
+      rankFanfare: career.rankFanfare,
+      urnInventory,
+      casketInventory,
+      intakeToast: toast,
+    });
+  },
   noteTutorialFile: (caseId) =>
     set((state) => {
       if (state.tutorial !== 'active') return state;
@@ -1923,6 +2042,17 @@ export const useGameStore = create<GameState>()(
     if (made < advanced.spawnCount) {
       spawned -= advanced.spawnCount - made;
     }
+    const holdNote =
+      'The cooler is full. The next arrival is waiting for an open bay.';
+    let holdToast: string | null = null;
+    if (advanced.heldForCooler) {
+      if (!coolerHoldAnnounced) {
+        coolerHoldAnnounced = true;
+        holdToast = holdNote;
+      }
+    } else if (!waitingSpawn(state.newsWire)) {
+      coolerHoldAnnounced = false;
+    }
     const phoneDay = localDayKey(now);
     const phoneReset = state.phoneDayKey !== phoneDay;
     const nextSchedule = {
@@ -1933,14 +2063,17 @@ export const useGameStore = create<GameState>()(
       phoneDayKey: phoneDay,
       phoneCasesToday: phoneReset ? 0 : state.phoneCasesToday,
     };
-    const same =
+        const same =
       nextSchedule.intakeDayKey === state.intakeDayKey &&
       nextSchedule.intakeSpawnedToday === state.intakeSpawnedToday &&
       nextSchedule.nextIntakeAt === state.nextIntakeAt &&
       nextSchedule.intakeBootstrapped === state.intakeBootstrapped &&
       !phoneReset;
-    if (same && made === 0) return;
-    set(nextSchedule);
+    if (same && made === 0 && !holdToast) return;
+    set({
+      ...nextSchedule,
+      ...(holdToast ? { intakeToast: holdToast } : {}),
+    });
   },
 
   placePhoneCall: (contactId) => {
@@ -2046,7 +2179,16 @@ export const useGameStore = create<GameState>()(
       coolerFull: coolerCount >= cap,
       headlineCaseOpen: state.cases.some((c) => c.headlineCase != null),
     });
-    if (!result.changed && !result.spawn) return;
+    const heldHeadline = waitingSpawn(state.newsWire);
+    const holdNote =
+      'The cooler is full. The next arrival is waiting for an open bay.';
+    if (!result.changed && !result.spawn && !(heldHeadline && coolerCount < cap)) {
+      if (heldHeadline && coolerCount >= cap && !coolerHoldAnnounced) {
+        coolerHoldAnnounced = true;
+        set({ intakeToast: holdNote });
+      }
+      return;
+    }
 
     let cases = state.cases;
     let inboxFiles = state.inboxFiles;
@@ -2066,10 +2208,10 @@ export const useGameStore = create<GameState>()(
       wire = wire.map((item) =>
         item === spawnSlot ? { ...item, caseId: next.id } : item
       );
-      intakeToast = `${next.name} — headline intake`;
+      intakeToast = `${next.name} has arrived. A headline intake. Tag them within 60 seconds.`;
       notifyHouse(
         'New remains',
-        `${next.name} has arrived — a headline intake. Tag them within 60 seconds.`
+        `${next.name} has arrived. A headline intake. Tag them within 60 seconds.`
       );
       activeCaseId = activeCaseId ?? next.id;
       lastCase = {
@@ -2078,8 +2220,33 @@ export const useGameStore = create<GameState>()(
         service: directiveLabel(next.directive),
         at: next.arrivedAt,
       };
-    } else if (spawnSlot) {
-      wire = wire.filter((item) => item !== spawnSlot);
+      coolerHoldAnnounced = false;
+    }
+    const pending = waitingSpawn(wire);
+    if (pending && coolerCount < cap && pending.item.caseId == null) {
+      const next = generateHeadlineCase(pending.headline, now);
+      playIntakeBell();
+      cases = [...cases, next];
+      inboxFiles = [toInboxFile(next), ...inboxFiles];
+      wire = wire.map((item) =>
+        item === pending.item ? { ...item, caseId: next.id } : item
+      );
+      intakeToast = `${next.name} has arrived. A headline intake. Tag them within 60 seconds.`;
+      notifyHouse(
+        'New remains',
+        `${next.name} has arrived. A headline intake. Tag them within 60 seconds.`
+      );
+      activeCaseId = activeCaseId ?? next.id;
+      lastCase = {
+        id: next.id,
+        name: displayCaseName(next),
+        service: directiveLabel(next.directive),
+        at: next.arrivedAt,
+      };
+      coolerHoldAnnounced = false;
+    } else if (pending && coolerCount >= cap && !coolerHoldAnnounced) {
+      coolerHoldAnnounced = true;
+      intakeToast = holdNote;
     }
     const chimeFor =
       spawn && !(spawnSlot && coolerCount < cap)
@@ -4098,6 +4265,12 @@ export const useGameStore = create<GameState>()(
       ) {
         vesselBits.push(offeredCasket.name);
       }
+      const legendaryVisit =
+        !serviceFailed &&
+        state.legendaryOffer == null &&
+        ratingTier(rating) === 'S+'
+          ? rollLegendaryVisit()
+          : null;
       const familyReview = serviceFailed
         ? null
         : pickFamilyReview(rating, {
@@ -4405,6 +4578,18 @@ export const useGameStore = create<GameState>()(
           at: gameNow(),
         },
         legalAlert: alertMsg,
+        ...(legendaryVisit
+          ? {
+              legendaryOffer: {
+                spiritId: legendaryVisit.spirit.id,
+                decedentName: c.name,
+                die: legendaryVisit.die,
+                showSecret: legendaryVisit.showSecret,
+                vesselKind: legendaryVisit.spirit.vesselKind,
+                vesselId: legendaryVisit.spirit.vesselId,
+              },
+            }
+          : {}),
         serviceFeedback: serviceFailed
           ? null
           : {
@@ -4639,7 +4824,10 @@ export const useGameStore = create<GameState>()(
         tutorial: state.tutorial,
         tutorialStep: state.tutorialStep,
         tutorialCaseId: state.tutorialCaseId,
-        tutorialBell: state.tutorialBell,
+        tutorialSpiritMoved: state.tutorialSpiritMoved,
+        tutorialSpirit: state.tutorialSpirit,
+        legendaryOffer: state.legendaryOffer,
+        legendaryKept: state.legendaryKept,
       }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<GameState>;
@@ -4835,7 +5023,23 @@ export const useGameStore = create<GameState>()(
             typeof p.tutorialStep === 'number' ? p.tutorialStep : 0,
           tutorialCaseId:
             typeof p.tutorialCaseId === 'string' ? p.tutorialCaseId : null,
-          tutorialBell: readTutorialBell(p.tutorialBell),
+          tutorialSpiritMoved: p.tutorialSpiritMoved === true,
+          tutorialSpirit: readTutorialBell(
+            p.tutorialSpirit ??
+              (p as { tutorialBell?: unknown }).tutorialBell
+          ),
+          legendaryOffer:
+            p.legendaryOffer &&
+            typeof p.legendaryOffer.spiritId === 'string' &&
+            (p.legendaryOffer.vesselKind === 'urn' ||
+              p.legendaryOffer.vesselKind === 'casket')
+              ? p.legendaryOffer
+              : null,
+          legendaryKept: Array.isArray(p.legendaryKept)
+            ? p.legendaryKept.filter(
+                (row) => row && typeof row.spiritId === 'string'
+              )
+            : [],
           filesPanelOpen: false,
           archivesPanelOpen: false,
           tutorialFileRead: false,

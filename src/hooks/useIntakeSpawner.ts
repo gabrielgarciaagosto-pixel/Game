@@ -1,11 +1,14 @@
 import { useEffect, useRef } from 'react';
+import { DAILY_INTAKE_CAP } from '../data/pacing';
 import { useGameStore } from '../store/useGameStore';
+import { gameNow } from '../utils/gameNow';
+import { syncHouseAlarms } from '../utils/houseNotifications';
 
 /**
- * Foreground parlor tick.
- * Intake is a real-day schedule (4–8 hours, five a day). SCI slows that band.
- * Pause writes no arrival. Decay, the toe-tag, urn choice, and permits
- * only move on this tick, so a closed app does not spend them.
+ * Parlor tick.
+ * Intake, family choices, permits, news, and the bank move on the real clock,
+ * including time spent with the app in the background.
+ * The toe tag, decay, and the retort stay foreground races.
  */
 export function useIntakeSpawner() {
   const hasStartedGame = useGameStore((s) => s.hasStartedGame);
@@ -19,12 +22,46 @@ export function useIntakeSpawner() {
   const tickBankLoans = useGameStore((s) => s.tickBankLoans);
   const tickNews = useGameStore((s) => s.tickNews);
   const catchUp = useRef(2);
+  const alarmKey = useRef('');
 
   useEffect(() => {
     if (!hasStartedGame || titleGate) return;
     catchUp.current = 2;
     let cancelled = false;
     let running = false;
+
+    const pushAlarms = () => {
+      const state = useGameStore.getState();
+      const now = gameNow();
+      const wall = Date.now();
+      const intakeAt =
+        state.nextIntakeAt != null && state.nextIntakeAt > now
+          ? wall + (state.nextIntakeAt - now)
+          : null;
+      const families = state.cases
+        .filter(
+          (row) =>
+            typeof row.familyUrnRemainingMs === 'number' &&
+            row.familyUrnRemainingMs > 0
+        )
+        .slice(0, 12)
+        .map((row) => ({
+          name: row.name,
+          at: wall + (row.familyUrnRemainingMs ?? 0),
+        }));
+      const key = [
+        state.notificationsEnabled ? '1' : '0',
+        intakeAt == null ? '' : String(Math.round(intakeAt / 60000)),
+        families.map((family) => Math.round(family.at / 60000)).join(','),
+      ].join('|');
+      if (key === alarmKey.current) return;
+      alarmKey.current = key;
+      void syncHouseAlarms({
+        enabled: state.notificationsEnabled,
+        intakeAt,
+        families,
+      });
+    };
 
     // One system per turn. Running the whole clock inside the effect, and
     // again every second, held the WebView UI thread through intake, tag
@@ -59,15 +96,31 @@ export function useIntakeSpawner() {
           return;
         }
         running = false;
+        pushAlarms();
       };
       window.setTimeout(step, 0);
     };
 
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        useGameStore.getState().noteParlorHidden();
+        alarmKey.current = '';
+        pushAlarms();
+        return;
+      }
+      useGameStore.getState().noteParlorShown();
+      catchUp.current = DAILY_INTAKE_CAP;
+      alarmKey.current = '';
+      runChain();
+    };
+
     runChain();
     const id = window.setInterval(runChain, 1000);
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       cancelled = true;
       window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [
     hasStartedGame,

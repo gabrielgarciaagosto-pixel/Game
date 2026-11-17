@@ -39,6 +39,7 @@ export const DesktopAppIcon: React.FC<{
         onOpen();
       }}
       style={{ touchAction: 'manipulation' }}
+      data-tutorial-target={kind === 'VR441' ? 'vr441' : undefined}
       className="desktop-app-icon flex flex-col items-center gap-1.5 p-1.5 rounded active:bg-white/10 group min-w-0"
     >
       <div className="desktop-icon-face relative w-[4.35rem] h-[4.35rem] rounded-[0.4rem] border border-white/30 shadow-[0_0_14px_rgba(120,255,180,0.22),inset_0_1px_0_rgba(255,255,255,0.28)] overflow-hidden">

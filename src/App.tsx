@@ -26,6 +26,7 @@ import { ServiceMusicAudio } from './components/ServiceMusicAudio';
 import { ShowroomAndChapelModal } from './components/ShowroomAndChapelModal';
 import { UrnFillingMiniGame } from './components/UrnFillingMiniGame';
 import { HouseSettings } from './components/HouseSettings';
+import { LegendarySpiritModal } from './components/LegendarySpiritModal';
 import { TutorialLayer } from './components/TutorialLayer';
 import { UrnStartScreen } from './components/UrnStartScreen';
 import { UrnVaultRoom } from './components/UrnVaultRoom';
@@ -192,6 +193,7 @@ function App() {
       <NotificationPing />
       {!titleGate && <BankForeclosureScreen />}
       {!titleGate && <ServiceFeedbackModal />}
+      {!titleGate && <LegendarySpiritModal />}
       {titleGate || !hasStartedGame ? (
         <UrnStartScreen
           title="OSSUARIAN"
@@ -318,8 +320,8 @@ function App() {
                   }
           }
         >
-          <div className="flex items-center justify-between gap-2 rounded-lg border border-cyan-400 bg-cyan-950 px-2.5 py-0.5 text-cyan-50 shadow-xl">
-            <span className="truncate text-[11px] font-semibold leading-none">{intakeToast}</span>
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-cyan-400 bg-cyan-950 px-2.5 py-1.5 text-cyan-50 shadow-xl">
+            <span className="line-clamp-2 text-[11px] font-semibold leading-snug">{intakeToast}</span>
             <button
               type="button"
               onPointerDown={clearIntakeToast}

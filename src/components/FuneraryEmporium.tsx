@@ -112,6 +112,13 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
   } = useGameStore();
 
   const [tab, setTab] = useState<ShopTab>('URNS');
+
+  useEffect(() => {
+    document.documentElement.dataset.shopOpen = '1';
+    return () => {
+      delete document.documentElement.dataset.shopOpen;
+    };
+  }, []);
   const [inspect, setInspect] = useState<InspectTarget>(null);
   const [now, setNow] = useState(() => gameDate());
   const [confirmBuy, setConfirmBuy] = useState<{
@@ -345,7 +352,7 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
         </div>
       )}
 
-      <div className="relative flex-1 min-h-0 overflow-y-auto p-2 pb-24">
+      <div className="relative flex-1 min-h-0 overflow-y-auto p-2 pb-3">
         {tab === 'URNS' && (
           <div className="space-y-4">
             {rareUrnRows.length > 0 && (

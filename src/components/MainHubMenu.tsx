@@ -182,6 +182,15 @@ function HubRoomButton({
       <button
         type="button"
         {...tap}
+        data-tutorial-target={
+          id === 'COOLER'
+            ? 'cooler'
+            : id === 'CREMATION'
+              ? 'crematory'
+              : id === 'COMPUTER'
+                ? 'computer'
+                : undefined
+        }
         className={`h-full min-h-0 w-full rounded-2xl bg-gradient-to-br ${color} border p-2 flex flex-col justify-between items-start text-left shadow-[0_10px_30px_rgba(0,0,0,0.35)] active:scale-[0.98] relative overflow-hidden`}
       >
         {bursting && <HubBurst id={id} />}

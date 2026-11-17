@@ -407,6 +407,7 @@ export const ComputerRoom: React.FC = () => {
                 </label>
                 <button
                   type="button"
+                  data-tutorial-target="permit"
                   disabled={!canAfford}
                   onClick={onSubmit}
                   style={{ touchAction: 'manipulation' }}

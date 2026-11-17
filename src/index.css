@@ -143,10 +143,16 @@ body {
 }
 html[data-sheet-open] .files-fab-anchor,
 html[data-sheet-open] .dev-summon-fab,
-html[data-sheet-open] .dev-summon-panel {
+html[data-sheet-open] .dev-summon-panel,
+html[data-shop-open] .files-fab-anchor {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
+}
+
+/* The shop used to reserve a black band for FILES and PHONE. */
+html[data-shop-open] .files-overlap-clear {
+  padding-bottom: 0;
 }
 
 /* Phone and files sheets sit above the FAB stack. The height cap keeps
@@ -931,6 +937,101 @@ canvas {
   0%, 100% { opacity: 0.62; transform: scale(0.9); }
   50% { opacity: 1; transform: scale(1.06); }
 }
+
+/* Tutorial Spirit. Same glow, core, and motes as the house spirits. */
+.tutorial-spirit {
+  position: relative;
+  z-index: 2;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  touch-action: none;
+}
+.tutorial-spirit-art {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 84px;
+  height: 84px;
+  margin: -42px 0 0 -42px;
+  animation: tutorial-spirit-bob 3.4s ease-in-out infinite;
+  pointer-events: none;
+}
+/* The house spirits use screen blend and fade into the room.
+   The Tutorial Spirit is a control, so the same art stays solid. */
+.tutorial-spirit-art .hub-spirit-glow {
+  mix-blend-mode: normal;
+  opacity: 1;
+}
+.tutorial-spirit-art .hub-spirit-core {
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+}
+@keyframes tutorial-spirit-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.tutorial-spirit-tickle {
+  position: absolute;
+  left: 0;
+  top: -2.1rem;
+  z-index: 2;
+  max-width: 11rem;
+  padding: 0.28rem 0.5rem;
+  border-radius: 0.7rem;
+  border: 1px solid hsl(36 70% 62% / 0.7);
+  background: rgba(18, 14, 10, 0.94);
+  color: #f3e6c8;
+  font-size: 11px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.tutorial-spirit-ring,
+.tutorial-spirit-trickle {
+  position: fixed;
+  z-index: 79;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.tutorial-spirit-ring i,
+.tutorial-spirit-trickle i {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  background: hsl(36 95% 80% / 0.92);
+  box-shadow: 0 0 6px hsl(36 90% 70% / 0.8);
+}
+.tutorial-spirit-ring i {
+  animation: tutorial-spirit-orbit 3.2s linear infinite;
+  animation-delay: calc(var(--i) * -0.4s);
+}
+@keyframes tutorial-spirit-orbit {
+  from {
+    transform: rotate(calc(var(--i) * 45deg)) translateX(var(--orbit, 28px))
+      rotate(calc(var(--i) * -45deg));
+  }
+  to {
+    transform: rotate(calc(360deg + var(--i) * 45deg)) translateX(var(--orbit, 28px))
+      rotate(calc(var(--i) * -45deg));
+  }
+}
+.tutorial-spirit-trickle i {
+  animation: tutorial-spirit-trickle 1.7s linear infinite;
+  animation-delay: calc(var(--i) * 0.38s);
+  opacity: 0;
+}
+@keyframes tutorial-spirit-trickle {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.6); }
+  20% { opacity: 0.95; }
+  100% {
+    opacity: 0.15;
+    transform: translate(var(--dx), var(--dy)) scale(1);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .hub-bob,
   .hub-fx i,
@@ -947,7 +1048,10 @@ canvas {
   .hub-spirit,
   .hub-spirit-glow,
   .hub-spirit-core,
-  .hub-spirit-mote {
+  .hub-spirit-mote,
+  .tutorial-spirit-art,
+  .tutorial-spirit-ring i,
+  .tutorial-spirit-trickle i {
     animation: none;
   }
   .hub-spirit[data-placed='1'] { opacity: var(--a, 0.55); }

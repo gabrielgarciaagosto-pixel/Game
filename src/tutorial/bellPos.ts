@@ -1,5 +1,9 @@
-/** Round tutorial bell, same footprint as the DEV button. */
-export const TUTORIAL_BELL_SIZE = 44;
+/**
+ * Footprint of the Tutorial Spirit. It replaced the tutorial bell
+ * and keeps the same drag math.
+ */
+export const TUTORIAL_SPIRIT_SIZE = 56;
+export const TUTORIAL_BELL_SIZE = TUTORIAL_SPIRIT_SIZE;
 
 export interface BellPoint {
   x: number;
@@ -39,7 +43,7 @@ export function defaultTutorialBell(bounds: BellBounds): BellPoint {
 
 /** Follow the finger, staying inside the play column. */
 export function clampTutorialBell(raw: BellPoint, bounds: BellBounds): BellPoint {
-  const size = TUTORIAL_BELL_SIZE;
+  const size = TUTORIAL_SPIRIT_SIZE;
   const maxX = Math.max(bounds.safeLeft, bounds.width - bounds.safeRight - size);
   const maxY = Math.max(bounds.safeTop, bounds.height - bounds.safeBottom - size);
   return {
@@ -57,7 +61,7 @@ export function snapTutorialBell(
   bounds: BellBounds,
   obstacles: BellObstacle[]
 ): BellPoint {
-  const size = TUTORIAL_BELL_SIZE;
+  const size = TUTORIAL_SPIRIT_SIZE;
   const leftX = bounds.safeLeft;
   const rightX = Math.max(leftX, bounds.width - bounds.safeRight - size);
   const side: 'left' | 'right' =
@@ -85,7 +89,7 @@ export function snapTutorialBell(
 }
 
 export function bellSide(pos: BellPoint, width: number): 'left' | 'right' {
-  return pos.x + TUTORIAL_BELL_SIZE / 2 <= width / 2 ? 'left' : 'right';
+  return pos.x + TUTORIAL_SPIRIT_SIZE / 2 <= width / 2 ? 'left' : 'right';
 }
 
 function overlaps(

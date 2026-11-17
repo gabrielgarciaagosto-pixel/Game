@@ -3,6 +3,8 @@ import type { StationId } from '../types/game';
 export type TutorialPhase = 'new' | 'offer' | 'active' | 'done';
 
 export interface TutorialGate {
+  /** The player has dragged the Tutorial Spirit at least once. */
+  spiritMoved: boolean;
   filesOpen: boolean;
   archivesOpen: boolean;
   fileRead: boolean;
@@ -10,6 +12,8 @@ export interface TutorialGate {
   computerOpenApp: string | null;
   permitFiled: boolean;
   tagged: boolean;
+  /** The tutorial case lost its name. The tag step can move on. */
+  nameExpired: boolean;
 }
 
 export interface TutorialStep {
@@ -18,8 +22,23 @@ export interface TutorialStep {
   done: (gate: TutorialGate) => boolean;
 }
 
-/** Short taps through one case. Each step waits until its tap has happened. */
+/**
+ * The Tutorial Spirit speaks these in order.
+ * First the player drags it. Then they tag, before the name can be lost.
+ */
 export const TUTORIAL_STEPS: TutorialStep[] = [
+  {
+    id: 'drag',
+    hint: (name) =>
+      `${name}, this is the Tutorial Spirit. Drag it where you can still see your work.`,
+    done: (g) => g.spiritMoved,
+  },
+  {
+    id: 'tag',
+    hint: (name) =>
+      `${name}, open the COOLER and tag the case. If two or three more arrive while you are busy, an untagged body loses its name.`,
+    done: (g) => g.tagged || g.nameExpired,
+  },
   {
     id: 'files',
     hint: (name) => `${name}, a case just arrived. Tap FILES.`,
@@ -45,11 +64,6 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     hint: (name) =>
       `${name}, copy the vitals from the case file and submit the permit.`,
     done: (g) => g.permitFiled,
-  },
-  {
-    id: 'tag',
-    hint: (name) => `${name}, open the COOLER and tag the case.`,
-    done: (g) => g.tagged,
   },
   {
     id: 'crematory',

@@ -12,6 +12,10 @@ const config: CapacitorConfig = {
     SplashScreen: {
       launchAutoHide: true,
     },
+    LocalNotifications: {
+      smallIcon: 'ic_stat_ossuarian',
+      iconColor: '#c4a574',
+    },
     SystemBars: {
       // Native padding here plus our CSS floor double-counts the status bar.
       // MainActivity publishes the real insets as --safe-area-inset-*.

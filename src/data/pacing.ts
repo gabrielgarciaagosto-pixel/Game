@@ -81,7 +81,7 @@ export function advanceIntakeSchedule(input: {
   coolerFull: boolean;
   catchUpLimit: number;
   rng?: () => number;
-}): { schedule: IntakeSchedule; spawnCount: number } {
+}): { schedule: IntakeSchedule; spawnCount: number; heldForCooler: boolean } {
   const rng = input.rng ?? Math.random;
   const today = localDayKey(input.now);
   let { dayKey, spawned, nextAt, bootstrapped } = input.schedule;
@@ -96,6 +96,7 @@ export function advanceIntakeSchedule(input: {
     return {
       schedule: { dayKey, spawned, nextAt: null, bootstrapped },
       spawnCount: 0,
+      heldForCooler: false,
     };
   }
 
@@ -110,9 +111,14 @@ export function advanceIntakeSchedule(input: {
     return {
       schedule: { dayKey, spawned, nextAt, bootstrapped },
       spawnCount,
+      heldForCooler: false,
     };
   }
 
+  // A due arrival is kept until a bay is free. It is not skipped because
+  // the calendar rolled, and it does not count against the daily cap
+  // until the body is actually in the cooler.
+  let heldForCooler = false;
   let guard = 0;
   while (
     nextAt <= input.now &&
@@ -121,26 +127,27 @@ export function advanceIntakeSchedule(input: {
   ) {
     guard += 1;
     const dueDay = localDayKey(nextAt);
-    if (dueDay < today) {
-      nextAt += gap();
-      continue;
-    }
     if (dueDay > today) break;
-    if (spawned >= cap || input.coolerFull) break;
+    if (input.coolerFull) {
+      heldForCooler = true;
+      break;
+    }
+    if (spawned >= cap) break;
     spawnCount += 1;
     spawned += 1;
     nextAt += gap();
   }
   if (
     nextAt <= input.now &&
-    (spawnCount >= input.catchUpLimit || spawned >= cap) &&
-    !input.coolerFull
+    !heldForCooler &&
+    (spawnCount >= input.catchUpLimit || spawned >= cap)
   ) {
     nextAt = input.now + gap();
   }
   return {
     schedule: { dayKey, spawned, nextAt, bootstrapped },
     spawnCount,
+    heldForCooler,
   };
 }
 

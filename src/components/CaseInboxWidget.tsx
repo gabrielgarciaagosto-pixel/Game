@@ -230,6 +230,7 @@ export const CaseInboxWidget: React.FC = () => {
             }}
             style={{ touchAction: 'manipulation' }}
             className={FILE_FAB_CLASS}
+            data-tutorial-target="archives"
           >
             ARCHIVES
           </button>
@@ -249,6 +250,7 @@ export const CaseInboxWidget: React.FC = () => {
           }}
           style={{ touchAction: 'manipulation' }}
           className={FILE_FAB_CLASS}
+          data-tutorial-target="files"
         >
           <span>FILES</span>
           {unreadCount > 0 && (
@@ -279,6 +281,7 @@ export const CaseInboxWidget: React.FC = () => {
               <button
                 key={file.id}
                 type="button"
+                data-tutorial-target="directive"
                 onClick={() => {
                   setSelectedFileId(file.id);
                   markFileRead(file.id);
