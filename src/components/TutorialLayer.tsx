@@ -9,8 +9,12 @@ import {
   type BellObstacle,
   type BellPoint,
 } from '../tutorial/bellPos';
+import { tutorialSpiritHeading } from '../tutorial/spirit';
 import {
   TUTORIAL_STEPS,
+  readTutorialGate,
+  resolveTutorialTarget,
+  tutorialGateKey,
   tutorialTargetSelector,
   type TutorialStep,
 } from '../tutorial/steps';
@@ -265,14 +269,15 @@ export const TutorialLayer: React.FC = () => {
   const filesPanelOpen = useGameStore((s) => s.filesPanelOpen);
   const archivesPanelOpen = useGameStore((s) => s.archivesPanelOpen);
   const settingsOpen = useGameStore((s) => s.settingsOpen);
-  const tutorialFileRead = useGameStore((s) => s.tutorialFileRead);
   const activeStation = useGameStore((s) => s.activeStation);
   const computerOpenApp = useGameStore((s) => s.computerOpenApp);
-  const tutorialCaseId = useGameStore((s) => s.tutorialCaseId);
-  const cases = useGameStore((s) => s.cases);
-  const permitSubmissions = useGameStore((s) => s.permitSubmissions);
   const tutorialSpirit = useGameStore((s) => s.tutorialSpirit);
-  const tutorialSpiritMoved = useGameStore((s) => s.tutorialSpiritMoved);
+  const gateKey = useGameStore((s) => tutorialGateKey(readTutorialGate(s)));
+  const stepSettled = useGameStore((s) => {
+    const current = TUTORIAL_STEPS[s.tutorialStep];
+    return current ? current.done(readTutorialGate(s)) : false;
+  });
+  const noteTutorialSawRejection = useGameStore((s) => s.noteTutorialSawRejection);
   const beginTutorial = useGameStore((s) => s.beginTutorial);
   const skipTutorial = useGameStore((s) => s.skipTutorial);
   const skipTutorialStep = useGameStore((s) => s.skipTutorialStep);
@@ -281,6 +286,7 @@ export const TutorialLayer: React.FC = () => {
   const setTutorialSpiritMoved = useGameStore((s) => s.setTutorialSpiritMoved);
   const [dragging, setDragging] = useState(false);
   const [armed, setArmed] = useState(false);
+  const [arrived, setArrived] = useState(false);
   const [bounds, setBounds] = useState<BellBounds | null>(() =>
     typeof document === 'undefined' ? null : readBounds()
   );
@@ -302,33 +308,46 @@ export const TutorialLayer: React.FC = () => {
   const longPressRef = useRef<number | null>(null);
 
   const name = resolvePlayerName(playerName);
-  const tutorialCase = cases.find((c) => c.id === tutorialCaseId);
-  const permitFiled =
-    tutorialCase == null
-      ? permitSubmissions.length > 0
-      : tutorialCase.cremationPermitStatus !== 'NONE' ||
-        permitSubmissions.some((s) => s.caseId === tutorialCase.id);
-  const tagged = tutorialCase == null ? false : tutorialCase.isTagged;
-  const nameExpired = tutorialCase?.nameExpired === true;
   const step = TUTORIAL_STEPS[tutorialStep];
+  const aimTarget = resolveTutorialTarget(step?.target, filesPanelOpen);
 
   useEffect(() => {
-    if (tutorial !== 'active') return;
-    completeTutorialStep();
-  }, [
-    tutorial,
-    tutorialStep,
-    filesPanelOpen,
-    archivesPanelOpen,
-    tutorialFileRead,
-    activeStation,
-    computerOpenApp,
-    permitFiled,
-    tagged,
-    nameExpired,
-    tutorialSpiritMoved,
-    completeTutorialStep,
-  ]);
+    if (tutorial !== 'active') {
+      setArrived(false);
+    }
+  }, [tutorial]);
+
+  useEffect(() => {
+    if (tutorial !== 'active' || !arrived) return;
+    const id = window.setTimeout(() => completeTutorialStep(), 0);
+    return () => window.clearTimeout(id);
+  }, [tutorial, tutorialStep, gateKey, arrived, completeTutorialStep]);
+
+  useEffect(() => {
+    if (!arrived || tutorial !== 'active' || step?.mode !== 'beat') return;
+    const id = window.setTimeout(() => skipTutorialStep(), step.beatMs ?? 800);
+    return () => window.clearTimeout(id);
+  }, [arrived, tutorial, step, skipTutorialStep]);
+
+  useEffect(() => {
+    if (!arrived || tutorial !== 'active' || step?.target !== 'permit-rejection') return;
+    if (stepSettled) return;
+    let timer = 0;
+    let raf = 0;
+    const look = () => {
+      const el = document.querySelector('[data-tutorial-target="permit-rejection"]');
+      if (el && usableTarget(el)) {
+        timer = window.setTimeout(() => noteTutorialSawRejection(), 1600);
+        return;
+      }
+      raf = requestAnimationFrame(look);
+    };
+    raf = requestAnimationFrame(look);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(timer);
+    };
+  }, [arrived, tutorial, step, stepSettled, gateKey, noteTutorialSawRejection]);
 
   useEffect(() => {
     setDragging(false);
@@ -382,8 +401,44 @@ export const TutorialLayer: React.FC = () => {
   };
 
   useLayoutEffect(() => {
-    if (tutorial !== 'active' || !step || !bounds) {
-      setAim(null);
+    if (tutorial !== 'active' || !bounds || arrived) return;
+    if (tutorialStep > 0 || reduceMotion()) {
+      paint(centerSpirit(bounds), 'center');
+      setArrived(true);
+      return;
+    }
+    const dest = centerSpirit(bounds);
+    const start = { x: -TUTORIAL_SPIRIT_SIZE, y: dest.y };
+    paint(start, 'arrive');
+    const began = performance.now();
+    const glide = { raf: 0, stop: false };
+    const go = (now: number) => {
+      if (glide.stop) return;
+      const raw = Math.min(1, (now - began) / 1500);
+      const t = easeInOut(raw);
+      paint(
+        {
+          x: start.x + (dest.x - start.x) * t,
+          y: start.y + (dest.y - start.y) * t,
+        },
+        raw < 1 ? 'arrive' : 'center'
+      );
+      if (raw < 1) {
+        glide.raf = requestAnimationFrame(go);
+        return;
+      }
+      setArrived(true);
+    };
+    glide.raf = requestAnimationFrame(go);
+    return () => {
+      glide.stop = true;
+      cancelAnimationFrame(glide.raf);
+    };
+  }, [tutorial, bounds, arrived, tutorialStep]);
+
+  useLayoutEffect(() => {
+    if (!arrived || tutorial !== 'active' || !step || !bounds) {
+      if (!arrived) setAim(null);
       return;
     }
     if (step.mode !== 'point') {
@@ -415,7 +470,7 @@ export const TutorialLayer: React.FC = () => {
         cancelAnimationFrame(glide.raf);
       };
     }
-    const selector = tutorialTargetSelector(step.target);
+    const selector = tutorialTargetSelector(aimTarget);
     if (!selector) return;
     const handle = { raf: 0, stop: false };
     let scrolled = false;
@@ -553,9 +608,11 @@ export const TutorialLayer: React.FC = () => {
       cancelAnimationFrame(handle.raf);
     };
   }, [
+    arrived,
     tutorial,
     tutorialStep,
     step,
+    aimTarget,
     bounds,
     activeStation,
     filesPanelOpen,
@@ -570,17 +627,17 @@ export const TutorialLayer: React.FC = () => {
       <div className="fixed inset-0 z-[10010] bg-black/75 flex items-center justify-center p-5">
         <div className="w-full max-w-sm rounded-2xl border border-amber-700/50 bg-[#14110e] p-5 text-[#f3eadc] shadow-2xl">
           <p className="text-[10px] uppercase tracking-[0.22em] text-amber-200/70">
-            First case
+            First cases
           </p>
           <h2
             className="mt-1 text-xl"
             style={{ fontFamily: 'Cinzel, Georgia, serif' }}
           >
-            Walk the first case with me?
+            Walk two cases with me?
           </h2>
           <p className="mt-3 text-sm leading-relaxed text-[#d9cbb8]">
-            I'm the Tutorial Spirit. We go slow, one thing at a time. Skip me
-            if you already know the house.
+            A cremation, then a viewing. We go slow, one thing at a time. Skip
+            me if you already know the house.
           </p>
           <div className="mt-5 flex flex-col gap-2">
             <button
@@ -605,13 +662,21 @@ export const TutorialLayer: React.FC = () => {
 
   if (tutorial !== 'active' || !step || !bounds) return null;
 
-  const talking = step.mode === 'talk' || (step.mode === 'drag' && !dragging);
-  if (step.mode === 'drag' && !dragging) {
+  const talking =
+    arrived &&
+    (step.mode === 'talk' ||
+      step.mode === 'beat' ||
+      (step.mode === 'drag' && !dragging));
+  if (arrived && step.mode === 'drag' && !dragging) {
     posRef.current = centerSpirit(bounds);
   }
-  const pos =
-    posRef.current ??
-    (talking ? centerSpirit(bounds) : placeBell(tutorialSpirit, bounds, obstacles));
+  const pos = !arrived
+    ? (posRef.current ?? {
+        x: -TUTORIAL_SPIRIT_SIZE,
+        y: Math.round(bounds.height * 0.42),
+      })
+    : (posRef.current ??
+      (talking ? centerSpirit(bounds) : placeBell(tutorialSpirit, bounds, obstacles)));
   const cardAtTop =
     aim != null
       ? aim.cy > bounds.height * 0.52
@@ -713,9 +778,10 @@ export const TutorialLayer: React.FC = () => {
       <button
         type="button"
         ref={spiritRef}
-        aria-label="Tutorial Spirit"
+        aria-label={tutorialSpiritHeading()}
         data-tutorial-layer
         data-tutorial-spirit
+        data-tutorial-arrived={arrived ? 'yes' : 'no'}
         data-tutorial-mode={step.mode}
         data-tutorial-step={step.id}
         data-tutorial-mood={step.mood}
@@ -731,7 +797,7 @@ export const TutorialLayer: React.FC = () => {
           top: pos.y,
           width: TUTORIAL_SPIRIT_SIZE,
           height: TUTORIAL_SPIRIT_SIZE,
-          pointerEvents: step.mode === 'point' ? 'none' : 'auto',
+          pointerEvents: !arrived || step.mode === 'point' ? 'none' : 'auto',
         }}
       >
         {tickle ? <span className="tutorial-spirit-tickle">{tickle}</span> : null}
@@ -754,16 +820,18 @@ export const TutorialLayer: React.FC = () => {
           </span>
         </span>
       </button>
-      <Lesson
-        step={step}
-        bounds={bounds}
-        talking={talking}
-        cardAtTop={cardAtTop}
-        line={step.hint(name)}
-        onOkay={() => skipTutorialStep()}
-        onSkipStep={() => skipTutorialStep()}
-        onSkip={() => skipTutorial()}
-      />
+      {arrived && !stepSettled && (
+        <Lesson
+          step={step}
+          bounds={bounds}
+          talking={talking}
+          cardAtTop={cardAtTop}
+          line={step.hint(name)}
+          onOkay={() => skipTutorialStep()}
+          onSkipStep={() => skipTutorialStep()}
+          onSkip={() => skipTutorial()}
+        />
+      )}
     </>
   );
 };
@@ -818,8 +886,11 @@ function Lesson({
           width: Math.max(180, bounds.width - 32),
         }}
       >
-        <p className="text-[10px] uppercase tracking-[0.18em] text-amber-200/70">
-          Tutorial Spirit
+        <p
+          data-tutorial-heading
+          className="text-[10px] uppercase tracking-[0.18em] text-amber-200/70"
+        >
+          {tutorialSpiritHeading()}
         </p>
         <p data-tutorial-line className="mt-1 text-[15px] leading-relaxed text-amber-50">
           {line}
@@ -851,8 +922,11 @@ function Lesson({
         bottom: cardAtTop ? undefined : bounds.safeBottom + 12,
       }}
     >
-      <p className="text-[10px] uppercase tracking-[0.18em] text-amber-200/70">
-        Tutorial Spirit
+      <p
+        data-tutorial-heading
+        className="text-[10px] uppercase tracking-[0.18em] text-amber-200/70"
+      >
+        {tutorialSpiritHeading()}
       </p>
       <p data-tutorial-line className="mt-1 text-[15px] leading-relaxed text-amber-50">
         {line}

@@ -40,6 +40,7 @@ export const CoolerRoom: React.FC = () => {
         </div>
         <button
           type="button"
+          data-tutorial-target="back"
           onPointerDown={() => setActiveStation('OVERVIEW')}
           className="px-3 py-1.5 bg-slate-800 rounded text-xs font-semibold shrink-0"
         >
@@ -159,6 +160,11 @@ export const CoolerRoom: React.FC = () => {
                 <div className="cooler-actions flex gap-1 mt-1">
                   <button
                     type="button"
+                    data-tutorial-target={
+                      tutorialCaseId == null || body.id === tutorialCaseId
+                        ? 'prep'
+                        : undefined
+                    }
                     onPointerDown={(e) => {
                       e.stopPropagation();
                       takeCaseToStation(body.id, 'EMBALMING');
@@ -169,6 +175,11 @@ export const CoolerRoom: React.FC = () => {
                   </button>
                   <button
                     type="button"
+                    data-tutorial-target={
+                      tutorialCaseId == null || body.id === tutorialCaseId
+                        ? 'cremate'
+                        : undefined
+                    }
                     onPointerDown={(e) => {
                       e.stopPropagation();
                       takeCaseToStation(body.id, 'CREMATION');
@@ -179,6 +190,11 @@ export const CoolerRoom: React.FC = () => {
                   </button>
                   <button
                     type="button"
+                    data-tutorial-target={
+                      tutorialCaseId == null || body.id === tutorialCaseId
+                        ? 'chapel-move'
+                        : undefined
+                    }
                     onPointerDown={(e) => {
                       e.stopPropagation();
                       takeCaseToStation(body.id, 'SHOWROOM');

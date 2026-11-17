@@ -189,7 +189,13 @@ function HubRoomButton({
               ? 'crematory'
               : id === 'COMPUTER'
                 ? 'computer'
-                : undefined
+                : id === 'EMBALMING'
+                  ? 'embalming'
+                  : id === 'SHOWROOM'
+                    ? 'chapel'
+                    : id === 'URN_FILLING'
+                      ? 'urn'
+                      : undefined
         }
         className={`h-full min-h-0 w-full rounded-2xl bg-gradient-to-br ${color} border p-2 flex flex-col justify-between items-start text-left shadow-[0_10px_30px_rgba(0,0,0,0.35)] active:scale-[0.98] relative overflow-hidden`}
       >

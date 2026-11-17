@@ -173,6 +173,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
           </button>
           <button
             type="button"
+            data-tutorial-target="back"
             onPointerDown={() => setActiveStation('OVERVIEW')}
             className="px-4 py-2 bg-slate-800 rounded font-semibold"
           >
@@ -258,6 +259,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
         <div className="flex flex-col gap-2 shrink-0">
           <button
             type="button"
+            data-tutorial-target="back"
             onPointerDown={() => setActiveStation('OVERVIEW')}
             className="px-3 py-2 bg-violet-900 rounded text-xs"
           >
@@ -457,6 +459,11 @@ export const ShowroomAndChapelModal: React.FC = () => {
               <button
                 key={t.id}
                 type="button"
+                data-tutorial-target={
+                  currentCase.familyChapelPrefs.musicTrackId === t.id
+                    ? 'chapel-music'
+                    : undefined
+                }
                 onPointerDown={() =>
                   setChapelServiceMusic(currentCase.id, t.id)
                 }
@@ -562,6 +569,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
               <button
                 key={casket.id}
                 type="button"
+                data-tutorial-target="casket"
                 onPointerDown={() =>
                   offerCasketToCase(
                     currentCase.id,
@@ -613,6 +621,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
                 key={flower}
                 type="button"
                 disabled={full || !inv || inv.ownedCount <= 0}
+                data-tutorial-target={flower === 'ROSES' ? 'roses' : undefined}
                 onPointerDown={() =>
                   placeFloralSpray(flower, currentCase.id)
                 }
@@ -651,6 +660,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
             <>
               <button
                 type="button"
+                data-tutorial-target="finalize-burial"
                 onPointerDown={() =>
                   finalizeServiceAndNextCase('BURIAL', currentCase.id)
                 }

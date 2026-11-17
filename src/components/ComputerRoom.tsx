@@ -428,7 +428,13 @@ export const ComputerRoom: React.FC = () => {
                   Recent filings
                 </div>
                 {permitSubmissions.slice(0, 6).map((s) => (
-                  <div key={s.id} className="flex justify-between py-0.5">
+                  <div
+                    key={s.id}
+                    className="flex justify-between py-0.5"
+                    data-tutorial-target={
+                      s.status === 'REJECTED' ? 'permit-rejection' : undefined
+                    }
+                  >
                     <span>fee ${s.filingFee ?? '—'}</span>
                     <span>{s.status}</span>
                   </div>

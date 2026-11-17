@@ -52,6 +52,7 @@ export const ToolDrawer: React.FC<{
               <button
                 key={tool.id}
                 type="button"
+                data-tutorial-target={`tool-${tool.id}`}
                 onPointerDown={(e) => {
                   e.stopPropagation();
                   onSelect(tool.id);
@@ -86,6 +87,7 @@ export const ToolDrawer: React.FC<{
 
       <button
         type="button"
+        data-tutorial-target="tools"
         onPointerDown={(e) => {
           e.stopPropagation();
           onToggle();

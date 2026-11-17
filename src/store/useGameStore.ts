@@ -41,10 +41,14 @@ import {
   rollFamilyKin,
 } from '../data/playerName';
 import {
+  TUTORIAL_CASE2_ARRIVE_ID,
   TUTORIAL_STEPS,
   TUTORIAL_TAG_HOLD_MS,
   TUTORIAL_TAG_STEP,
+  nextTutorialBeat,
+  readTutorialGate,
   releaseHeldTagWindow,
+  tutorialReleasesTag,
   type TutorialPhase,
 } from '../tutorial/steps';
 import { getCremationTargets } from '../utils/mortuaryMath';
@@ -267,6 +271,8 @@ interface GameState {
   tutorialSpiritMoved: boolean;
   /** Snapped Tutorial Spirit position. Null uses the left-edge default. */
   tutorialSpirit: { x: number; y: number } | null;
+  /** Furthest urn-processor beat while the tutorial is active. */
+  tutorialBeat: string | null;
   /**
    * A Legendary Spirit waiting on stay or cross over.
    * Only rolled after an S+ farewell. Not persisted through a missed choice
@@ -286,6 +292,8 @@ interface GameState {
   filesPanelOpen: boolean;
   archivesPanelOpen: boolean;
   tutorialFileRead: boolean;
+  /** The player has looked at a REJECTED filing. Runtime only. */
+  tutorialSawRejection: boolean;
   settingsOpen: boolean;
   cash: number;
   reputation: number;
@@ -451,6 +459,8 @@ interface GameState {
   replayTutorial: () => void;
   setTutorialSpirit: (pos: { x: number; y: number } | null) => void;
   setTutorialSpiritMoved: (moved: boolean) => void;
+  noteTutorialBeat: (beat: string) => void;
+  noteTutorialSawRejection: () => void;
   /** Wall clock when the parlor last went to the background. Runtime only. */
   parlorHiddenAt: number | null;
   noteParlorHidden: () => void;
@@ -1150,6 +1160,7 @@ export function freshPersistedGameFields() {
     tutorialCaseId: null as string | null,
     tutorialSpiritMoved: false,
     tutorialSpirit: null as { x: number; y: number } | null,
+    tutorialBeat: null as string | null,
     legendaryOffer: null as GameState['legendaryOffer'],
     legendaryKept: [] as { spiritId: string }[],
     showroomInventory: defaultShowroomInventory.map((i) => ({ ...i })),
@@ -1558,21 +1569,31 @@ function stepOneRetort(
 }
 
 function tutorialGateOf(state: GameState) {
-  const row = state.cases.find((c) => c.id === state.tutorialCaseId);
-  const permitFiled =
-    row != null &&
-    (row.cremationPermitStatus !== 'NONE' ||
-      state.permitSubmissions.some((sub) => sub.caseId === row.id));
+  return readTutorialGate(state);
+}
+
+function spawnTutorialViewing(now: number): DecedentCase {
+  const base = generateRandomCase(now);
   return {
-    spiritMoved: state.tutorialSpiritMoved,
-    filesOpen: state.filesPanelOpen,
-    archivesOpen: state.archivesPanelOpen,
-    fileRead: state.tutorialFileRead,
-    activeStation: state.activeStation,
-    computerOpenApp: state.computerOpenApp,
-    permitFiled,
-    tagged: row?.isTagged === true,
-    nameExpired: row?.nameExpired === true,
+    ...base,
+    directive: 'BURIAL_VIEWING',
+    familyRelation: 'Dad',
+    familyRequestedUrnId: null,
+    familyRequestedCasketId: null,
+    basePayout: basePayoutFor('BURIAL_VIEWING'),
+    cremationPermitStatus: initialPermitStatus('BURIAL_VIEWING'),
+    cremationPermitSubmittedAt: null,
+    cremationPermitEvaluatesAt: null,
+    cremationPermitRejectReason: null,
+    unpermittedCremation: false,
+    isTagged: false,
+    nameExpired: false,
+    isEmbalmed: false,
+    isCremated: false,
+    isUrnFilled: false,
+    location: 'COOLER',
+    tagExpiresAt: now + TUTORIAL_TAG_HOLD_MS,
+    tagRemainingMs: TUTORIAL_TAG_HOLD_MS,
   };
 }
 
@@ -1596,20 +1617,40 @@ function advanceTutorial(state: GameState, force: boolean) {
   const step = TUTORIAL_STEPS[state.tutorialStep];
   if (!force && (!step || !step.done(tutorialGateOf(state)))) return state;
   const next = state.tutorialStep + 1;
-  const released =
-    next >= TUTORIAL_TAG_STEP
-      ? casesWithTagWindowReleased(state, gameNow())
-      : null;
-  const casesPatch = released ? { cases: released } : {};
+  const entering = TUTORIAL_STEPS[next];
+  const released = tutorialReleasesTag(entering?.id)
+    ? casesWithTagWindowReleased(state, gameNow())
+    : null;
   if (!step || next >= TUTORIAL_STEPS.length) {
     return {
-      ...casesPatch,
+      ...(released ? { cases: released } : {}),
       tutorial: 'done' as const,
       tutorialStep: 0,
       tutorialFileRead: false,
+      tutorialSawRejection: false,
+      tutorialBeat: null,
     };
   }
-  return { ...casesPatch, tutorialStep: next, tutorialFileRead: false };
+  const viewing =
+    entering?.id === TUTORIAL_CASE2_ARRIVE_ID
+      ? spawnTutorialViewing(gameNow())
+      : null;
+  const cases = viewing
+    ? [...(released ?? state.cases), viewing]
+    : released ?? null;
+  return {
+    ...(cases ? { cases } : {}),
+    ...(viewing
+      ? {
+          inboxFiles: [toInboxFile(viewing), ...state.inboxFiles],
+          tutorialCaseId: viewing.id,
+          activeCaseId: viewing.id,
+        }
+      : {}),
+    tutorialStep: next,
+    tutorialFileRead: false,
+    tutorialSawRejection: false,
+  };
 }
 
 function readTutorialBell(value: unknown): { x: number; y: number } | null {
@@ -1633,6 +1674,7 @@ export const useGameStore = create<GameState>()(
   filesPanelOpen: false,
   archivesPanelOpen: false,
   tutorialFileRead: false,
+  tutorialSawRejection: false,
   settingsOpen: false,
   computerOpenApp: null,
   bankOpenTab: null,
@@ -1704,7 +1746,9 @@ export const useGameStore = create<GameState>()(
       tutorialStep: 0,
       tutorialCaseId: next.id,
       tutorialFileRead: false,
+      tutorialSawRejection: false,
       tutorialSpiritMoved: false,
+      tutorialBeat: null,
       intakeToast: null,
     });
   },
@@ -1715,6 +1759,8 @@ export const useGameStore = create<GameState>()(
         tutorial: 'done',
         tutorialStep: 0,
         tutorialFileRead: false,
+        tutorialSawRejection: false,
+        tutorialBeat: null,
         ...(released ? { cases: released } : {}),
       };
     }),
@@ -1728,10 +1774,24 @@ export const useGameStore = create<GameState>()(
       tutorialStep: 0,
       tutorialCaseId: null,
       tutorialFileRead: false,
+      tutorialSawRejection: false,
       tutorialSpiritMoved: false,
+      tutorialBeat: null,
     }),
   setTutorialSpirit: (pos) => set({ tutorialSpirit: pos }),
   setTutorialSpiritMoved: (moved) => set({ tutorialSpiritMoved: moved }),
+  noteTutorialBeat: (beat) =>
+    set((state) => {
+      if (state.tutorial !== 'active') return state;
+      const next = nextTutorialBeat(state.tutorialBeat, beat);
+      if (next === state.tutorialBeat) return state;
+      return { tutorialBeat: next };
+    }),
+  noteTutorialSawRejection: () =>
+    set((state) => {
+      if (state.tutorial !== 'active' || state.tutorialSawRejection) return state;
+      return { tutorialSawRejection: true };
+    }),
   noteParlorHidden: () => set({ parlorHiddenAt: gameNow() }),
   noteParlorShown: () => {
     const state = get();
@@ -1825,6 +1885,7 @@ export const useGameStore = create<GameState>()(
       filesPanelOpen: false,
       archivesPanelOpen: false,
       tutorialFileRead: false,
+      tutorialSawRejection: false,
       settingsOpen: false,
       computerOpenApp: null,
       bankOpenTab: null,
@@ -4853,6 +4914,7 @@ export const useGameStore = create<GameState>()(
         tutorialCaseId: state.tutorialCaseId,
         tutorialSpiritMoved: state.tutorialSpiritMoved,
         tutorialSpirit: state.tutorialSpirit,
+        tutorialBeat: state.tutorialBeat,
         legendaryOffer: state.legendaryOffer,
         legendaryKept: state.legendaryKept,
       }),
@@ -5051,6 +5113,8 @@ export const useGameStore = create<GameState>()(
           tutorialCaseId:
             typeof p.tutorialCaseId === 'string' ? p.tutorialCaseId : null,
           tutorialSpiritMoved: p.tutorialSpiritMoved === true,
+          tutorialBeat:
+            typeof p.tutorialBeat === 'string' ? p.tutorialBeat : null,
           tutorialSpirit: readTutorialBell(
             p.tutorialSpirit ??
               (p as { tutorialBell?: unknown }).tutorialBell
@@ -5070,6 +5134,7 @@ export const useGameStore = create<GameState>()(
           filesPanelOpen: false,
           archivesPanelOpen: false,
           tutorialFileRead: false,
+          tutorialSawRejection: false,
           settingsOpen: false,
           titleGate: true,
           intakeToast:

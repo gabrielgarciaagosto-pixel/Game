@@ -80,6 +80,7 @@ export const CaseInboxWidget: React.FC = () => {
     setServiceDate,
     setCaseFilePanels,
     noteTutorialFile,
+    tutorialCaseId,
     cases,
     finalizeServiceAndNextCase,
     urnInventory,
@@ -281,7 +282,11 @@ export const CaseInboxWidget: React.FC = () => {
               <button
                 key={file.id}
                 type="button"
-                data-tutorial-target="directive"
+                data-tutorial-target={
+                  tutorialCaseId == null || file.id === tutorialCaseId
+                    ? 'directive'
+                    : undefined
+                }
                 onClick={() => {
                   setSelectedFileId(file.id);
                   markFileRead(file.id);
@@ -396,7 +401,14 @@ export const CaseInboxWidget: React.FC = () => {
                       activeFile.cremationPermitStatus !== 'NOT_REQUIRED' && (
                         <div className="pt-1 border-t border-slate-800 text-[11px]">
                           <span className="text-slate-500">Cremation permit: </span>
-                          <strong className="case-permit-ink">
+                          <strong
+                            className="case-permit-ink"
+                            data-tutorial-target={
+                              activeFile.cremationPermitStatus === 'REJECTED'
+                                ? 'permit-rejection'
+                                : 'permit-status'
+                            }
+                          >
                             {permitStatusLabel(activeFile.cremationPermitStatus)}
                           </strong>
                           {activeFile.cremationPermitRejectReason && (
@@ -572,6 +584,7 @@ export const CaseInboxWidget: React.FC = () => {
                   ) : (
                     <button
                       type="button"
+                      data-tutorial-target="schedule"
                       onClick={openSchedule}
                       style={{ touchAction: 'manipulation' }}
                       className="w-full py-2.5 bg-sky-600 active:bg-sky-500 rounded font-bold text-sm"
@@ -590,6 +603,7 @@ export const CaseInboxWidget: React.FC = () => {
                       </p>
                       <button
                         type="button"
+                        data-tutorial-target="hand-urn"
                         disabled={!urnInHand}
                         onClick={handUrnToFamily}
                         style={{ touchAction: 'manipulation' }}
@@ -866,7 +880,14 @@ function ArchivesPanel({
               {active.cremationPermitStatus !== 'NOT_REQUIRED' && (
                 <div className="pt-1 border-t border-stone-400/70 text-[11px]">
                   <span>Cremation permit: </span>
-                  <strong className="case-permit-ink">
+                  <strong
+                    className="case-permit-ink"
+                    data-tutorial-target={
+                      active.cremationPermitStatus === 'REJECTED'
+                        ? 'permit-rejection'
+                        : 'permit-status'
+                    }
+                  >
                     {permitStatusLabel(active.cremationPermitStatus)}
                   </strong>
                 </div>

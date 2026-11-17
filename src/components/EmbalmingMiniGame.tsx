@@ -148,6 +148,7 @@ export const EmbalmingMiniGame: React.FC = () => {
           </h2>
           <button
             type="button"
+            data-tutorial-target="back"
             onPointerDown={() => setActiveStation('OVERVIEW')}
             className="px-4 py-2 bg-slate-800 rounded text-sm"
           >
@@ -286,6 +287,7 @@ export const EmbalmingMiniGame: React.FC = () => {
           </button>
           <button
             type="button"
+            data-tutorial-target="back"
             onPointerDown={() => setActiveStation('OVERVIEW')}
             className="px-4 py-2 bg-slate-800 rounded text-sm active:bg-slate-700"
           >
@@ -437,6 +439,7 @@ export const EmbalmingMiniGame: React.FC = () => {
 
         <button
           type="button"
+          data-tutorial-target="inject"
           onPointerDown={() =>
             completeEmbalming(
               evaluationFinal.rank,

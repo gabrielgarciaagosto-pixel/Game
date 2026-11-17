@@ -210,17 +210,20 @@ function PushButton({
   onPress,
   disabled,
   size = 'md',
+  tutorialTarget,
 }: {
   color: 'green' | 'red' | 'silver';
   label: string;
   onPress: () => void;
   disabled?: boolean;
   size?: 'sm' | 'md';
+  tutorialTarget?: string;
 }) {
   const look = React.useContext(ButtonLookContext);
   return (
     <button
       type="button"
+      data-tutorial-target={tutorialTarget}
       disabled={disabled}
       onPointerDown={(e) => {
         e.stopPropagation();
@@ -241,6 +244,7 @@ function HoldButton({
   onHoldEnd,
   disabled,
   size = 'md',
+  tutorialTarget,
 }: {
   color: 'green' | 'red' | 'silver';
   label: string;
@@ -248,6 +252,7 @@ function HoldButton({
   onHoldEnd: () => void;
   disabled?: boolean;
   size?: 'sm' | 'md';
+  tutorialTarget?: string;
 }) {
   const look = React.useContext(ButtonLookContext);
   const startRef = useRef(onHoldStart);
@@ -258,6 +263,7 @@ function HoldButton({
   return (
     <button
       type="button"
+      data-tutorial-target={tutorialTarget}
       disabled={disabled}
       onPointerDown={(e) => {
         if (disabled) return;
@@ -298,11 +304,13 @@ function StatusLamp({
   color,
   label,
   compact,
+  tutorialTarget,
 }: {
   on: boolean;
   color: 'white' | 'amber' | 'green' | 'red';
   label: string;
   compact?: boolean;
+  tutorialTarget?: string;
 }) {
   const look = React.useContext(ButtonLookContext);
   const lit =
@@ -314,7 +322,10 @@ function StatusLamp({
           ? 'bg-red-500 shadow-[0_0_12px_#ef4444]'
           : 'bg-zinc-100 shadow-[0_0_10px_#f4f4f5]';
   return (
-    <div className="flex flex-col items-center gap-0.5 min-w-0 w-full">
+    <div
+      className="flex flex-col items-center gap-0.5 min-w-0 w-full"
+      data-tutorial-target={tutorialTarget}
+    >
       <div
         className={`w-4 h-4 rounded-full border border-zinc-700 transition-all shrink-0 ${
           on ? lit : 'bg-zinc-800'
@@ -938,6 +949,7 @@ export const CremationMiniGame: React.FC = () => {
           </h2>
           <button
             type="button"
+            data-tutorial-target="back"
             onPointerDown={() => setActiveStation('OVERVIEW')}
             className="px-3 py-2 bg-stone-800 rounded text-xs shrink-0"
           >
@@ -1011,6 +1023,7 @@ export const CremationMiniGame: React.FC = () => {
           label="START"
           onPress={startBlower}
           size={zoomed ? 'md' : 'sm'}
+          tutorialTarget="blower-start"
         />
         <PushButton
           color="red"
@@ -1039,6 +1052,7 @@ export const CremationMiniGame: React.FC = () => {
           on={heated && !purging}
           color="green"
           label="Heated"
+          tutorialTarget="heated"
         />
       </div>
 
@@ -1052,6 +1066,7 @@ export const CremationMiniGame: React.FC = () => {
           onPress={startSecondary}
           disabled={!heated}
           size={zoomed ? 'md' : 'sm'}
+          tutorialTarget="secondary-start"
         />
         <PushButton
           color="red"
@@ -1088,6 +1103,7 @@ export const CremationMiniGame: React.FC = () => {
           onPress={startPrimary}
           disabled={!canStartPrimary}
           size={zoomed ? 'md' : 'sm'}
+          tutorialTarget="primary-start"
         />
         <PushButton
           color="red"
@@ -1124,6 +1140,7 @@ export const CremationMiniGame: React.FC = () => {
           onHoldStart={() => patchRetort({ doorMoving: 'UP' })}
           onHoldEnd={() => patchRetort({ doorMoving: null })}
           size={zoomed ? 'md' : 'sm'}
+          tutorialTarget="door-up"
         />
         <HoldButton
           color="silver"
@@ -1167,6 +1184,7 @@ export const CremationMiniGame: React.FC = () => {
             });
             setPanelZoomed(false);
           }}
+          data-tutorial-target="begin-sweep"
           className="mt-3 w-full py-2.5 bg-emerald-700 text-white font-bold rounded text-xs"
         >
           Cool & Begin 3-Tool Sweep →
@@ -1177,6 +1195,7 @@ export const CremationMiniGame: React.FC = () => {
         <button
           type="button"
           onPointerDown={finishRetortProcess}
+          data-tutorial-target="transfer-tray"
           className="mt-3 w-full py-2.5 bg-amber-500 text-zinc-950 font-bold rounded text-xs"
         >
           Transfer Tray to Urn Processor →
@@ -1224,6 +1243,7 @@ export const CremationMiniGame: React.FC = () => {
           <div className="flex flex-col gap-1 shrink-0">
             <button
               type="button"
+              data-tutorial-target="back"
               onPointerDown={() => setActiveStation('OVERVIEW')}
               className="px-2.5 py-1.5 bg-stone-800 rounded text-[10px]"
             >
@@ -1512,6 +1532,7 @@ export const CremationMiniGame: React.FC = () => {
               {phase === 'SWEEP' && fineAshLeft === 0 && (
                 <button
                   type="button"
+                  data-tutorial-target="transfer-tray"
                   onPointerDown={finishRetortProcess}
                   className="absolute bottom-2 left-2 right-2 z-[60] py-2 bg-amber-500 text-stone-950 font-bold rounded text-[11px]"
                 >
