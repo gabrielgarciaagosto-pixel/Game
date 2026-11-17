@@ -321,6 +321,25 @@ export function PlainHandBrushArt({
 
 const FRAGMENT_WIRES = 46;
 const FRAGMENT_ATTACH_Y = 286;
+/** Chrome shaft. Wires stay outside this column, on the head only. */
+const FRAGMENT_POLE_L = 62;
+const FRAGMENT_POLE_R = 78;
+
+function fragmentWireX(index: number): number {
+  const leftCount = Math.round(FRAGMENT_WIRES * 0.5);
+  if (index < leftCount) {
+    const t = leftCount <= 1 ? 0.5 : index / (leftCount - 1);
+    return 8 + t * (FRAGMENT_POLE_L - 6 - 8);
+  }
+  const rightCount = FRAGMENT_WIRES - leftCount;
+  const j = index - leftCount;
+  const t = rightCount <= 1 ? 0.5 : j / (rightCount - 1);
+  return FRAGMENT_POLE_R + 6 + t * (132 - (FRAGMENT_POLE_R + 6));
+}
+
+function stayOffPole(x: number, anchor: number): number {
+  return anchor < 70 ? Math.min(x, FRAGMENT_POLE_L - 4) : Math.max(x, FRAGMENT_POLE_R + 4);
+}
 
 function fragmentWire(
   index: number,
@@ -328,16 +347,15 @@ function fragmentWire(
   lean: number,
   push: number
 ): { d: string; stroke: string; width: number } {
-  const span = FRAGMENT_WIRES - 1;
-  const t = index / span;
-  const edge = Math.abs(t - 0.5) * 2;
-  const x = 10 + t * 120 + (rank === 0 ? -0.6 : 0.7);
-  const length = (rank === 0 ? 46 : 54) - edge * 5 + (index % 3) * 1.1;
-  const bow = lean * (8 + edge * 7);
+  const anchor = fragmentWireX(index) + (rank === 0 ? -0.5 : 0.5);
+  const x = stayOffPole(anchor, anchor);
+  const fromCenter = Math.min(1, Math.abs(x - 70) / 62);
+  const length = (rank === 0 ? 46 : 54) - (1 - fromCenter) * 4 + (index % 3) * 1.1;
+  const bow = lean * (8 + (1 - fromCenter) * 4);
   const squash = push * (rank === 0 ? 10 : 14);
-  const tipX = x + bow;
+  const tipX = stayOffPole(x + bow, x);
   const tipY = FRAGMENT_ATTACH_Y - length + squash;
-  const cx = x + bow * 0.62;
+  const cx = stayOffPole(x + bow * 0.62, x);
   const cy = FRAGMENT_ATTACH_Y - length * 0.46;
   const stroke =
     rank === 0
@@ -409,13 +427,9 @@ export function HandBrushArt({
           <stop offset="1" stopColor="#050505" />
         </linearGradient>
       </defs>
-      <rect x="62" y="36" width="16" height="250" rx="3" fill={`url(#${pole})`} />
-      <path d="M66 44 v234" stroke="#ffffff" strokeWidth="1.1" opacity="0.55" />
-      <path d="M72.5 48 v226" stroke="#9aa3ab" strokeWidth="0.6" opacity="0.45" />
       <rect x="58" y="10" width="24" height="34" rx="7" fill={`url(#${grip})`} />
       <path d="M64 16 v22" stroke="#6b6b6b" strokeWidth="1.2" opacity="0.55" strokeLinecap="round" />
       <rect x="60" y="40" width="20" height="5" rx="1" fill="#1c1c1c" />
-      <rect x="58" y="278" width="24" height="10" rx="2" fill="#9aa3ab" />
       <rect x="8" y="286" width="124" height="22" rx="2" fill={`url(#${wood})`} stroke="#a67c3d" strokeWidth="0.8" />
       <path d="M14 294 h112 M18 302 h104" stroke="#f8edd6" strokeWidth="0.7" opacity="0.45" />
       <rect x="8" y="284" width="124" height="5" fill={`url(#${brass})`} />
@@ -447,6 +461,10 @@ export function HandBrushArt({
           />
         ))}
       </g>
+      <rect x="62" y="36" width="16" height="262" rx="2" fill={`url(#${pole})`} />
+      <path d="M66 44 v246" stroke="#ffffff" strokeWidth="1.1" opacity="0.55" />
+      <path d="M72.5 48 v238" stroke="#9aa3ab" strokeWidth="0.6" opacity="0.45" />
+      <rect x="59" y="274" width="22" height="8" rx="1" fill="#c5ced6" />
     </svg>
   );
 }
