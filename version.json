@@ -1,6 +1,6 @@
 {
-  "versionName": "0.9.66-demo",
-  "versionCode": 84,
-  "apkUrl": "https://github.com/gabrielgarciaagosto-pixel/Game/raw/4c44c70be545256fe6ffdfb25a4b6dc3de39fe5c/demo/Ossuarian-FirstUrn-v0.9.66-demo.apk",
-  "notes": "The hand brush sweeps ash, and the smaller brush is the Fragment Brush."
+  "versionName": "0.9.67-demo",
+  "versionCode": 85,
+  "apkUrl": "https://github.com/gabrielgarciaagosto-pixel/Game/raw/b46c996ae0e59dd2138079f79e8c8614514e752f/demo/Ossuarian-FirstUrn-v0.9.67-demo.apk",
+  "notes": "Uninstall the previous demo before installing this one. The signature is new."
 }
