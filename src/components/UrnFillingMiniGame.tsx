@@ -10,15 +10,19 @@ import { hapticHammer } from '../utils/haptics';
 import { getUrnById, URN_CATALOG } from '../data/urnCatalog';
 import { UrnVessel } from './urns/UrnVessel';
 import {
+  AshField,
   BoneFragment,
+  CremainsMagnet,
   CrushHammer,
   MetalBit,
   type BoneKind,
+  type BoneTone,
   type MetalKind,
 } from './urns/BoneArt';
 import { startAshPourSfx, stopAshPourSfx } from '../utils/soundEffects';
 import { boneCrushSfx } from '../audio/boneCrushSfx';
 import { extractorSfx } from '../audio/extractorSfx';
+import { cremulatorSfx } from '../audio/cremulatorSfx';
 
 type Phase =
   | 'CRUSH'
@@ -44,6 +48,7 @@ interface BoneChunk {
   /** Share of the body. Splits keep the same total. */
   weight: number;
   crushed: boolean;
+  tone: BoneTone;
 }
 
 interface MetalFragment {
@@ -55,8 +60,8 @@ interface MetalFragment {
 }
 
 const BONE_CYCLE: BoneKind[] = ['SHAFT', 'SKULL', 'RIB', 'VERTEBRA', 'KNUCKLE'];
-const STARTER_BONES = 18;
-const BONE_CAP = 56;
+const STARTER_BONES = 42;
+const BONE_CAP = 96;
 
 function starterBones(): BoneChunk[] {
   return Array.from({ length: STARTER_BONES }, (_, i) => {
@@ -64,13 +69,14 @@ function starterBones(): BoneChunk[] {
     return {
       id: i,
       kind,
-      x: 10 + ((i * 17) % 78),
-      y: 14 + ((i * 23) % 62),
-      rot: (i * 37) % 80 - 40,
-      size: kind === 'KNUCKLE' ? 46 : kind === 'RIB' ? 58 : 52 + (i % 3) * 8,
+      x: 8 + ((i * 19) % 84),
+      y: 16 + ((i * 13) % 64),
+      rot: (i * 37) % 110 - 55,
+      size: kind === 'KNUCKLE' ? 34 : kind === 'RIB' ? 46 : 40 + (i % 4) * 5,
       stage: 0 as const,
       weight: 6,
       crushed: false,
+      tone: (i % 5 === 0 ? 2 : i % 2 === 0 ? 1 : 0) as BoneTone,
     };
   });
 }
@@ -103,6 +109,7 @@ export const UrnFillingMiniGame: React.FC = () => {
     buyReplacementCremulator,
     cash,
     urnInventory,
+    noteTutorialBeat,
   } = useGameStore();
   const currentCase = caseAtLocation(cases, 'URN_FILLING', activeCaseId);
 
@@ -138,6 +145,10 @@ export const UrnFillingMiniGame: React.FC = () => {
   };
 
   const [phase, setPhase] = useState<Phase>(resumePhase);
+
+  useEffect(() => {
+    noteTutorialBeat(phase);
+  }, [phase, noteTutorialBeat]);
   const [bones, setBones] = useState<BoneChunk[]>(starterBones);
   const [motes, setMotes] = useState<
     Array<{ id: number; x: number; y: number; dx: number; dy: number; size: number }>
@@ -179,6 +190,7 @@ export const UrnFillingMiniGame: React.FC = () => {
   const trayRef = useRef<HTMLDivElement>(null);
   const pourRef = useRef<HTMLDivElement>(null);
   const lastHammer = useRef(0);
+  const millToken = useRef(0);
 
   const familyUrn = getUrnById(currentCase?.familyRequestedUrnId ?? null);
   const offeredUrn = getUrnById(currentCase?.offeredUrnId ?? null);
@@ -223,9 +235,11 @@ export const UrnFillingMiniGame: React.FC = () => {
   useEffect(() => {
     void extractorSfx.preload();
     void boneCrushSfx.preload();
+    void cremulatorSfx.preload();
     return () => {
       extractorSfx.stop();
       boneCrushSfx.stop();
+      cremulatorSfx.stop();
     };
   }, []);
 
@@ -239,7 +253,7 @@ export const UrnFillingMiniGame: React.FC = () => {
     }
     if (phase !== 'CRUSH') return;
     const id = setInterval(() => {
-      setDustLevel((d) => Math.min(92, d + 3));
+      setDustLevel((d) => Math.min(100, d + 8));
     }, 400);
     return () => clearInterval(id);
   }, [phase, extractorOn]);
@@ -287,10 +301,12 @@ export const UrnFillingMiniGame: React.FC = () => {
           stage: nextStage,
           weight: share,
           crushed: nextStage === 3,
+          tone: bone.tone,
         });
       }
     }
     if (!struck) return;
+    if (!extractorOn) setDustLevel((d) => Math.min(100, d + 14));
     if (Date.now() - lastHammer.current > 120) {
       lastHammer.current = Date.now();
       void hapticHammer();
@@ -363,6 +379,7 @@ export const UrnFillingMiniGame: React.FC = () => {
   };
 
   const startExtractor = () => {
+    noteTutorialBeat('EXTRACTOR');
     setExtractorOn(true);
     extractorSfx.start();
     setDustLevel((d) => Math.max(0, d - 40));
@@ -429,15 +446,27 @@ export const UrnFillingMiniGame: React.FC = () => {
     }
     setProcessing(true);
     setLoadingSorting(false);
+    cremulatorSfx.start();
+    const token = ++millToken.current;
     const start = performance.now();
     const duration = 2800 / speed;
     const tick = (now: number) => {
+      if (millToken.current !== token) return;
       const p = Math.min(100, ((now - start) / duration) * 100);
       setCremulatorProgress(p);
       if (p < 100) requestAnimationFrame(tick);
-      else setProcessing(false);
+      else {
+        setProcessing(false);
+        cremulatorSfx.stop();
+      }
     };
     requestAnimationFrame(tick);
+  };
+
+  const emergencyStop = () => {
+    millToken.current += 1;
+    setProcessing(false);
+    cremulatorSfx.stop();
   };
 
   const applyPourAt = (clientY: number) => {
@@ -586,6 +615,7 @@ export const UrnFillingMiniGame: React.FC = () => {
           </h2>
           <button
             type="button"
+            data-tutorial-target="back"
             onPointerDown={() => setActiveStation('OVERVIEW')}
             className="px-3 py-2 bg-zinc-800 rounded text-xs"
           >
@@ -692,6 +722,7 @@ export const UrnFillingMiniGame: React.FC = () => {
         </div>
         <button
           type="button"
+          data-tutorial-target="back"
           onPointerDown={() => setActiveStation('OVERVIEW')}
           className="px-2.5 py-1.5 bg-zinc-800 rounded text-[10px] shrink-0"
         >
@@ -699,92 +730,118 @@ export const UrnFillingMiniGame: React.FC = () => {
         </button>
       </div>
 
-      {/* Processor control strip — visible once bones reach hatch/processing */}
       {(phase === 'CRUSH' ||
+        phase === 'MAGNET' ||
         phase === 'HATCH' ||
-        phase === 'PROCESSOR' ||
-        hatchLoaded) && (
-        <div className="shrink-0 mt-2 rounded-lg border border-zinc-700 bg-zinc-900/90 p-2">
-          <div className="text-[9px] uppercase tracking-wider text-zinc-500 mb-1.5 text-center">
-            Processing Console
-          </div>
-          <div className="flex items-stretch gap-2">
+        phase === 'PROCESSOR') && (
+        <div className="shrink-0 mt-2 rounded-lg border border-zinc-600 bg-zinc-800 px-2 py-2">
+          <div className="flex items-end justify-between gap-1.5">
             <button
               type="button"
+              data-tutorial-target="extractor"
               onPointerDown={startExtractor}
-              className={`flex-1 py-2.5 rounded font-bold text-[11px] border-2 ${
+              className={`w-[4.6rem] h-14 rounded-md border-b-4 font-black text-[8px] leading-tight tracking-wide ${
                 extractorOn
-                  ? 'bg-emerald-800 border-emerald-400'
-                  : 'bg-zinc-800 border-zinc-600 active:bg-zinc-700'
+                  ? 'bg-emerald-500 border-emerald-900 text-emerald-950'
+                  : 'bg-emerald-700 border-emerald-950 text-emerald-50 active:translate-y-px active:border-b-2'
               }`}
             >
-              Start Extractor
+              START
+              <br />
+              EXTRACTOR
             </button>
-            <div className="flex flex-col items-center justify-center px-1 min-w-[72px]">
+            <div className="flex flex-col items-center justify-end min-w-[4.2rem] pb-0.5">
               <div
-                className={`w-4 h-4 rounded-full border border-zinc-600 mb-1 ${
-                  loadingSorting
-                    ? 'bg-amber-400 shadow-[0_0_10px_#fbbf24] animate-pulse'
-                    : 'bg-zinc-800'
+                className={`w-7 h-7 rounded-full border-2 border-zinc-950 ${
+                  extractorOn || loadingSorting
+                    ? 'bg-yellow-300 shadow-[0_0_14px_#fde047]'
+                    : 'bg-yellow-950'
                 }`}
+                aria-hidden
               />
-              <span className="text-[7px] uppercase text-zinc-400 text-center leading-tight">
-                Loading and sorting
+              <span className="text-[7px] uppercase text-zinc-300 text-center leading-tight mt-1">
+                Sort remains
               </span>
             </div>
             <button
               type="button"
+              data-tutorial-target="engage"
               disabled={!hatchLoaded || processing || cremulatorProgress >= 100}
               onPointerDown={engageCremulator}
-              className={`flex-1 py-2.5 rounded font-bold text-[11px] border-2 disabled:opacity-40 ${
+              className={`w-[4.2rem] h-14 rounded-md border-b-4 font-black text-[8px] leading-tight disabled:opacity-40 ${
                 processing
-                  ? 'bg-red-900 border-red-400'
-                  : 'bg-zinc-800 border-zinc-600 active:bg-zinc-700'
+                  ? 'bg-amber-400 border-amber-900 text-amber-950'
+                  : 'bg-zinc-200 border-zinc-500 text-zinc-900 active:translate-y-px active:border-b-2'
               }`}
             >
-              Engage
+              ENGAGE
             </button>
-            <div className="flex flex-col items-center justify-center px-1 min-w-[64px]">
-              <div
-                className={`w-4 h-4 rounded-full border border-zinc-600 mb-1 ${
-                  processing
-                    ? 'bg-red-500 shadow-[0_0_10px_#ef4444] animate-pulse'
-                    : 'bg-zinc-800'
-                }`}
-              />
-              <span className="text-[7px] uppercase text-zinc-400 text-center">
-                Processing
-              </span>
-            </div>
+            <button
+              type="button"
+              onPointerDown={emergencyStop}
+              className="w-14 h-14 rounded-full border-b-4 border-red-950 bg-red-600 text-white font-black text-[8px] leading-tight active:translate-y-px active:border-b-2"
+            >
+              EMERGENCY
+              <br />
+              STOP
+            </button>
           </div>
           {hatchLoaded && !magnetCleared && !allMetalsCleared && (
-            <p className="text-[9px] text-amber-400 mt-1.5 text-center">
+            <p className="text-[9px] text-amber-300 mt-1.5 text-center">
               Warning: Engage without magnet sweep can destroy the cremulator.
             </p>
           )}
         </div>
       )}
 
-      {phase === 'CRUSH' && (
+      {(phase === 'CRUSH' ||
+        phase === 'MAGNET' ||
+        phase === 'HATCH' ||
+        phase === 'PROCESSOR') && (
         <div className="flex-1 min-h-0 flex flex-col gap-2 mt-2">
           <p className="text-[11px] text-zinc-400 shrink-0">
-            Tap the rubber hammer. Bones break from large, to medium, to small,
-            then to dust. Start Extractor or the tray will blind you.
+            {phase === 'CRUSH' &&
+              'Tap the hammer. The bones stay in this tray. Start the extractor or the dust will white the screen out.'}
+            {phase === 'MAGNET' &&
+              'Drag the magnet through the same pile. It pulls screws, plates, and implants.'}
+            {phase === 'HATCH' &&
+              'Sweep the remains down into the hatch. They are still the bones you crushed.'}
+            {phase === 'PROCESSOR' &&
+              'The tray stays put. Press Engage. Emergency Stop kills the mill.'}
           </p>
           <div
             ref={trayRef}
-            className="relative flex-1 rounded-xl border-2 border-zinc-700 bg-gradient-to-b from-stone-800 to-stone-950 overflow-hidden touch-none"
+            data-tutorial-target={phase === 'CRUSH' ? 'hammer' : undefined}
+            className="relative flex-1 rounded-xl border border-zinc-500 overflow-hidden touch-none"
+            style={{
+              backgroundImage: 'url(/textures/tray-steel.jpg)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
             onPointerDown={(e) => {
-              setHammerHeld(true);
               (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-              smashAt(e.clientX, e.clientY);
+              if (phase === 'CRUSH') {
+                setHammerHeld(true);
+                smashAt(e.clientX, e.clientY);
+              } else if (phase === 'MAGNET') {
+                moveMagnet(e.clientX, e.clientY);
+              } else if (phase === 'HATCH') {
+                sweepToHatch(e.clientX, e.clientY);
+              }
             }}
             onPointerMove={(e) => {
-              if (hammerHeld || e.buttons > 0) smashAt(e.clientX, e.clientY);
+              if (phase === 'CRUSH' && (hammerHeld || e.buttons > 0)) {
+                smashAt(e.clientX, e.clientY);
+              } else if (phase === 'MAGNET' && (e.buttons > 0 || e.pressure > 0)) {
+                moveMagnet(e.clientX, e.clientY);
+              } else if (phase === 'HATCH' && e.buttons > 0) {
+                sweepToHatch(e.clientX, e.clientY);
+              }
             }}
             onPointerUp={() => setHammerHeld(false)}
             onPointerCancel={() => setHammerHeld(false)}
           >
+            <div className="absolute inset-0 bg-black/10 pointer-events-none" />
             {bones.map((b) => (
               <div
                 key={`${b.id}-${b.stage}`}
@@ -795,14 +852,37 @@ export const UrnFillingMiniGame: React.FC = () => {
                   top: `${b.y}%`,
                   width: b.size,
                   height: b.size * 0.62,
-                  ['--rot' as string]: `${b.rot}deg`,
                   transform: `translate(-50%, -50%) rotate(${b.rot}deg)`,
-                  filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.45))',
+                  filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.55))',
+                  opacity: phase === 'PROCESSOR' ? 0.55 : 1,
                 }}
               >
-                <BoneFragment kind={b.kind} stage={b.stage} />
+                <BoneFragment
+                  kind={b.kind}
+                  stage={b.stage}
+                  tone={b.tone}
+                  variant={b.id % 3}
+                />
               </div>
             ))}
+            {fragments.map((f) =>
+              f.collected ? null : (
+                <div
+                  key={`metal-${f.id}`}
+                  className="absolute pointer-events-none z-10"
+                  style={{
+                    left: `${f.x}%`,
+                    top: `${f.y}%`,
+                    width: f.kind === 'PLATE' ? 34 : f.kind === 'STAPLE' ? 24 : 16,
+                    height: f.kind === 'SCREW' ? 30 : 18,
+                    transform: 'translate(-50%, -50%)',
+                    filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.6))',
+                  }}
+                >
+                  <MetalBit kind={f.kind} />
+                </div>
+              )
+            )}
             {motes.map((m) => (
               <span
                 key={m.id}
@@ -817,207 +897,114 @@ export const UrnFillingMiniGame: React.FC = () => {
                 }}
               />
             ))}
-            <div
-              className="absolute pointer-events-none z-20"
-              style={{
-                left: `${hammerPos.x}%`,
-                top: `${hammerPos.y}%`,
-                width: 54,
-                height: 96,
-                transform: `translate(-50%, -78%) rotate(${hammerHeld ? -28 : -12}deg)`,
-                filter: 'drop-shadow(0 8px 6px rgba(0,0,0,0.55))',
-              }}
-            >
-              <CrushHammer held={hammerHeld} />
-            </div>
-            {dustLevel > 5 && (
+            {phase === 'CRUSH' && (
               <div
-                className="absolute inset-0 z-30 pointer-events-none bg-stone-400/40 backdrop-blur-[1px] transition-opacity"
-                style={{ opacity: dustLevel / 100 }}
-              >
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-xs font-bold text-stone-900/80 bg-stone-200/50 px-2 py-1 rounded">
-                    Bone dust. Start the extractor.
-                  </span>
-                </div>
-              </div>
-            )}
-            <div className="absolute top-2 left-2 text-[10px] font-mono text-amber-300 z-10">
-              Crush {crushProgress}%
-            </div>
-          </div>
-          <button
-            type="button"
-            disabled={crushProgress < 90}
-            onPointerDown={() => crushProgress >= 90 && setPhase('MAGNET')}
-            className={`w-full py-3 rounded font-bold text-sm ${
-              crushProgress >= 90
-                ? 'bg-emerald-600 active:bg-emerald-500'
-                : 'bg-zinc-800 text-zinc-500'
-            }`}
-          >
-            {crushProgress >= 90
-              ? 'Bones Crushed — Magnet Sweep →'
-              : `Keep crushing (${crushProgress}%)`}
-          </button>
-        </div>
-      )}
-
-      {phase === 'MAGNET' && (
-        <div className="flex-1 min-h-0 flex flex-col gap-2 mt-2">
-          <p className="text-[11px] text-zinc-400">
-            Drag the magnetic wand over the tray. Skip this and Engage later will
-            wreck the cremulator.
-          </p>
-          <div
-            ref={trayRef}
-            className="relative flex-1 rounded-xl border-2 border-zinc-700 bg-gradient-to-b from-stone-800 to-stone-950 overflow-hidden touch-none"
-            onPointerDown={(e) => {
-              (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-              moveMagnet(e.clientX, e.clientY);
-            }}
-            onPointerMove={(e) => {
-              if (e.buttons > 0 || e.pressure > 0)
-                moveMagnet(e.clientX, e.clientY);
-            }}
-          >
-            {fragments.map((f) =>
-              f.collected ? null : (
-                <div
-                  key={f.id}
-                  className="absolute pointer-events-none drop-shadow"
-                  style={{
-                    left: `${f.x}%`,
-                    top: `${f.y}%`,
-                    width: f.kind === 'PLATE' ? 36 : f.kind === 'STAPLE' ? 26 : 18,
-                    height: f.kind === 'SCREW' ? 32 : 20,
-                    transform: 'translate(-50%, -50%)',
-                  }}
-                >
-                  <MetalBit kind={f.kind} />
-                </div>
-              )
-            )}
-            <div
-              className="absolute w-10 h-10 rounded-full border-2 border-cyan-300 bg-cyan-500/30 pointer-events-none"
-              style={{
-                left: `${magnetPos.x}%`,
-                top: `${magnetPos.y}%`,
-                transform: 'translate(-50%, -50%)',
-              }}
-            />
-          </div>
-          <button
-            type="button"
-            onPointerDown={() => {
-              if (allMetalsCleared) setMagnetCleared(true);
-              setPhase('HATCH');
-            }}
-            className={`w-full py-3 rounded font-bold text-sm ${
-              allMetalsCleared
-                ? 'bg-emerald-600'
-                : 'bg-amber-800 text-amber-100'
-            }`}
-          >
-            {allMetalsCleared
-              ? 'Metals Cleared — Sweep into Hatch →'
-              : `Skip magnet (${fragments.filter((f) => !f.collected).length} left) — risky →`}
-          </button>
-        </div>
-      )}
-
-      {phase === 'HATCH' && (
-        <div className="flex-1 min-h-0 flex flex-col gap-2 mt-2">
-          <p className="text-[11px] text-zinc-400">
-            Drag bone fragments into the hatch at the bottom. They drop into the
-            cremulator hopper.
-          </p>
-          <div
-            ref={trayRef}
-            className="relative flex-1 rounded-xl border-2 border-zinc-700 bg-stone-950 overflow-hidden touch-none"
-            onPointerDown={(e) => {
-              (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-              sweepToHatch(e.clientX, e.clientY);
-            }}
-            onPointerMove={(e) => {
-              if (e.buttons > 0) sweepToHatch(e.clientX, e.clientY);
-            }}
-          >
-            {bones.map((b) => (
-              <div
-                key={b.id}
-                className="absolute pointer-events-none"
+                className="absolute pointer-events-none z-20"
                 style={{
-                  left: `${b.x}%`,
-                  top: `${b.y}%`,
-                  width: 22,
-                  height: 14,
-                  transform: `translate(-50%, -50%) rotate(${b.rot}deg)`,
-                  opacity: hatchLoaded ? 0.25 : 0.9,
+                  left: `${hammerPos.x}%`,
+                  top: `${hammerPos.y}%`,
+                  width: 54,
+                  height: 96,
+                  transform: `translate(-50%, -78%) rotate(${hammerHeld ? -28 : -12}deg)`,
+                  filter: 'drop-shadow(0 8px 6px rgba(0,0,0,0.55))',
                 }}
               >
-                <BoneFragment kind={b.kind} stage={3} />
+                <CrushHammer held={hammerHeld} />
               </div>
-            ))}
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-28 h-16 border-2 border-amber-600 bg-zinc-900 rounded-b-xl flex flex-col items-center justify-end pb-1 overflow-hidden">
+            )}
+            {phase === 'MAGNET' && (
               <div
-                className="absolute bottom-0 left-0 right-0 bg-stone-500/80 transition-all"
-                style={{ height: `${hatchFill}%` }}
-              />
-              <span className="relative z-10 text-[9px] font-mono text-amber-200">
+                className="absolute pointer-events-none z-20"
+                style={{
+                  left: `${magnetPos.x}%`,
+                  top: `${magnetPos.y}%`,
+                  width: 72,
+                  height: 96,
+                  transform: 'translate(-50%, -70%)',
+                  filter: 'drop-shadow(0 8px 6px rgba(0,0,0,0.55))',
+                }}
+              >
+                <CremainsMagnet />
+              </div>
+            )}
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-32 h-14 border border-zinc-700 bg-zinc-950/80 rounded-b-lg flex flex-col items-center justify-end pb-1 overflow-hidden z-10">
+              <div className="absolute inset-0 opacity-80" style={{ height: `${hatchFill}%`, top: 'auto' }}>
+                <AshField seed={4} />
+              </div>
+              <span className="relative z-10 text-[9px] font-mono text-stone-100">
                 HATCH {Math.round(hatchFill)}%
               </span>
             </div>
-            {hatchLoaded && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                <span className="text-amber-200 font-bold text-sm animate-pulse">
-                  Dropped into cremulator
-                </span>
+            {dustLevel > 4 && (
+              <div
+                className="absolute inset-0 z-30 pointer-events-none"
+                style={{
+                  opacity: dustLevel / 100,
+                  background: '#f4f1ea',
+                }}
+              >
+                {dustLevel > 55 && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-xs font-bold text-stone-700">
+                      Bone dust. Start the extractor.
+                    </span>
+                  </div>
+                )}
               </div>
             )}
+            <div className="absolute top-2 left-2 text-[10px] font-mono text-stone-900 bg-stone-100/80 px-1 z-10">
+              Crush {crushProgress}%
+              {processing ? ` · Mill ${Math.round(cremulatorProgress)}%` : ''}
+            </div>
           </div>
-          <button
-            type="button"
-            disabled={!hatchLoaded}
-            onPointerDown={() => hatchLoaded && setPhase('PROCESSOR')}
-            className={`w-full py-3 rounded font-bold text-sm ${
-              hatchLoaded
-                ? 'bg-emerald-600'
-                : 'bg-zinc-800 text-zinc-500'
-            }`}
-          >
-            {hatchLoaded
-              ? 'Hatch Loaded — Open Processor →'
-              : 'Sweep remains into hatch'}
-          </button>
-        </div>
-      )}
-
-      {phase === 'PROCESSOR' && (
-        <div className="flex-1 min-h-0 flex flex-col justify-center gap-4 mt-2">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 text-center">
-            <div className="text-xs uppercase tracking-widest text-zinc-500 mb-2">
-              Cremulator Drum
-            </div>
-            <div className="text-4xl font-mono text-amber-300 mb-3">
-              {Math.round(cremulatorProgress)}%
-            </div>
-            <div className="h-3 bg-zinc-800 rounded overflow-hidden mb-4">
-              <div
-                className={`h-full transition-all ${
-                  processing ? 'bg-red-500 animate-pulse' : 'bg-amber-500'
-                }`}
-                style={{ width: `${cremulatorProgress}%` }}
-              />
-            </div>
-            <p className="text-[11px] text-zinc-400">
-              {!extractorOn && 'Start Extractor for Loading & Sorting light. '}
-              {hatchLoaded
-                ? 'Press Engage to pulverize.'
-                : 'Load hatch first.'}
-            </p>
-          </div>
-          {cremulatorProgress >= 100 && (
+          {phase === 'CRUSH' && (
+            <button
+              type="button"
+              data-tutorial-target="crush"
+              disabled={crushProgress < 90}
+              onPointerDown={() => crushProgress >= 90 && setPhase('MAGNET')}
+              className={`w-full py-3 rounded font-bold text-sm ${
+                crushProgress >= 90
+                  ? 'bg-emerald-600 active:bg-emerald-500'
+                  : 'bg-zinc-800 text-zinc-500'
+              }`}
+            >
+              {crushProgress >= 90
+                ? 'Bones Crushed — Magnet Sweep →'
+                : `Keep crushing (${crushProgress}%)`}
+            </button>
+          )}
+          {phase === 'MAGNET' && (
+            <button
+              type="button"
+              data-tutorial-target="magnet"
+              onPointerDown={() => {
+                if (allMetalsCleared) setMagnetCleared(true);
+                setPhase('HATCH');
+              }}
+              className={`w-full py-3 rounded font-bold text-sm ${
+                allMetalsCleared ? 'bg-emerald-600' : 'bg-amber-800 text-amber-100'
+              }`}
+            >
+              {allMetalsCleared
+                ? 'Metals Cleared — Sweep into Hatch →'
+                : `Skip magnet (${fragments.filter((f) => !f.collected).length} left) — risky →`}
+            </button>
+          )}
+          {phase === 'HATCH' && (
+            <button
+              type="button"
+              data-tutorial-target="hatch"
+              disabled={!hatchLoaded}
+              onPointerDown={() => hatchLoaded && setPhase('PROCESSOR')}
+              className={`w-full py-3 rounded font-bold text-sm ${
+                hatchLoaded ? 'bg-emerald-600' : 'bg-zinc-800 text-zinc-500'
+              }`}
+            >
+              {hatchLoaded ? 'Hatch Loaded — Open Processor →' : 'Sweep remains into hatch'}
+            </button>
+          )}
+          {phase === 'PROCESSOR' && cremulatorProgress >= 100 && (
             <button
               type="button"
               onPointerDown={goSelectUrn}
@@ -1028,6 +1015,7 @@ export const UrnFillingMiniGame: React.FC = () => {
           )}
         </div>
       )}
+
 
       {phase === 'SELECT_URN' && (
         <div className="flex-1 min-h-0 flex flex-col gap-3 mt-2 overflow-y-auto pb-3">
@@ -1112,6 +1100,7 @@ export const UrnFillingMiniGame: React.FC = () => {
                   <button
                     key={urn.id}
                     type="button"
+                    data-tutorial-target="choose-urn"
                     onPointerDown={() => {
                       if (currentCase.offeredUrnId !== urn.id) {
                         offerUrnToCase(currentCase.id, urn.id);
@@ -1152,7 +1141,7 @@ export const UrnFillingMiniGame: React.FC = () => {
           </p>
           <div
             ref={pourRef}
-            className="relative flex-1 rounded-xl border-2 border-zinc-700 bg-gradient-to-b from-zinc-900 to-zinc-950 flex items-end justify-center pb-6 touch-none overflow-hidden"
+            className="relative flex-1 rounded-xl border border-zinc-600 flex items-end justify-center pb-6 touch-none overflow-hidden"
             onPointerDown={(e) => {
               e.preventDefault();
               tiltingRef.current = true;
@@ -1164,6 +1153,23 @@ export const UrnFillingMiniGame: React.FC = () => {
               applyPourAt(e.clientY);
             }}
           >
+            <div className="absolute inset-0 pointer-events-none" aria-hidden>
+              <div className="absolute inset-0 bg-[#7a756e]" />
+              <div className="absolute inset-x-0 top-0 h-[62%] bg-gradient-to-b from-[#8d887f] to-[#6a655f]" />
+              <div className="absolute left-[10%] top-[8%] w-[28%] h-[22%] bg-[#d6d3d1] border-[6px] border-[#3f3f46] shadow-inner" />
+              <div className="absolute left-[14%] top-[12%] w-[20%] h-[14%] bg-[#e7e5e4]/80" />
+              <div className="absolute right-[8%] top-[12%] w-[16%] bottom-[38%] bg-[#3f3f46] border border-[#27272a]" />
+              <div className="absolute right-[11%] top-[18%] w-[10%] h-2 bg-[#a1a1aa]" />
+              <div className="absolute right-[11%] top-[28%] w-[10%] h-2 bg-[#a1a1aa]" />
+              <div className="absolute inset-x-0 top-[60%] h-2 bg-[#3f3f46]" />
+              <div
+                className="absolute inset-x-[4%] bottom-[6%] h-[24%] border border-[#52525b]"
+                style={{
+                  backgroundImage: 'url(/textures/tray-steel.jpg)',
+                  backgroundSize: 'cover',
+                }}
+              />
+            </div>
             {/* Funnel */}
             <div
               className="absolute top-8 left-1/2 -translate-x-1/2 w-32 h-24 bg-zinc-600/95 border border-zinc-500 transition-transform"
@@ -1213,9 +1219,13 @@ export const UrnFillingMiniGame: React.FC = () => {
                   style={{ height: '55%' }}
                 >
                   <div
-                    className="absolute inset-x-0 bottom-0 bg-stone-500/80 transition-all"
+                    className="absolute inset-x-0 bottom-0 overflow-hidden transition-all"
                     style={{ height: `${urnFill}%` }}
-                  />
+                  >
+                    <div className="absolute inset-x-0 bottom-0 h-24">
+                      <AshField seed={9} />
+                    </div>
+                  </div>
                   <div
                     className="absolute left-0 right-0 border-t border-dashed border-amber-300/90 z-10"
                     style={{ bottom: `${FILL_LINE}%` }}
@@ -1234,6 +1244,7 @@ export const UrnFillingMiniGame: React.FC = () => {
           </div>
           <button
             type="button"
+            data-tutorial-target="seal"
             disabled={urnFill < 70 || !currentCase.offeredUrnId}
             onPointerDown={() => urnFill >= 70 && finish()}
             className={`w-full py-3 rounded font-bold ${

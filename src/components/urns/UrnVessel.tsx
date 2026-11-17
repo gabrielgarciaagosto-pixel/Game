@@ -438,6 +438,18 @@ export const UrnVessel: React.FC<{
       <path d={bodyPath} fill={`url(#${body})`} stroke={urn.palette.bodyDeep} strokeWidth="1.15" />
       <path d={bodyPath} fill={`url(#${shade})`} />
       <path d={bodyPath} fill={`url(#${shine})`} opacity="0.45" />
+      {(urn.material === 'STEEL' || urn.material === 'BRONZE') && (
+        <g clipPath={`url(#${clip})`}>
+          <ellipse
+            cx="36"
+            cy="78"
+            rx="4.5"
+            ry="30"
+            fill="#fff"
+            opacity={urn.material === 'STEEL' ? 0.26 : 0.18}
+          />
+        </g>
+      )}
 
       <g clipPath={`url(#${clip})`}>
         <MaterialMarks

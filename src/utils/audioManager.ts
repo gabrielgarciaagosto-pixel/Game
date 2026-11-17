@@ -17,7 +17,7 @@ export type MusicBedId = BuiltinBedId | string;
 const BED_URLS: Record<BuiltinBedId, string> = {
   theme: '/audio/ossuarian-theme.m4a',
   crematoryStart: '/audio/crematory-start.m4a',
-  crematoryLoop: '/audio/crematory-loop.m4a',
+  crematoryLoop: '/audio/crematory/crematory-running.wav',
 };
 
 const DEFAULT_VOLUME: Record<BuiltinBedId, number> = {

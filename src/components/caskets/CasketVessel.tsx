@@ -188,7 +188,7 @@ function materialLook(material: CasketMaterial, silhouette: CasketSilhouette): O
       top: '#4a525c', topHi: '#9aa4b0', topMid: '#343a42',
       front: '#3c444c', frontHi: '#6a7480', frontDeep: '#22262c',
       end: '#2e343c', endDeep: '#16191e',
-      grain: '#c5ced6', gap: '#101216', metal: true, gloss: 0.45,
+      grain: '#c5ced6', gap: '#101216', metal: true, gloss: 0.53,
       bar: ['#f4f7fa', '#9aa6b2', '#3a424a'], lug: ['#f8fafc', '#8e98a4', '#2a3036'],
     };
   }
@@ -197,7 +197,7 @@ function materialLook(material: CasketMaterial, silhouette: CasketSilhouette): O
       top: '#e7eef3', topHi: '#ffffff', topMid: '#c5d0d8',
       front: '#d5dee6', frontHi: '#f4f7fa', frontDeep: '#8b99a6',
       end: '#b7c3cc', endDeep: '#6e7c88',
-      grain: '#ffffff', gap: '#5c6a76', metal: true, gloss: 0.4,
+      grain: '#ffffff', gap: '#5c6a76', metal: true, gloss: 0.48,
       bar: ['#ffffff', '#d5dee6', '#7d8c98'], lug: ['#ffffff', '#c5d0da', '#6a7884'],
     };
   }
@@ -206,7 +206,7 @@ function materialLook(material: CasketMaterial, silhouette: CasketSilhouette): O
       top: '#c4924a', topHi: '#f0d090', topMid: '#9a6c30',
       front: '#b07e3c', frontHi: '#d4a45c', frontDeep: '#6a4818',
       end: '#8e6428', endDeep: '#4a3010',
-      grain: '#3e6b34', gap: '#3a240c', metal: true, gloss: 0.62,
+      grain: '#3e6b34', gap: '#3a240c', metal: true, gloss: 0.7,
       bar: ['#f0d8a0', '#b88840', '#5a3c14'], lug: ['#f6e2b0', '#c09040', '#5a3810'],
     };
   }
@@ -214,7 +214,7 @@ function materialLook(material: CasketMaterial, silhouette: CasketSilhouette): O
     top: '#d4844c', topHi: '#f4c098', topMid: '#b06838',
     front: '#c47240', frontHi: '#e09060', frontDeep: '#7a3c1c',
     end: '#a05a30', endDeep: '#5c3014',
-    grain: '#7a3416', gap: '#3a1c0c', metal: true, gloss: 0.58,
+    grain: '#7a3416', gap: '#3a1c0c', metal: true, gloss: 0.66,
     bar: ['#f6d0b0', '#c07040', '#6a3418'], lug: ['#f8d4b4', '#c07040', '#6a3014'],
   };
 }
