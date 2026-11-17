@@ -89,54 +89,118 @@ export function IronRakeArt({ className }: { className?: string }) {
   );
 }
 
-export function IronBrushArt({ className }: { className?: string }) {
+export type BrushFlex = {
+  /** -1 leans left on screen, 1 leans right. Opposite the stroke. */
+  lean: number;
+  /** 0 at rest, 1 when a downward sweep presses the bristles back. */
+  push: number;
+};
+
+/**
+ * Plain hearth brush. Wooden handle, natural hair, tips a little singed.
+ * This replaced the iron brush. The bristle group flexes against the stroke.
+ */
+export function PlainHandBrushArt({
+  className,
+  flex,
+}: {
+  className?: string;
+  flex?: BrushFlex;
+}) {
   const uid = useId().replace(/:/g, '');
-  const iron = `brush-iron-${uid}`;
-  const wood = `brush-wood-${uid}`;
+  const wood = `plain-wood-${uid}`;
+  const lean = Math.max(-1, Math.min(1, flex?.lean ?? 0));
+  const push = Math.max(0, Math.min(1, flex?.push ?? 0));
   return (
-    <svg viewBox="0 0 130 230" className={className} aria-hidden>
+    <svg
+      viewBox="0 0 96 248"
+      className={className}
+      aria-hidden
+      data-tool-art="hand-brush"
+      data-brush-lean={lean.toFixed(2)}
+      data-brush-push={push.toFixed(2)}
+    >
       <defs>
-        <linearGradient id={iron} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#e7e5e4" />
-          <stop offset="0.45" stopColor="#78716c" />
-          <stop offset="1" stopColor="#1c1917" />
-        </linearGradient>
         <linearGradient id={wood} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#451a03" />
-          <stop offset="0.5" stopColor="#b45309" />
-          <stop offset="1" stopColor="#431407" />
+          <stop offset="0" stopColor="#4a2c1a" />
+          <stop offset="0.45" stopColor="#c4a574" />
+          <stop offset="1" stopColor="#3f2414" />
         </linearGradient>
       </defs>
-      <rect x="52" y="8" width="26" height="62" rx="8" fill={`url(#${wood})`} />
-      <path d="M58 20h14M58 32h14M58 44h14" stroke="#431407" strokeWidth="1.3" opacity="0.5" />
-      <path d="M40 70h50l10 18H30z" fill={`url(#${iron})`} stroke="#292524" />
-      <rect x="24" y="86" width="82" height="22" rx="3" fill="#44403c" stroke="#d6d3d1" strokeWidth="1" />
-      <circle cx="36" cy="97" r="2.2" fill="#a8a29e" />
-      <circle cx="94" cy="97" r="2.2" fill="#a8a29e" />
-      <circle cx="65" cy="97" r="2.2" fill="#e7e5e4" />
-      {Array.from({ length: 18 }).map((_, i) => {
-        const x = 30 + (i % 9) * 8;
-        const row = i < 9 ? 0 : 5;
-        return (
-          <path
-            key={i}
-            d={`M${x} ${108 + row} q${i % 2 ? 2 : -2} 28 ${i % 3 === 0 ? 1 : -1} 52`}
-            stroke={i % 4 === 0 ? '#a8a29e' : '#292524'}
-            strokeWidth="1.7"
-            fill="none"
-            strokeLinecap="round"
-          />
-        );
-      })}
+      <rect x="34" y="8" width="28" height="126" rx="12" fill={`url(#${wood})`} />
+      <path d="M40 22v96" stroke="#fff" strokeWidth="1.4" opacity="0.22" />
+      <path
+        d="M56 28c5 20 5 44 0 68"
+        stroke="#4a2c1a"
+        strokeWidth="1.1"
+        fill="none"
+        opacity="0.4"
+      />
+      <ellipse cx="48" cy="14" rx="15" ry="8" fill="#c4a574" />
+      <ellipse cx="48" cy="14" rx="8" ry="3.2" fill="#4a2c1a" opacity="0.35" />
+      <rect x="26" y="128" width="44" height="18" rx="4" fill="#6b4428" />
+      <path d="M30 134c12 3 24 3 36 0" stroke="#4a2c1a" strokeWidth="1" fill="none" opacity="0.45" />
+      <g
+        className="brush-bristles"
+        style={{
+          transformOrigin: '48px 146px',
+          transform: `rotate(${lean * 22}deg) scaleY(${1 - push * 0.28})`,
+        }}
+      >
+        {Array.from({ length: 9 }).map((_, i) => {
+          const x = 16 + i * 8;
+          const tip = 208 + (i % 3) * 10;
+          const bow = (i - 4) * 1.8;
+          const mid = 148 + (tip - 148) * 0.72;
+          return (
+            <g key={i}>
+              <path
+                d={`M${x} 146 q${bow} ${(mid - 146) / 2} ${bow * 0.35} ${mid - 146}`}
+                stroke="#e6d2b0"
+                strokeWidth="4.6"
+                fill="none"
+                strokeLinecap="round"
+              />
+              <path
+                d={`M${x + bow * 0.35} ${mid} q${bow * 0.2} ${(tip - mid) / 2} 0 ${tip - mid}`}
+                stroke="#1c1410"
+                strokeWidth="4.2"
+                fill="none"
+                strokeLinecap="round"
+              />
+            </g>
+          );
+        })}
+        {push > 0.15
+          ? [0, 1, 2].map((i) => (
+              <circle
+                key={`ash-${i}`}
+                cx={28 + i * 16}
+                cy={198 + (i % 2) * 10}
+                r="2.4"
+                fill="#d6d3d1"
+                opacity={0.35 + push * 0.5}
+              />
+            ))
+          : null}
+      </g>
     </svg>
   );
 }
 
-export function HandBrushArt({ className }: { className?: string }) {
+export function HandBrushArt({
+  className,
+  flex,
+}: {
+  className?: string;
+  flex?: BrushFlex;
+}) {
   const uid = useId().replace(/:/g, '');
   const wood = `hand-wood-${uid}`;
+  const lean = Math.max(-1, Math.min(1, flex?.lean ?? 0));
+  const push = Math.max(0, Math.min(1, flex?.push ?? 0));
   return (
-    <svg viewBox="0 0 120 156" className={className} aria-hidden>
+    <svg viewBox="0 0 120 156" className={className} aria-hidden data-tool-art="ash-brush">
       <defs>
         <linearGradient id={wood} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#f5deb3" />
@@ -149,21 +213,29 @@ export function HandBrushArt({ className }: { className?: string }) {
       <path d="M36 40c16 6 32 6 48 0" stroke="#a1623b" strokeWidth="1.2" fill="none" opacity="0.7" />
       <path d="M36 54c18 8 34 8 50-1" stroke="#a1623b" strokeWidth="1" fill="none" opacity="0.55" />
       <rect x="24" y="84" width="72" height="12" rx="2" fill="#9a7b4f" />
-      {Array.from({ length: 22 }).map((_, i) => {
-        const x = 28 + i * 3;
-        const len = 26 + (i % 3) * 4;
-        return (
-          <path
-            key={i}
-            d={`M${x} 94 q${i % 2 ? 1.2 : -1} ${len / 2} ${i % 2 ? 0.6 : -0.4} ${len}`}
-            stroke={i % 5 === 0 ? '#f5f5f4' : '#d6d3d1'}
-            strokeWidth="2.2"
-            fill="none"
-            strokeLinecap="round"
-            opacity="0.95"
-          />
-        );
-      })}
+      <g
+        className="brush-bristles"
+        style={{
+          transformOrigin: '60px 94px',
+          transform: `rotate(${lean * 14}deg) scaleY(${1 - push * 0.18})`,
+        }}
+      >
+        {Array.from({ length: 22 }).map((_, i) => {
+          const x = 28 + i * 3;
+          const len = 26 + (i % 3) * 4;
+          return (
+            <path
+              key={i}
+              d={`M${x} 94 q${i % 2 ? 1.2 : -1} ${len / 2} ${i % 2 ? 0.6 : -0.4} ${len}`}
+              stroke={i % 5 === 0 ? '#f5f5f4' : '#d6d3d1'}
+              strokeWidth="2.2"
+              fill="none"
+              strokeLinecap="round"
+              opacity="0.95"
+            />
+          );
+        })}
+      </g>
     </svg>
   );
 }
@@ -171,14 +243,18 @@ export function HandBrushArt({ className }: { className?: string }) {
 export function ToolArt({
   tool,
   className,
+  flex,
 }: {
   tool: SweepTool;
   className?: string;
+  flex?: BrushFlex;
 }) {
   if (tool === 'STIRRING_ROD') return <StirringRodArt className={className} />;
   if (tool === 'IRON_RAKE') return <IronRakeArt className={className} />;
-  if (tool === 'BRISTLE_BRUSH') return <IronBrushArt className={className} />;
-  return <HandBrushArt className={className} />;
+  if (tool === 'BRISTLE_BRUSH') {
+    return <PlainHandBrushArt className={className} flex={flex} />;
+  }
+  return <HandBrushArt className={className} flex={flex} />;
 }
 
 export function Femur({ className }: { className?: string }) {

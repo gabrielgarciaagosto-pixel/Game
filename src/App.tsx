@@ -7,6 +7,7 @@ declare global {
     __ossuarianClosePhone?: () => void;
     __ossuarianCloseCalendar?: () => void;
     __ossuarianCloseSettingsConfirm?: () => void;
+    __ossuarianCloseUpdate?: () => void;
   }
 }
 import { BankDebtHud } from './components/BankDebtHud';
@@ -28,6 +29,7 @@ import { UrnFillingMiniGame } from './components/UrnFillingMiniGame';
 import { HouseSettings } from './components/HouseSettings';
 import { LegendarySpiritModal } from './components/LegendarySpiritModal';
 import { TutorialLayer } from './components/TutorialLayer';
+import { UpdateNotice } from './components/UpdateNotice';
 import { UrnStartScreen } from './components/UrnStartScreen';
 import { UrnVaultRoom } from './components/UrnVaultRoom';
 import { useIntakeSpawner } from './hooks/useIntakeSpawner';
@@ -60,6 +62,10 @@ function App() {
   useEffect(() => {
     window.__ossuarianHardwareBack = () => {
       const state = useGameStore.getState();
+      if (window.__ossuarianCloseUpdate) {
+        window.__ossuarianCloseUpdate();
+        return 'handled';
+      }
       if (window.__ossuarianCloseSettingsConfirm) {
         window.__ossuarianCloseSettingsConfirm();
         return 'handled';
@@ -185,6 +191,7 @@ function App() {
 
   return (
     <>
+      <UpdateNotice />
       <MenuThemeAudio />
       <TutorialLayer />
       <HouseSettings />

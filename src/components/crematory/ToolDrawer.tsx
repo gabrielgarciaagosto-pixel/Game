@@ -19,12 +19,12 @@ export const CREMATORY_TOOLS: {
   },
   {
     id: 'BRISTLE_BRUSH',
-    name: 'Iron Brush',
-    blurb: 'Sweep fragments downward. Contact shakes the pile.',
+    name: 'Hand Brush',
+    blurb: 'Sweep fragments downward. The bristles flex in the ash.',
   },
   {
     id: 'HAND_BRUSH',
-    name: 'Hand Brush',
+    name: 'Ash Brush',
     blurb: 'Sweep fine ash. Raises dust when it kisses the heap.',
   },
 ];

@@ -410,6 +410,7 @@ export const CremationMiniGame: React.FC = () => {
   const [toolMenuOpen, setToolMenuOpen] = useState(false);
   const [toolHeld, setToolHeld] = useState(false);
   const [toolPos, setToolPos] = useState({ x: 52, y: 40 });
+  const [brushFlex, setBrushFlex] = useState({ lean: 0, push: 0 });
   const [toolGlide, setToolGlide] = useState(false);
   const [boneNudge, setBoneNudge] = useState(0);
   const [boneContact, setBoneContact] = useState<BoneContact | null>(null);
@@ -647,7 +648,7 @@ export const CremationMiniGame: React.FC = () => {
     }
     if (tool === 'IRON_RAKE') {
       if (live.largeBonesLeft <= 0) {
-        showHint('Large bones are clear. Take the iron brush.');
+        showHint('Large bones are clear. Take the hand brush.');
         return;
       }
       let fall: ReturnType<typeof fallClipFor> = null;
@@ -677,7 +678,7 @@ export const CremationMiniGame: React.FC = () => {
         return;
       }
       if (live.mediumBonesLeft <= 0) {
-        showHint('Fragments are clear. Take the hand brush.');
+        showHint('Fragments are clear. Take the ash brush.');
         return;
       }
       let fall: ReturnType<typeof fallClipFor> = null;
@@ -721,6 +722,7 @@ export const CremationMiniGame: React.FC = () => {
   const selectTool = (tool: SweepTool) => {
     crematoryToolSfx.setSweep(null);
     audioMovingRef.current = false;
+    setBrushFlex({ lean: 0, push: 0 });
     patchRetort({ activeTool: tool });
     setToolMenuOpen(false);
     setPanelZoomed(false);
@@ -758,6 +760,21 @@ export const CremationMiniGame: React.FC = () => {
         phase: liveTool.phase,
       })
     );
+    const isBrush =
+      liveTool.activeTool === 'BRISTLE_BRUSH' ||
+      liveTool.activeTool === 'HAND_BRUSH';
+    const sweepingAsh =
+      isBrush && liveTool.phase === 'SWEEP' && overHearth && audioMoving;
+    if (sweepingAsh) {
+      setBrushFlex({
+        lean: Math.max(-1, Math.min(1, (prev.x - point.x) / 2.2)),
+        push: Math.max(0, Math.min(1, (point.y - prev.y) / 2.4)),
+      });
+    } else if (isBrush) {
+      setBrushFlex((cur) =>
+        cur.lean === 0 && cur.push === 0 ? cur : { lean: 0, push: 0 }
+      );
+    }
 
     // Contact feedback for ALL tools (rod, rake, brushes)
     applyToolContact(point.x, point.y, moving);
@@ -1439,6 +1456,7 @@ export const CremationMiniGame: React.FC = () => {
                       setToolHeld(false);
                       audioMovingRef.current = false;
                       crematoryToolSfx.setSweep(null);
+                      setBrushFlex({ lean: 0, push: 0 });
                       prevToolPoint.current = null;
                       resetCircularStir(circularStirRef.current);
                       window.removeEventListener('pointermove', move);
@@ -1453,6 +1471,11 @@ export const CremationMiniGame: React.FC = () => {
                   <ToolArt
                     tool={activeTool}
                     className="h-48 w-auto max-w-[11rem] pointer-events-none"
+                    flex={
+                      activeTool === 'BRISTLE_BRUSH' || activeTool === 'HAND_BRUSH'
+                        ? brushFlex
+                        : undefined
+                    }
                   />
                 </div>
               )}

@@ -1380,3 +1380,13 @@ canvas {
     linear-gradient(90deg, #6a747a, #c5cfd4 18%, #8b969c 50%, #d5dee3 82%, #5e686e);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
+
+.brush-bristles {
+  transition: transform 0.18s cubic-bezier(0.2, 1.45, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brush-bristles {
+    transition: none;
+  }
+}
