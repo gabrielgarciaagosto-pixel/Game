@@ -319,6 +319,42 @@ export function PlainHandBrushArt({
   );
 }
 
+const FRAGMENT_WIRES = 46;
+const FRAGMENT_ATTACH_Y = 286;
+
+function fragmentWire(
+  index: number,
+  rank: 0 | 1,
+  lean: number,
+  push: number
+): { d: string; stroke: string; width: number } {
+  const span = FRAGMENT_WIRES - 1;
+  const t = index / span;
+  const edge = Math.abs(t - 0.5) * 2;
+  const x = 10 + t * 120 + (rank === 0 ? -0.6 : 0.7);
+  const length = (rank === 0 ? 46 : 54) - edge * 5 + (index % 3) * 1.1;
+  const bow = lean * (8 + edge * 7);
+  const squash = push * (rank === 0 ? 10 : 14);
+  const tipX = x + bow;
+  const tipY = FRAGMENT_ATTACH_Y - length + squash;
+  const cx = x + bow * 0.62;
+  const cy = FRAGMENT_ATTACH_Y - length * 0.46;
+  const stroke =
+    rank === 0
+      ? index % 2 === 0
+        ? '#8a6418'
+        : '#a07828'
+      : index % 3 === 0
+        ? '#f3d48a'
+        : '#d4a441';
+  return {
+    d: `M${x.toFixed(1)} ${FRAGMENT_ATTACH_Y} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${tipX.toFixed(1)} ${tipY.toFixed(1)}`,
+    stroke,
+    width: rank === 0 ? 1.15 : 0.85,
+  };
+}
+
+/** Pizza-oven hearth brush. Grip sits at the low end of this drawing; the game turns the head up. */
 export function HandBrushArt({
   className,
   flex,
@@ -327,45 +363,89 @@ export function HandBrushArt({
   flex?: BrushFlex;
 }) {
   const uid = useId().replace(/:/g, '');
-  const wood = `hand-wood-${uid}`;
+  const pole = `frag-pole-${uid}`;
+  const wood = `frag-wood-${uid}`;
+  const brass = `frag-brass-${uid}`;
+  const grip = `frag-grip-${uid}`;
   const lean = Math.max(-1, Math.min(1, flex?.lean ?? 0));
   const push = Math.max(0, Math.min(1, flex?.push ?? 0));
+  const back = Array.from({ length: FRAGMENT_WIRES }, (_, i) =>
+    fragmentWire(i, 0, lean, push)
+  );
+  const front = Array.from({ length: FRAGMENT_WIRES }, (_, i) =>
+    fragmentWire(i, 1, lean, push)
+  );
   return (
-    <svg viewBox="0 0 120 156" className={className} aria-hidden data-tool-art="fragment-brush">
+    <svg
+      viewBox="0 0 140 360"
+      className={className}
+      aria-hidden
+      data-tool-art="fragment-brush"
+      data-brush-lean={lean.toFixed(2)}
+      data-brush-push={push.toFixed(2)}
+    >
       <defs>
+        <linearGradient id={pole} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#8b939c" />
+          <stop offset="0.28" stopColor="#f7fafc" />
+          <stop offset="0.48" stopColor="#c5ced6" />
+          <stop offset="0.7" stopColor="#ffffff" />
+          <stop offset="1" stopColor="#6d7680" />
+        </linearGradient>
         <linearGradient id={wood} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#f5deb3" />
-          <stop offset="0.5" stopColor="#d6b48a" />
-          <stop offset="1" stopColor="#8a5a32" />
+          <stop offset="0" stopColor="#f3e2c4" />
+          <stop offset="0.45" stopColor="#e2c48a" />
+          <stop offset="1" stopColor="#c4964e" />
+        </linearGradient>
+        <linearGradient id={brass} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#f6e2a8" />
+          <stop offset="0.5" stopColor="#c8922e" />
+          <stop offset="1" stopColor="#8a5a12" />
+        </linearGradient>
+        <linearGradient id={grip} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#0c0c0c" />
+          <stop offset="0.35" stopColor="#3a3a3a" />
+          <stop offset="0.55" stopColor="#141414" />
+          <stop offset="1" stopColor="#050505" />
         </linearGradient>
       </defs>
-      <rect x="28" y="8" width="64" height="78" rx="8" fill={`url(#${wood})`} stroke="#6b3a1f" />
-      <circle cx="60" cy="24" r="6" fill="none" stroke="#6b3a1f" strokeWidth="2" />
-      <path d="M36 40c16 6 32 6 48 0" stroke="#a1623b" strokeWidth="1.2" fill="none" opacity="0.7" />
-      <path d="M36 54c18 8 34 8 50-1" stroke="#a1623b" strokeWidth="1" fill="none" opacity="0.55" />
-      <rect x="24" y="84" width="72" height="12" rx="2" fill="#9a7b4f" />
+      <rect x="62" y="36" width="16" height="250" rx="3" fill={`url(#${pole})`} />
+      <path d="M66 44 v234" stroke="#ffffff" strokeWidth="1.1" opacity="0.55" />
+      <path d="M72.5 48 v226" stroke="#9aa3ab" strokeWidth="0.6" opacity="0.45" />
+      <rect x="58" y="10" width="24" height="34" rx="7" fill={`url(#${grip})`} />
+      <path d="M64 16 v22" stroke="#6b6b6b" strokeWidth="1.2" opacity="0.55" strokeLinecap="round" />
+      <rect x="60" y="40" width="20" height="5" rx="1" fill="#1c1c1c" />
+      <rect x="58" y="278" width="24" height="10" rx="2" fill="#9aa3ab" />
+      <rect x="8" y="286" width="124" height="22" rx="2" fill={`url(#${wood})`} stroke="#a67c3d" strokeWidth="0.8" />
+      <path d="M14 294 h112 M18 302 h104" stroke="#f8edd6" strokeWidth="0.7" opacity="0.45" />
+      <rect x="8" y="284" width="124" height="5" fill={`url(#${brass})`} />
       <g
         className="brush-bristles"
         style={{
-          transformOrigin: '60px 94px',
-          transform: `rotate(${lean * 14}deg) scaleY(${1 - push * 0.18})`,
+          transformOrigin: '70px 286px',
+          transform: `rotate(${lean * -8}deg)`,
         }}
       >
-        {Array.from({ length: 22 }).map((_, i) => {
-          const x = 28 + i * 3;
-          const len = 26 + (i % 3) * 4;
-          return (
-            <path
-              key={i}
-              d={`M${x} 94 q${i % 2 ? 1.2 : -1} ${len / 2} ${i % 2 ? 0.6 : -0.4} ${len}`}
-              stroke={i % 5 === 0 ? '#f5f5f4' : '#d6d3d1'}
-              strokeWidth="2.2"
-              fill="none"
-              strokeLinecap="round"
-              opacity="0.95"
-            />
-          );
-        })}
+        {back.map((wire, i) => (
+          <path
+            key={`b${i}`}
+            d={wire.d}
+            stroke={wire.stroke}
+            strokeWidth={wire.width}
+            fill="none"
+            strokeLinecap="round"
+          />
+        ))}
+        {front.map((wire, i) => (
+          <path
+            key={`f${i}`}
+            d={wire.d}
+            stroke={wire.stroke}
+            strokeWidth={wire.width}
+            fill="none"
+            strokeLinecap="round"
+          />
+        ))}
       </g>
     </svg>
   );
