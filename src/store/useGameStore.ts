@@ -126,6 +126,10 @@ import {
 } from '../data/funeralFleets';
 import {
   BANK_FORECLOSURE_AFTER_MS,
+  BANK_LOAN_GRACE_MS,
+  BANK_PAYMENT_DRAFTED,
+  BANK_PAYMENT_DUE,
+  BANK_PAYMENT_OVERDUE,
   BANK_WARNING_AFTER_MS,
   BANK_WARNING_MESSAGE,
   LOAN_INSTALLMENT_MS,
@@ -203,6 +207,7 @@ import {
 import { gameNow } from '../utils/gameNow';
 import { readIntakeDevOptions } from '../dev/intakeOptions';
 import {
+  COOLER_RIVAL_NOTE,
   PHONE_EXTRA_PER_DAY,
   SERVICE_GRACE_FINE,
   SERVICE_RESCHEDULE_REP,
@@ -1616,7 +1621,8 @@ function readTutorialBell(value: unknown): { x: number; y: number } | null {
 }
 
 /** One notice per time the cooler fills, not once a second. */
-let coolerHoldAnnounced = false;
+/** One reminder per loan due-time, so the parlor tick does not repeat it. */
+const bankReminded = new Set<string>();
 
 export const useGameStore = create<GameState>()(
   persist(
@@ -2035,23 +2041,13 @@ export const useGameStore = create<GameState>()(
     });
     let spawned = advanced.schedule.spawned;
     let made = 0;
+    let lostToRival = advanced.lostToRival;
     for (let i = 0; i < advanced.spawnCount; i += 1) {
-      if (!get().receiveNewIntake()) break;
-      made += 1;
-    }
-    if (made < advanced.spawnCount) {
-      spawned -= advanced.spawnCount - made;
-    }
-    const holdNote =
-      'The cooler is full. The next arrival is waiting for an open bay.';
-    let holdToast: string | null = null;
-    if (advanced.heldForCooler) {
-      if (!coolerHoldAnnounced) {
-        coolerHoldAnnounced = true;
-        holdToast = holdNote;
+      if (!get().receiveNewIntake()) {
+        lostToRival += advanced.spawnCount - i;
+        break;
       }
-    } else if (!waitingSpawn(state.newsWire)) {
-      coolerHoldAnnounced = false;
+      made += 1;
     }
     const phoneDay = localDayKey(now);
     const phoneReset = state.phoneDayKey !== phoneDay;
@@ -2069,10 +2065,13 @@ export const useGameStore = create<GameState>()(
       nextSchedule.nextIntakeAt === state.nextIntakeAt &&
       nextSchedule.intakeBootstrapped === state.intakeBootstrapped &&
       !phoneReset;
-    if (same && made === 0 && !holdToast) return;
+    if (same && made === 0 && lostToRival === 0) return;
+    if (lostToRival > 0 && document.visibilityState === 'hidden') {
+      notifyHouse('Another house', COOLER_RIVAL_NOTE);
+    }
     set({
       ...nextSchedule,
-      ...(holdToast ? { intakeToast: holdToast } : {}),
+      ...(lostToRival > 0 ? { intakeToast: COOLER_RIVAL_NOTE } : {}),
     });
   },
 
@@ -2176,19 +2175,10 @@ export const useGameStore = create<GameState>()(
       now,
       ownedListingId: state.ownedProperty?.listingId ?? '',
       openCaseIds: new Set(state.cases.map((c) => c.id)),
-      coolerFull: coolerCount >= cap,
       headlineCaseOpen: state.cases.some((c) => c.headlineCase != null),
     });
     const heldHeadline = waitingSpawn(state.newsWire);
-    const holdNote =
-      'The cooler is full. The next arrival is waiting for an open bay.';
-    if (!result.changed && !result.spawn && !(heldHeadline && coolerCount < cap)) {
-      if (heldHeadline && coolerCount >= cap && !coolerHoldAnnounced) {
-        coolerHoldAnnounced = true;
-        set({ intakeToast: holdNote });
-      }
-      return;
-    }
+    if (!result.changed && !result.spawn && !heldHeadline) return;
 
     let cases = state.cases;
     let inboxFiles = state.inboxFiles;
@@ -2200,7 +2190,17 @@ export const useGameStore = create<GameState>()(
     const spawnSlot = spawn
       ? wire.find((item) => item.live && item.headlineId === spawn.id)
       : undefined;
-    if (spawn && spawnSlot && coolerCount < cap) {
+    const dropRival = (item: { headlineId: string } | undefined) => {
+      if (!item) return;
+      wire = wire.filter((row) => row !== item && row.headlineId !== item.headlineId);
+      intakeToast = COOLER_RIVAL_NOTE;
+      if (document.visibilityState === 'hidden') {
+        notifyHouse('Another house', COOLER_RIVAL_NOTE);
+      }
+    };
+    if (spawn && spawnSlot && coolerCount >= cap) {
+      dropRival(spawnSlot);
+    } else if (spawn && spawnSlot && coolerCount < cap) {
       const next = generateHeadlineCase(spawn, now);
       playIntakeBell();
       cases = [...cases, next];
@@ -2220,10 +2220,11 @@ export const useGameStore = create<GameState>()(
         service: directiveLabel(next.directive),
         at: next.arrivedAt,
       };
-      coolerHoldAnnounced = false;
     }
     const pending = waitingSpawn(wire);
-    if (pending && coolerCount < cap && pending.item.caseId == null) {
+    if (pending && coolerCount >= cap) {
+      dropRival(pending.item);
+    } else if (pending && coolerCount < cap && pending.item.caseId == null) {
       const next = generateHeadlineCase(pending.headline, now);
       playIntakeBell();
       cases = [...cases, next];
@@ -2243,10 +2244,6 @@ export const useGameStore = create<GameState>()(
         service: directiveLabel(next.directive),
         at: next.arrivedAt,
       };
-      coolerHoldAnnounced = false;
-    } else if (pending && coolerCount >= cap && !coolerHoldAnnounced) {
-      coolerHoldAnnounced = true;
-      intakeToast = holdNote;
     }
     const chimeFor =
       spawn && !(spawnSlot && coolerCount < cap)
@@ -3016,7 +3013,7 @@ export const useGameStore = create<GameState>()(
           negativeCashSinceMs,
           overdraftAccruedMs: accrued,
           bankForeclosed: true,
-          intakeToast: 'BANK FORECLOSURE — the funeral home has been seized.',
+          intakeToast: 'The bank has taken the parlor.',
           legalAlert: null,
         };
       }
@@ -3848,44 +3845,74 @@ export const useGameStore = create<GameState>()(
     const now = gameNow();
     let cash = state.cash;
     let changed = false;
+    let foreclose = false;
+    let toast: string | null = null;
+    let push: string | null = null;
     const ledger = [...state.financeLedger];
-    const activeLoans = state.activeLoans.map((loan) => {
-      let next = { ...loan };
-      if (now < next.nextPaymentDueAt || next.principalRemaining <= 0) {
+    const activeLoans = state.activeLoans
+      .map((loan) => {
+        const next = { ...loan };
+        if (now < next.nextPaymentDueAt || next.principalRemaining <= 0) {
+          return next;
+        }
+        const pay = Math.min(next.paymentAmount, next.principalRemaining);
+        const remindKey = `${next.id}:${next.nextPaymentDueAt}`;
+        if (cash >= pay) {
+          changed = true;
+          cash -= pay;
+          next.principalRemaining = Math.max(0, next.principalRemaining - pay);
+          next.missedPayments = 0;
+          const every = Math.max(next.paymentEveryMs, LOAN_INSTALLMENT_MS);
+          next.paymentEveryMs = every;
+          next.nextPaymentDueAt = now + every;
+          ledger.unshift({
+            id: `led_auto_${next.id}_${next.nextPaymentDueAt}`,
+            at: now,
+            label: `Bank draft — ${next.label}`,
+            amount: -pay,
+            kind: 'OTHER' as const,
+          });
+          if (!bankReminded.has(remindKey)) {
+            bankReminded.add(remindKey);
+            toast = BANK_PAYMENT_DRAFTED;
+            push = BANK_PAYMENT_DUE;
+          }
+          return next;
+        }
+        next.missedPayments = Math.max(1, next.missedPayments);
+        if (now >= next.nextPaymentDueAt + BANK_LOAN_GRACE_MS) {
+          foreclose = true;
+          changed = true;
+          return next;
+        }
+        if (!bankReminded.has(remindKey)) {
+          bankReminded.add(remindKey);
+          changed = true;
+          const overdue = now > next.nextPaymentDueAt + 60_000;
+          toast = overdue ? BANK_PAYMENT_OVERDUE : BANK_PAYMENT_DUE;
+          push = toast;
+        }
         return next;
-      }
-      changed = true;
-      const pay = Math.min(next.paymentAmount, next.principalRemaining);
-      cash -= pay;
-      next.principalRemaining = Math.max(0, next.principalRemaining - pay);
-      if (cash < 0) {
-        next.missedPayments += 1;
-      } else {
-        next.missedPayments = 0;
-      }
-      const every = Math.max(next.paymentEveryMs, LOAN_INSTALLMENT_MS);
-      next.paymentEveryMs = every;
-      next.nextPaymentDueAt = now + every;
-      ledger.unshift({
-        id: `led_auto_${next.id}_${next.nextPaymentDueAt}`,
-        at: now,
-        label: `Auto draft — ${next.label}`,
-        amount: -pay,
-        kind: 'OTHER' as const,
+      })
+      .filter((loan) => loan.principalRemaining > 0);
+    if (!changed && !foreclose) return;
+    if (push) notifyHouse('The bank', push);
+    if (foreclose) {
+      set({
+        cash,
+        activeLoans,
+        financeLedger: ledger.slice(0, 80),
+        bankForeclosed: true,
+        intakeToast: 'The bank has taken the parlor.',
+        legalAlert: null,
       });
-      return next;
-    }).filter((l) => l.principalRemaining > 0);
-    if (!changed) return;
+      return;
+    }
     set({
       cash,
       activeLoans,
       financeLedger: ledger.slice(0, 80),
-      intakeToast:
-        cash < state.cash
-          ? cash < 0
-            ? 'Loan draft overdrew your accounts — bank foreclosure clock applies.'
-            : 'Loan installment drafted.'
-          : state.intakeToast,
+      ...(toast ? { intakeToast: toast } : {}),
     });
     get().tickBankForeclosure();
   },

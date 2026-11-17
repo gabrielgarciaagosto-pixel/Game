@@ -10,21 +10,32 @@ const CRACK = '#78716c';
 
 export const BoneFragment: React.FC<{
   kind: BoneKind;
-  stage: 0 | 1 | 2;
+  /** 0 big, 1 medium, 2 small, 3 dust */
+  stage: 0 | 1 | 2 | 3;
 }> = ({ kind, stage }) => {
+  if (stage === 3) {
+    return (
+      <svg viewBox="0 0 48 32" className="h-full w-full" aria-hidden>
+        {Array.from({ length: 22 }, (_, i) => (
+          <circle
+            key={i}
+            cx={4 + ((i * 11) % 40)}
+            cy={4 + ((i * 7) % 24)}
+            r={i % 5 === 0 ? 1.8 : i % 2 === 0 ? 1.15 : 0.7}
+            fill={i % 3 === 0 ? '#fafaf9' : i % 3 === 1 ? IVORY : CHALK}
+            opacity={0.8}
+          />
+        ))}
+      </svg>
+    );
+  }
   if (stage === 2) {
     return (
       <svg viewBox="0 0 48 32" className="h-full w-full" aria-hidden>
-        {Array.from({ length: 14 }, (_, i) => (
-          <circle
-            key={i}
-            cx={6 + (i * 7) % 38}
-            cy={6 + ((i * 5) % 20)}
-            r={i % 3 === 0 ? 2.2 : 1.2}
-            fill={i % 2 ? IVORY : CHALK}
-            opacity={0.75}
-          />
-        ))}
+        <path d="M6 22 L14 8 L22 18 L16 26 Z" fill={IVORY} stroke={CRACK} strokeWidth="0.6" />
+        <path d="M24 6 L34 12 L30 22 L20 16 Z" fill={CHALK} stroke={CRACK} strokeWidth="0.6" />
+        <path d="M28 20 L42 16 L44 26 L32 28 Z" fill={IVORY} stroke={CRACK} strokeWidth="0.6" />
+        <path d="M10 12 l4 2 M26 10 l3 2" stroke="#fff" strokeOpacity="0.45" />
       </svg>
     );
   }
@@ -108,6 +119,37 @@ export const BoneFragment: React.FC<{
     </svg>
   );
 };
+
+/** Rubber mallet for the cremulator tray. */
+export const CrushHammer: React.FC<{ held?: boolean }> = ({ held = false }) => (
+  <svg viewBox="0 0 86 150" className="h-full w-full" aria-hidden>
+    <defs>
+      <linearGradient id="crush-handle" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stopColor="#4a2c18" />
+        <stop offset="0.45" stopColor="#c4894a" />
+        <stop offset="0.72" stopColor="#8a5a2b" />
+        <stop offset="1" stopColor="#3b2212" />
+      </linearGradient>
+      <linearGradient id="crush-rubber" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stopColor="#3f3f46" />
+        <stop offset="0.35" stopColor="#18181b" />
+        <stop offset="1" stopColor="#09090b" />
+      </linearGradient>
+    </defs>
+    <rect x="36" y="28" width="14" height="108" rx="6" fill="url(#crush-handle)" />
+    <path d="M40 40 v84" stroke="#f5deb3" strokeWidth="1.2" opacity="0.35" />
+    <path d="M42 48 h6 M42 64 h6 M42 80 h5 M42 96 h6" stroke="#3b2212" strokeWidth="0.7" opacity="0.45" />
+    <ellipse cx="43" cy="136" rx="9" ry="5" fill="#3b2212" />
+    <rect x="30" y="22" width="26" height="10" rx="2" fill="#a1a1aa" />
+    <path d="M32 24 h20" stroke="#f4f4f5" strokeWidth="1" opacity="0.7" />
+    <rect x="8" y="6" width="70" height="28" rx="8" fill="url(#crush-rubber)" stroke="#52525b" strokeWidth="1.2" />
+    <path d="M14 12 h52" stroke="#d4d4d8" strokeWidth="1.4" opacity="0.35" />
+    <rect x="12" y="18" width="62" height="4" rx="1" fill="#27272a" />
+    <ellipse cx="43" cy="32" rx="28" ry="4" fill={held ? '#09090b' : '#18181b'} />
+    <circle cx="18" cy="16" r="1.3" fill="#a1a1aa" />
+    <circle cx="68" cy="16" r="1.3" fill="#a1a1aa" />
+  </svg>
+);
 
 export const MetalBit: React.FC<{ kind: MetalKind }> = ({ kind }) => {
   if (kind === 'DENTAL_GOLD') {

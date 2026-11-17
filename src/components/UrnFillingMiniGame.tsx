@@ -11,6 +11,7 @@ import { getUrnById, URN_CATALOG } from '../data/urnCatalog';
 import { UrnVessel } from './urns/UrnVessel';
 import {
   BoneFragment,
+  CrushHammer,
   MetalBit,
   type BoneKind,
   type MetalKind,
@@ -36,8 +37,10 @@ interface BoneChunk {
   y: number;
   rot: number;
   size: number;
-  /** 0 whole, 1 shards, 2 dust */
-  stage: 0 | 1 | 2;
+  /** 0 big, 1 medium, 2 small, 3 dust */
+  stage: 0 | 1 | 2 | 3;
+  /** Share of the body. Splits keep the same total. */
+  weight: number;
   crushed: boolean;
 }
 
@@ -49,18 +52,26 @@ interface MetalFragment {
   collected: boolean;
 }
 
-const BONE_KINDS: BoneKind[] = [
-  'SHAFT',
-  'SKULL',
-  'RIB',
-  'VERTEBRA',
-  'KNUCKLE',
-  'SHAFT',
-  'RIB',
-  'VERTEBRA',
-  'KNUCKLE',
-  'SKULL',
-];
+const BONE_CYCLE: BoneKind[] = ['SHAFT', 'SKULL', 'RIB', 'VERTEBRA', 'KNUCKLE'];
+const STARTER_BONES = 18;
+const BONE_CAP = 56;
+
+function starterBones(): BoneChunk[] {
+  return Array.from({ length: STARTER_BONES }, (_, i) => {
+    const kind = BONE_CYCLE[i % BONE_CYCLE.length]!;
+    return {
+      id: i,
+      kind,
+      x: 10 + ((i * 17) % 78),
+      y: 14 + ((i * 23) % 62),
+      rot: (i * 37) % 80 - 40,
+      size: kind === 'KNUCKLE' ? 46 : kind === 'RIB' ? 58 : 52 + (i % 3) * 8,
+      stage: 0 as const,
+      weight: 6,
+      crushed: false,
+    };
+  });
+}
 
 const METAL_KINDS: MetalKind[] = [
   'SCREW',
@@ -125,21 +136,11 @@ export const UrnFillingMiniGame: React.FC = () => {
   };
 
   const [phase, setPhase] = useState<Phase>(resumePhase);
-  const [bones, setBones] = useState<BoneChunk[]>(() =>
-    BONE_KINDS.map((kind, i) => ({
-      id: i,
-      kind,
-      x: 12 + ((i * 9) % 74),
-      y: 18 + ((i * 13) % 58),
-      rot: (i * 37) % 80 - 40,
-      size: kind === 'KNUCKLE' ? 28 : kind === 'RIB' ? 46 : 40 + (i % 3) * 8,
-      stage: 0,
-      crushed: false,
-    }))
-  );
-  const [motes, setMotes] = useState<Array<{ id: number; x: number; y: number }>>(
-    []
-  );
+  const [bones, setBones] = useState<BoneChunk[]>(starterBones);
+  const [motes, setMotes] = useState<
+    Array<{ id: number; x: number; y: number; dx: number; dy: number; size: number }>
+  >([]);
+  const boneSeq = useRef(STARTER_BONES);
   const bonesRef = useRef(bones);
   bonesRef.current = bones;
   const [hammerPos, setHammerPos] = useState({ x: 50, y: 20 });
@@ -200,10 +201,13 @@ export const UrnFillingMiniGame: React.FC = () => {
   };
 
   const crushProgress = useMemo(() => {
-    if (bones.length === 0) return 100;
-    return Math.round(
-      (bones.filter((b) => b.crushed).length / bones.length) * 100
+    const total = bones.reduce((sum, bone) => sum + bone.weight, 0);
+    if (total <= 0) return 100;
+    const done = bones.reduce(
+      (sum, bone) => sum + (bone.crushed ? bone.weight : 0),
+      0
     );
+    return Math.round((done / total) * 100);
   }, [bones]);
 
   const collectedBonus = useMemo(() => {
@@ -236,21 +240,43 @@ export const UrnFillingMiniGame: React.FC = () => {
     const y = ((clientY - rect.top) / rect.height) * 100;
     setHammerPos({ x, y });
     let struck = false;
-    const next = bonesRef.current.map((b) => {
-      if (b.stage >= 2) return b;
-      if (Math.hypot(b.x - x, b.y - y) >= 16) return b;
+    const incoming = bonesRef.current;
+    const next: BoneChunk[] = [];
+    for (const bone of incoming) {
+      if (Math.hypot(bone.x - x, bone.y - y) >= 18) {
+        next.push(bone);
+        continue;
+      }
       struck = true;
-      const nextStage = (b.stage + 1) as 1 | 2;
-      return {
-        ...b,
-        stage: nextStage,
-        crushed: nextStage === 2,
-        size: nextStage === 2 ? Math.max(22, b.size * 0.7) : Math.max(18, b.size * 0.62),
-        rot: b.rot + (Math.random() - 0.5) * 28,
-        x: b.x + (Math.random() - 0.5) * 6,
-        y: b.y + (Math.random() - 0.5) * 6,
-      };
-    });
+      if (bone.stage >= 3) {
+        next.push(bone);
+        continue;
+      }
+      const want = bone.stage === 0 ? 3 : bone.stage === 1 ? 2 : 1;
+      const room = Math.max(1, BONE_CAP - (incoming.length - 1));
+      const count = Math.max(1, Math.min(want, room));
+      const nextStage = (bone.stage + 1) as 1 | 2 | 3;
+      const size =
+        nextStage === 1
+          ? Math.max(32, bone.size * 0.62)
+          : nextStage === 2
+            ? Math.max(18, bone.size * 0.55)
+            : Math.max(14, bone.size * 0.75);
+      const share = bone.weight / count;
+      for (let k = 0; k < count; k += 1) {
+        next.push({
+          id: boneSeq.current++,
+          kind: bone.kind,
+          x: Math.min(92, Math.max(8, bone.x + (k - (count - 1) / 2) * 8)),
+          y: Math.min(86, Math.max(12, bone.y + (k % 2 === 0 ? -4 : 5))),
+          rot: bone.rot + (k - 1) * 18,
+          size,
+          stage: nextStage,
+          weight: share,
+          crushed: nextStage === 3,
+        });
+      }
+    }
     if (!struck) return;
     if (Date.now() - lastHammer.current > 120) {
       lastHammer.current = Date.now();
@@ -260,12 +286,19 @@ export const UrnFillingMiniGame: React.FC = () => {
     bonesRef.current = next;
     setBones(next);
     setMotes((prev) => [
-      ...prev.slice(-36),
-      ...Array.from({ length: 7 }, (_, n) => ({
-        id: particleId.current++,
-        x: x + (n - 3) * 1.6,
-        y: y + (n % 3) * 1.3,
-      })),
+      ...prev.slice(-40),
+      ...Array.from({ length: 14 }, (_, n) => {
+        const angle = (n / 14) * Math.PI * 2;
+        const dist = 12 + (n % 5) * 7;
+        return {
+          id: particleId.current++,
+          x: x + (n % 3) - 1,
+          y,
+          dx: Math.cos(angle) * dist,
+          dy: Math.sin(angle) * dist - 6,
+          size: 3 + (n % 4) * 2,
+        };
+      }),
     ]);
   };
 
@@ -720,8 +753,8 @@ export const UrnFillingMiniGame: React.FC = () => {
       {phase === 'CRUSH' && (
         <div className="flex-1 min-h-0 flex flex-col gap-2 mt-2">
           <p className="text-[11px] text-zinc-400 shrink-0">
-            Tap the rubber hammer on large bone fragments. Start Extractor to
-            clear bone dust or the tray will blind you.
+            Tap the rubber hammer. Bones break from large, to medium, to small,
+            then to dust. Start Extractor or the tray will blind you.
           </p>
           <div
             ref={trayRef}
@@ -741,6 +774,7 @@ export const UrnFillingMiniGame: React.FC = () => {
               <div
                 key={`${b.id}-${b.stage}`}
                 className="bone-hit absolute pointer-events-none"
+                data-bone-stage={b.stage}
                 style={{
                   left: `${b.x}%`,
                   top: `${b.y}%`,
@@ -758,7 +792,14 @@ export const UrnFillingMiniGame: React.FC = () => {
               <span
                 key={m.id}
                 className="bone-mote"
-                style={{ left: `${m.x}%`, top: `${m.y}%` }}
+                style={{
+                  left: `${m.x}%`,
+                  top: `${m.y}%`,
+                  width: m.size,
+                  height: m.size,
+                  ['--dx' as string]: `${m.dx}px`,
+                  ['--dy' as string]: `${m.dy}px`,
+                }}
               />
             ))}
             <div
@@ -766,11 +807,13 @@ export const UrnFillingMiniGame: React.FC = () => {
               style={{
                 left: `${hammerPos.x}%`,
                 top: `${hammerPos.y}%`,
-                transform: `translate(-50%, -80%) rotate(${hammerHeld ? -25 : -8}deg)`,
+                width: 54,
+                height: 96,
+                transform: `translate(-50%, -78%) rotate(${hammerHeld ? -28 : -12}deg)`,
+                filter: 'drop-shadow(0 8px 6px rgba(0,0,0,0.55))',
               }}
             >
-              <div className="w-3 h-16 bg-zinc-700 rounded-sm mx-auto" />
-              <div className="w-10 h-7 bg-zinc-900 border-2 border-zinc-500 rounded-md -mt-1" />
+              <CrushHammer held={hammerHeld} />
             </div>
             {dustLevel > 5 && (
               <div
@@ -779,7 +822,7 @@ export const UrnFillingMiniGame: React.FC = () => {
               >
                 <div className="absolute inset-0 flex items-center justify-center">
                   <span className="text-xs font-bold text-stone-900/80 bg-stone-200/50 px-2 py-1 rounded">
-                    BONE DUST — Start Extractor!
+                    Bone dust. Start the extractor.
                   </span>
                 </div>
               </div>
@@ -898,7 +941,7 @@ export const UrnFillingMiniGame: React.FC = () => {
                   opacity: hatchLoaded ? 0.25 : 0.9,
                 }}
               >
-                <BoneFragment kind={b.kind} stage={2} />
+                <BoneFragment kind={b.kind} stage={3} />
               </div>
             ))}
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-28 h-16 border-2 border-amber-600 bg-zinc-900 rounded-b-xl flex flex-col items-center justify-end pb-1 overflow-hidden">

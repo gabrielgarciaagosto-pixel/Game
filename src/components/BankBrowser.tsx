@@ -231,7 +231,8 @@ export const BankBrowser: React.FC = () => {
           <section className="space-y-3">
             <p className="text-[11px] text-slate-400">
               Working capital notes. Mortgages appear when you finance a Lychgate
-              purchase. Drafts auto-pull; shortfalls overdraw accounts.
+              purchase. If the house can pay, the bank drafts it. If it cannot,
+              you have 2 days to pay here before the bank takes the parlor.
             </p>
             {BANK_LOAN_PRODUCTS.map((p) => (
               <div

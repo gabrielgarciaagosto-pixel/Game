@@ -20,6 +20,10 @@ export const SCI_GAP_MAX_MS = 12 * HOUR_MS;
 /** Phone calls that land a body, on top of the daily automatic cap. */
 export const PHONE_EXTRA_PER_DAY = 2;
 
+/** A due arrival that found no open bay. The body is not kept. */
+export const COOLER_RIVAL_NOTE =
+  'A family called, but your cooler was full. Another funeral home took the call.';
+
 /**
  * A service may run this long after the chosen hour.
  * Inside the window the house pays a small courtesy. After it, reschedule.
@@ -81,7 +85,7 @@ export function advanceIntakeSchedule(input: {
   coolerFull: boolean;
   catchUpLimit: number;
   rng?: () => number;
-}): { schedule: IntakeSchedule; spawnCount: number; heldForCooler: boolean } {
+}): { schedule: IntakeSchedule; spawnCount: number; lostToRival: number } {
   const rng = input.rng ?? Math.random;
   const today = localDayKey(input.now);
   let { dayKey, spawned, nextAt, bootstrapped } = input.schedule;
@@ -96,11 +100,12 @@ export function advanceIntakeSchedule(input: {
     return {
       schedule: { dayKey, spawned, nextAt: null, bootstrapped },
       spawnCount: 0,
-      heldForCooler: false,
+      lostToRival: 0,
     };
   }
 
   let spawnCount = 0;
+  let lostToRival = 0;
   if (nextAt == null) {
     if (!bootstrapped && input.coolerEmpty && !input.coolerFull && spawned < cap) {
       spawnCount = 1;
@@ -111,43 +116,43 @@ export function advanceIntakeSchedule(input: {
     return {
       schedule: { dayKey, spawned, nextAt, bootstrapped },
       spawnCount,
-      heldForCooler: false,
+      lostToRival: 0,
     };
   }
 
-  // A due arrival is kept until a bay is free. It is not skipped because
-  // the calendar rolled, and it does not count against the daily cap
-  // until the body is actually in the cooler.
-  let heldForCooler = false;
+  // A due call is not held for a bay. If the cooler is full, that call is
+  // lost and the next one is scheduled. It still counts toward today's cap,
+  // so a long absence does not dump every missed day at once.
   let guard = 0;
   while (
     nextAt <= input.now &&
-    spawnCount < input.catchUpLimit &&
+    spawnCount + lostToRival < input.catchUpLimit &&
     guard < 64
   ) {
     guard += 1;
     const dueDay = localDayKey(nextAt);
     if (dueDay > today) break;
-    if (input.coolerFull) {
-      heldForCooler = true;
-      break;
-    }
     if (spawned >= cap) break;
+    if (input.coolerFull) {
+      lostToRival += 1;
+      spawned += 1;
+      nextAt += gap();
+      continue;
+    }
     spawnCount += 1;
     spawned += 1;
     nextAt += gap();
   }
   if (
     nextAt <= input.now &&
-    !heldForCooler &&
-    (spawnCount >= input.catchUpLimit || spawned >= cap)
+    (spawnCount + lostToRival >= input.catchUpLimit || spawned >= cap)
   ) {
     nextAt = input.now + gap();
   }
   return {
     schedule: { dayKey, spawned, nextAt, bootstrapped },
     spawnCount,
-    heldForCooler,
+    lostToRival,
   };
 }
 

@@ -136,7 +136,7 @@ export function HandBrushArt({ className }: { className?: string }) {
   const uid = useId().replace(/:/g, '');
   const wood = `hand-wood-${uid}`;
   return (
-    <svg viewBox="0 0 120 210" className={className} aria-hidden>
+    <svg viewBox="0 0 120 156" className={className} aria-hidden>
       <defs>
         <linearGradient id={wood} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#f5deb3" />
@@ -149,15 +149,15 @@ export function HandBrushArt({ className }: { className?: string }) {
       <path d="M36 40c16 6 32 6 48 0" stroke="#a1623b" strokeWidth="1.2" fill="none" opacity="0.7" />
       <path d="M36 54c18 8 34 8 50-1" stroke="#a1623b" strokeWidth="1" fill="none" opacity="0.55" />
       <rect x="24" y="84" width="72" height="12" rx="2" fill="#9a7b4f" />
-      {Array.from({ length: 16 }).map((_, i) => {
-        const x = 30 + i * 4;
-        const len = 78 + (i % 3) * 8;
+      {Array.from({ length: 22 }).map((_, i) => {
+        const x = 28 + i * 3;
+        const len = 26 + (i % 3) * 4;
         return (
           <path
             key={i}
-            d={`M${x} 94 q${i % 2 ? 3 : -2} ${len / 2} ${i % 2 ? 2 : -1} ${len}`}
+            d={`M${x} 94 q${i % 2 ? 1.2 : -1} ${len / 2} ${i % 2 ? 0.6 : -0.4} ${len}`}
             stroke={i % 5 === 0 ? '#f5f5f4' : '#d6d3d1'}
-            strokeWidth="2.1"
+            strokeWidth="2.2"
             fill="none"
             strokeLinecap="round"
             opacity="0.95"

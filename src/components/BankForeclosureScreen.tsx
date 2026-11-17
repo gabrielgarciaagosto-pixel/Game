@@ -19,7 +19,10 @@ export const BankForeclosureScreen: React.FC = () => {
         <p className="text-[10px] uppercase tracking-[0.28em] text-red-400/80">
           First National Mortuary Bank
         </p>
-        <h2 className="text-3xl font-black text-red-200 tracking-tight">
+        <h2
+          className="text-3xl text-red-100 tracking-tight"
+          style={{ fontFamily: 'Cinzel, Georgia, serif' }}
+        >
           {BANK_FORECLOSURE_TITLE}
         </h2>
         <p className="text-sm text-red-100/90 leading-relaxed">

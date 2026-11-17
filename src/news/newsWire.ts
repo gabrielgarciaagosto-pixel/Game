@@ -45,7 +45,6 @@ export interface NewsTickInput {
   now: number;
   ownedListingId: string;
   openCaseIds: ReadonlySet<string>;
-  coolerFull: boolean;
   /** A headline case is already in the house, even if the wire lost the line. */
   headlineCaseOpen?: boolean;
   rng?: () => number;
@@ -241,7 +240,7 @@ export function advanceNewsWire(input: NewsTickInput): NewsTickResult {
   }
 
   const spawnBusy = wire.some(isSpawnItem) || input.headlineCaseOpen === true;
-  if (!spawnBusy && input.now >= celebGate && !input.coolerFull) {
+  if (!spawnBusy && input.now >= celebGate) {
     celebGate = input.now + NEWS_DAY_MS;
     changed = true;
     if (rng() < CELEB_ROLL) {

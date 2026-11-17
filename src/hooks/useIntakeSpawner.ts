@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { coolerBayCapacity } from '../data/facilityUpgrades';
 import { DAILY_INTAKE_CAP } from '../data/pacing';
 import { useGameStore } from '../store/useGameStore';
 import { gameNow } from '../utils/gameNow';
@@ -38,6 +39,9 @@ export function useIntakeSpawner() {
         state.nextIntakeAt != null && state.nextIntakeAt > now
           ? wall + (state.nextIntakeAt - now)
           : null;
+      const coolerCap = coolerBayCapacity(state.facilityLevels.cooler_bays || 0);
+      const coolerFull =
+        state.cases.filter((row) => row.location === 'COOLER').length >= coolerCap;
       const families = state.cases
         .filter(
           (row) =>
@@ -49,17 +53,25 @@ export function useIntakeSpawner() {
           name: row.name,
           at: wall + (row.familyUrnRemainingMs ?? 0),
         }));
+      const loans = state.activeLoans
+        .filter((loan) => loan.principalRemaining > 0 && loan.nextPaymentDueAt > now)
+        .slice(0, 8)
+        .map((loan) => ({ at: wall + (loan.nextPaymentDueAt - now) }));
       const key = [
         state.notificationsEnabled ? '1' : '0',
+        coolerFull ? 'full' : 'open',
         intakeAt == null ? '' : String(Math.round(intakeAt / 60000)),
         families.map((family) => Math.round(family.at / 60000)).join(','),
+        loans.map((loan) => Math.round(loan.at / 60000)).join(','),
       ].join('|');
       if (key === alarmKey.current) return;
       alarmKey.current = key;
       void syncHouseAlarms({
         enabled: state.notificationsEnabled,
         intakeAt,
+        intakeRival: coolerFull,
         families,
+        loans,
       });
     };
 

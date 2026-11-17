@@ -1,5 +1,5 @@
 import { FAMILY_MINUTE_MS } from './familyUrnTiming';
-import { HOUR_MS } from './pacing';
+import { DAY_MS, HOUR_MS } from './pacing';
 
 /**
  * Family hour stays on the old scale for anything that still speaks it.
@@ -16,12 +16,24 @@ export const BANK_FORECLOSURE_AFTER_MS = 72 * HOUR_MS;
 /** One real day between loan and mortgage drafts. */
 export const LOAN_INSTALLMENT_MS = 24 * HOUR_MS;
 
+/**
+ * After a payment comes due and the house cannot pay, the bank waits this long.
+ * Two in-game days. An in-game day is one real day. Gabriel can change this.
+ */
+export const BANK_LOAN_GRACE_MS = 2 * DAY_MS;
+
+export const BANK_PAYMENT_DUE =
+  'A reminder from the bank: your payment is due.';
+export const BANK_PAYMENT_OVERDUE =
+  'A reminder from the bank: your payment is overdue.';
+export const BANK_PAYMENT_DRAFTED = 'The bank drafted your payment.';
+
 export const BANK_WARNING_MESSAGE =
   'BANK NOTICE: Your accounts are overdrawn. This notice arrives after 24 hours of open parlor time. Restore a non-negative balance before 72 hours of open parlor time or the bank will foreclose. This clock pauses while Ossuarian is closed.';
 
-export const BANK_FORECLOSURE_TITLE = 'FORECLOSED';
+export const BANK_FORECLOSURE_TITLE = 'The parlor is closed';
 export const BANK_FORECLOSURE_BODY =
-  'The bank has seized the funeral home. Your license is revoked. All progress is lost.';
+  'The bank waited, and the payment did not come. They have taken the parlor. This house is no longer yours.';
 
 export function bankDebtElapsedMs(
   negativeCashSinceMs: number | null,

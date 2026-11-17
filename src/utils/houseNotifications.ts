@@ -68,6 +68,8 @@ const SMALL_ICON = 'ic_stat_ossuarian';
 const INTAKE_ALARM = 81001;
 const FAMILY_ALARM_BASE = 82000;
 const FAMILY_ALARM_SLOTS = 12;
+const LOAN_ALARM_BASE = 83000;
+const LOAN_ALARM_SLOTS = 8;
 
 async function deliver(title: string, body: string) {
   try {
@@ -104,7 +106,10 @@ export interface HouseAlarmPlan {
   enabled: boolean;
   /** Wall-clock ms. Null when nothing is due later. */
   intakeAt: number | null;
+  /** True when the next intake will be lost if the cooler stays full. */
+  intakeRival: boolean;
   families: { at: number; name: string }[];
+  loans: { at: number }[];
 }
 
 /**
@@ -119,6 +124,9 @@ export async function syncHouseAlarms(plan: HouseAlarmPlan) {
     const ids = [{ id: INTAKE_ALARM }];
     for (let i = 0; i < FAMILY_ALARM_SLOTS; i += 1) {
       ids.push({ id: FAMILY_ALARM_BASE + i });
+    }
+    for (let i = 0; i < LOAN_ALARM_SLOTS; i += 1) {
+      ids.push({ id: LOAN_ALARM_BASE + i });
     }
     await local.cancel({ notifications: ids });
     if (!plan.enabled || !gate()) return;
@@ -135,11 +143,22 @@ export async function syncHouseAlarms(plan: HouseAlarmPlan) {
     if (plan.intakeAt != null && plan.intakeAt > now + 2000) {
       queued.push({
         id: INTAKE_ALARM,
-        title: 'New remains',
-        body: 'A body is due at the house. Tag them in the cooler when you open the door.',
+        title: plan.intakeRival ? 'Another house' : 'New remains',
+        body: plan.intakeRival
+          ? 'A family called, but your cooler was full. Another funeral home took the call.'
+          : 'A body is due at the house. Tag them in the cooler when you open the door.',
         at: plan.intakeAt,
       });
     }
+    plan.loans.slice(0, LOAN_ALARM_SLOTS).forEach((loan, index) => {
+      if (loan.at <= now + 2000) return;
+      queued.push({
+        id: LOAN_ALARM_BASE + index,
+        title: 'The bank',
+        body: 'A reminder from the bank: your payment is due.',
+        at: loan.at,
+      });
+    });
     plan.families.slice(0, FAMILY_ALARM_SLOTS).forEach((family, index) => {
       if (family.at <= now + 2000) return;
       queued.push({

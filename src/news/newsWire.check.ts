@@ -38,7 +38,6 @@ const base = {
   recent: [] as string[],
   ownedListingId: '',
   openCaseIds: new Set<string>(),
-  coolerFull: false,
   headlineCaseOpen: false,
 };
 
@@ -184,7 +183,6 @@ const full = advanceNewsWire({
   nextLiveAt: Number.POSITIVE_INFINITY,
   celebGate: 0,
   now: 10_000_000,
-  coolerFull: true,
   rng: () => 0,
 });
 const fullLater = advanceNewsWire({
@@ -194,11 +192,10 @@ const fullLater = advanceNewsWire({
   celebGate: full.celebGate,
   recent: full.recent,
   now: full.celebGate,
-  coolerFull: true,
   rng: () => 0,
 });
-check(fullLater.spawn == null, 'a full cooler does not spawn');
-check(counts(fullLater.wire).spawn === 0, 'a full cooler does not leave a live case line');
+check(fullLater.spawn != null, 'the celebrity day still rolls when the house is full');
+check(counts(fullLater.wire).spawn === 1, 'a hit still lands on the wire');
 
 const fresh = advanceNewsWire({
   ...base,
