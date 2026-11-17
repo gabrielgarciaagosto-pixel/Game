@@ -4,10 +4,10 @@
  * and versionCode as VERSION_CODE. The update check compares VERSION_CODE
  * with version.json. See VERSION.md.
  */
-export const GAME_VERSION = '0.9.65';
+export const GAME_VERSION = '0.9.66';
 
 /** Installed Android versionCode. The web bundle cannot read the APK, so this must match build.gradle. */
-export const VERSION_CODE = 83;
+export const VERSION_CODE = 84;
 
 export const VERSION_NAME = `${GAME_VERSION}-demo`;
 
