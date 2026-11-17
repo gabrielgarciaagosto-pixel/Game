@@ -18,14 +18,14 @@ export const CREMATORY_TOOLS: {
     blurb: 'Sweep large bones downward. Nudges remains on contact.',
   },
   {
-    id: 'BRISTLE_BRUSH',
-    name: 'Hand Brush',
-    blurb: 'Sweep fragments downward. The bristles flex in the ash.',
+    id: 'HAND_BRUSH',
+    name: 'Fragment Brush',
+    blurb: 'Sweep fragments downward. Clears the smaller bones.',
   },
   {
-    id: 'HAND_BRUSH',
-    name: 'Ash Brush',
-    blurb: 'Sweep fine ash. Raises dust when it kisses the heap.',
+    id: 'BRISTLE_BRUSH',
+    name: 'Hand Brush',
+    blurb: 'Sweep fine ash. The bristles flex in the heap.',
   },
 ];
 

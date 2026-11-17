@@ -652,7 +652,7 @@ export const CremationMiniGame: React.FC = () => {
     }
     if (tool === 'IRON_RAKE') {
       if (live.largeBonesLeft <= 0) {
-        showHint('Large bones are clear. Take the hand brush.');
+        showHint('Large bones are clear. Take the fragment brush.');
         return;
       }
       let fall: ReturnType<typeof fallClipFor> = null;
@@ -676,13 +676,13 @@ export const CremationMiniGame: React.FC = () => {
       if (fall) crematoryToolSfx.playFall(fall);
       spawnDust(x, y, 'char');
       void hapticIronRake();
-    } else if (tool === 'BRISTLE_BRUSH') {
+    } else if (tool === 'HAND_BRUSH') {
       if (live.largeBonesLeft > 0) {
         showHint('Rake the large bones first.');
         return;
       }
       if (live.mediumBonesLeft <= 0) {
-        showHint('Fragments are clear. Take the ash brush.');
+        showHint('Fragments are clear. Take the hand brush.');
         return;
       }
       let fall: ReturnType<typeof fallClipFor> = null;
@@ -706,7 +706,7 @@ export const CremationMiniGame: React.FC = () => {
       if (fall) crematoryToolSfx.playFall(fall);
       spawnDust(x, y, 'char');
       void hapticIronRake();
-    } else if (tool === 'HAND_BRUSH') {
+    } else if (tool === 'BRISTLE_BRUSH') {
       if (live.mediumBonesLeft > 0 || live.largeBonesLeft > 0) {
         showHint('Clear bones and fragments before the ash.');
         return;

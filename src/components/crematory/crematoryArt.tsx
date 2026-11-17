@@ -331,7 +331,7 @@ export function HandBrushArt({
   const lean = Math.max(-1, Math.min(1, flex?.lean ?? 0));
   const push = Math.max(0, Math.min(1, flex?.push ?? 0));
   return (
-    <svg viewBox="0 0 120 156" className={className} aria-hidden data-tool-art="ash-brush">
+    <svg viewBox="0 0 120 156" className={className} aria-hidden data-tool-art="fragment-brush">
       <defs>
         <linearGradient id={wood} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#f5deb3" />

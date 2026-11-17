@@ -100,6 +100,7 @@ export function pickVariation<T extends string>(
 /**
  * Bones leave the hearth on a credited downstroke. That stroke is the fall.
  * The long clatter is only the iron-rake stroke that empties the large bones.
+ * The short fall is the fragment brush clearing smaller bones. The hand brush sweeps ash and stays quiet.
  * The retort has no separate "full sweep finished" flag.
  */
 export function fallClipFor(input: {
@@ -119,7 +120,7 @@ export function fallClipFor(input: {
   const largeDropped =
     input.tool === 'IRON_RAKE' && input.largeAfter < input.largeBefore;
   const fragmentsDropped =
-    input.tool === 'BRISTLE_BRUSH' && input.mediumAfter < input.mediumBefore;
+    input.tool === 'HAND_BRUSH' && input.mediumAfter < input.mediumBefore;
   if (largeDropped || fragmentsDropped) return 'short';
   return null;
 }

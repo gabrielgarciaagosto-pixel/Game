@@ -40,7 +40,7 @@ check(
     touchingBones: false,
     phase: 'SWEEP',
   }) === 'dry',
-  'iron brush uses the same dry scrape'
+  'the hand brush uses the same dry scrape'
 );
 check(
   sweepClipFor({
@@ -50,7 +50,7 @@ check(
     touchingBones: false,
     phase: 'SWEEP',
   }) === 'dry',
-  'hand brush uses the same dry scrape'
+  'the fragment brush uses the same dry scrape'
 );
 check(
   sweepClipFor({
@@ -177,23 +177,23 @@ check(
 );
 check(
   fallClipFor({
-    tool: 'BRISTLE_BRUSH',
+    tool: 'HAND_BRUSH',
     largeBefore: 0,
     largeAfter: 0,
     mediumBefore: 22,
     mediumAfter: 0,
   }) === 'short',
-  'the iron brush, even on its last fragments, stays on the short fall'
+  'the fragment brush, even on its last fragments, stays on the short fall'
 );
 check(
   fallClipFor({
-    tool: 'HAND_BRUSH',
+    tool: 'BRISTLE_BRUSH',
     largeBefore: 0,
     largeAfter: 0,
-    mediumBefore: 0,
+    mediumBefore: 22,
     mediumAfter: 0,
   }) === null,
-  'the hand brush does not drop bones'
+  'the hand brush sweeps ash and does not drop bones'
 );
 check(
   fallClipFor({
