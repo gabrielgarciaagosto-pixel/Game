@@ -21,8 +21,11 @@ import {
 } from './urns/BoneArt';
 import { startAshPourSfx, stopAshPourSfx } from '../utils/soundEffects';
 import { boneCrushSfx } from '../audio/boneCrushSfx';
+import { crematoryToolSfx } from '../audio/crematoryToolSfx';
+import { latchToolMoving, sweepClipFor } from '../audio/crematoryToolSfxPolicy';
 import { extractorSfx } from '../audio/extractorSfx';
 import { cremulatorSfx } from '../audio/cremulatorSfx';
+import { ToolArt, type BrushFlex } from './crematory/crematoryArt';
 
 type Phase =
   | 'CRUSH'
@@ -148,6 +151,10 @@ export const UrnFillingMiniGame: React.FC = () => {
 
   useEffect(() => {
     noteTutorialBeat(phase);
+    if (phase !== 'HATCH') {
+      crematoryToolSfx.setSweep(null);
+      brushAudio.current = false;
+    }
   }, [phase, noteTutorialBeat]);
   const [bones, setBones] = useState<BoneChunk[]>(starterBones);
   const [motes, setMotes] = useState<
@@ -176,6 +183,16 @@ export const UrnFillingMiniGame: React.FC = () => {
     }))
   );
   const [magnetPos, setMagnetPos] = useState({ x: 50, y: 50 });
+  const [brushPos, setBrushPos] = useState({ x: 48, y: 58 });
+  const [brushHeld, setBrushHeld] = useState(false);
+  const [brushFlex, setBrushFlex] = useState<BrushFlex>({ lean: 0, push: 0 });
+  const [ashMotes, setAshMotes] = useState<
+    Array<{ id: number; x: number; y: number; dx: number; dy: number; size: number }>
+  >([]);
+  const brushAudio = useRef(false);
+  const prevBrush = useRef<{ x: number; y: number } | null>(null);
+  const lastAsh = useRef(0);
+  const ashSeq = useRef(1);
   const [urnFill, setUrnFill] = useState(0);
   const [tilt, setTilt] = useState(0);
   const [ashPouring, setAshPouring] = useState(false);
@@ -236,10 +253,12 @@ export const UrnFillingMiniGame: React.FC = () => {
     void extractorSfx.preload();
     void boneCrushSfx.preload();
     void cremulatorSfx.preload();
+    void crematoryToolSfx.preload();
     return () => {
       extractorSfx.stop();
       boneCrushSfx.stop();
       cremulatorSfx.stop();
+      crematoryToolSfx.setSweep(null);
     };
   }, []);
 
@@ -353,29 +372,86 @@ export const UrnFillingMiniGame: React.FC = () => {
     );
   };
 
-  const sweepToHatch = (clientX: number, clientY: number) => {
-    if (!trayRef.current || hatchLoaded) return;
+  const spawnAsh = (x: number, y: number) => {
+    const motes = Array.from({ length: 14 }, (_, i) => {
+      const angle = -Math.PI / 2 + (i / 12) * Math.PI - 0.4;
+      const dist = 18 + (i % 5) * 10;
+      return {
+        id: ashSeq.current++,
+        x,
+        y,
+        dx: Math.cos(angle) * dist,
+        dy: Math.sin(angle) * dist - 10,
+        size: 7 + (i % 4) * 3,
+      };
+    });
+    setAshMotes((prev) => [...prev.slice(-28), ...motes]);
+    window.setTimeout(() => {
+      const ids = new Set(motes.map((m) => m.id));
+      setAshMotes((prev) => prev.filter((m) => !ids.has(m.id)));
+    }, 980);
+  };
+
+  const releaseBrush = () => {
+    setBrushHeld(false);
+    brushAudio.current = false;
+    prevBrush.current = null;
+    crematoryToolSfx.setSweep(null);
+    setBrushFlex({ lean: 0, push: 0 });
+  };
+
+  const sweepWithBrush = (clientX: number, clientY: number) => {
+    if (!trayRef.current) return;
     const rect = trayRef.current.getBoundingClientRect();
     const x = ((clientX - rect.left) / rect.width) * 100;
     const y = ((clientY - rect.top) / rect.height) * 100;
-    // Hatch is bottom-center zone
-    if (y > 70 && x > 30 && x < 70) {
-      setHatchFill((v) => {
-        const next = Math.min(100, v + 4);
-        if (next >= 100) {
-          setHatchLoaded(true);
-          setLoadingSorting(true);
-        }
-        return next;
+    const prev = prevBrush.current ?? { x, y };
+    prevBrush.current = { x, y };
+    setBrushPos({ x, y });
+    const dist = Math.hypot(x - prev.x, y - prev.y);
+    const dy = y - prev.y;
+    const onTray = x > 4 && x < 96 && y > 6 && y < 98;
+    const moving = latchToolMoving(brushAudio.current, dist);
+    brushAudio.current = moving;
+    crematoryToolSfx.setSweep(
+      sweepClipFor({
+        tool: 'BRISTLE_BRUSH',
+        moving,
+        onHearth: onTray,
+        touchingBones: false,
+        phase: 'SWEEP',
+      })
+    );
+    if (onTray && moving) {
+      setBrushFlex({
+        lean: Math.max(-1, Math.min(1, (prev.x - x) / 2.2)),
+        push: Math.max(0, Math.min(1, dy / 2.4)),
       });
-      setBones((prev) =>
-        prev.map((b) => ({
-          ...b,
-          x: b.x + (50 - b.x) * 0.08,
-          y: b.y + (85 - b.y) * 0.1,
-        }))
+      if (Date.now() - lastAsh.current > 90) {
+        lastAsh.current = Date.now();
+        spawnAsh(x, y);
+      }
+    } else {
+      setBrushFlex((cur) =>
+        cur.lean === 0 && cur.push === 0 ? cur : { lean: 0, push: 0 }
       );
     }
+    if (hatchLoaded || !onTray || dy <= 0) return;
+    setHatchFill((v) => {
+      const next = Math.min(100, v + Math.min(6, dy * 0.45));
+      if (next >= 100) {
+        setHatchLoaded(true);
+        setLoadingSorting(true);
+      }
+      return next;
+    });
+    setBones((prevBones) =>
+      prevBones.map((b) => ({
+        ...b,
+        x: b.x + (50 - b.x) * 0.05,
+        y: Math.min(88, b.y + Math.max(1.2, dy * 0.35)),
+      }))
+    );
   };
 
   const startExtractor = () => {
@@ -805,7 +881,7 @@ export const UrnFillingMiniGame: React.FC = () => {
             {phase === 'MAGNET' &&
               'Drag the magnet through the same pile. It pulls screws, plates, and implants.'}
             {phase === 'HATCH' &&
-              'Sweep the remains down into the hatch. They are still the bones you crushed.'}
+              'Sweep the remains down into the hatch with the Hand Brush. They are still the bones you crushed.'}
             {phase === 'PROCESSOR' &&
               'The tray stays put. Press Engage. Emergency Stop kills the mill.'}
           </p>
@@ -826,7 +902,8 @@ export const UrnFillingMiniGame: React.FC = () => {
               } else if (phase === 'MAGNET') {
                 moveMagnet(e.clientX, e.clientY);
               } else if (phase === 'HATCH') {
-                sweepToHatch(e.clientX, e.clientY);
+                setBrushHeld(true);
+                sweepWithBrush(e.clientX, e.clientY);
               }
             }}
             onPointerMove={(e) => {
@@ -834,12 +911,18 @@ export const UrnFillingMiniGame: React.FC = () => {
                 smashAt(e.clientX, e.clientY);
               } else if (phase === 'MAGNET' && (e.buttons > 0 || e.pressure > 0)) {
                 moveMagnet(e.clientX, e.clientY);
-              } else if (phase === 'HATCH' && e.buttons > 0) {
-                sweepToHatch(e.clientX, e.clientY);
+              } else if (phase === 'HATCH' && (brushHeld || e.buttons > 0)) {
+                sweepWithBrush(e.clientX, e.clientY);
               }
             }}
-            onPointerUp={() => setHammerHeld(false)}
-            onPointerCancel={() => setHammerHeld(false)}
+            onPointerUp={() => {
+              setHammerHeld(false);
+              if (phase === 'HATCH') releaseBrush();
+            }}
+            onPointerCancel={() => {
+              setHammerHeld(false);
+              if (phase === 'HATCH') releaseBrush();
+            }}
           >
             <div className="absolute inset-0 bg-black/10 pointer-events-none" />
             {bones.map((b) => (
@@ -925,6 +1008,41 @@ export const UrnFillingMiniGame: React.FC = () => {
                 }}
               >
                 <CremainsMagnet />
+              </div>
+            )}
+            {ashMotes.map((mote) => (
+              <span
+                key={mote.id}
+                className="ash-mote"
+                style={{
+                  left: `${mote.x}%`,
+                  top: `${mote.y}%`,
+                  width: mote.size,
+                  height: mote.size,
+                  opacity: 0.95,
+                  ['--dx' as string]: `${mote.dx}px`,
+                  ['--dy' as string]: `${mote.dy}px`,
+                }}
+              />
+            ))}
+            {phase === 'HATCH' && (
+              <div
+                className={`absolute z-50 pointer-events-none ${
+                  brushHeld ? '' : 'tool-bob-brush'
+                }`}
+                data-hatch-brush="hand"
+                style={{
+                  left: `${brushPos.x}%`,
+                  top: `${brushPos.y}%`,
+                  transform: brushHeld ? 'translate(-50%, -100%)' : undefined,
+                  filter: 'drop-shadow(0 12px 8px rgba(0,0,0,0.6))',
+                }}
+              >
+                <ToolArt
+                  tool="BRISTLE_BRUSH"
+                  className="h-44 w-auto max-w-[12rem]"
+                  flex={brushFlex}
+                />
               </div>
             )}
             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-32 h-14 border border-zinc-700 bg-zinc-950/80 rounded-b-lg flex flex-col items-center justify-end pb-1 overflow-hidden z-10">
