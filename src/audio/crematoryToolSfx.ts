@@ -1,15 +1,34 @@
 /**
- * Crematory rake and brush clips.
+ * Crematory rake, brush, and stirring-rod clips.
  * Sweep loops stay tied to the tool: stop() cuts them, they do not ring out.
+ * A bone sweep picks a variation when the stroke starts and keeps it until
+ * the tool stops, then a different one next stroke.
  * A bone-fall, once started, plays through even if the tool stops.
  * Level and mute follow the interface bus (the same gate as UI clicks).
  */
 import { audioManager } from '../utils/audioManager';
-import type { FallClip, SweepClip } from './crematoryToolSfxPolicy';
+import {
+  pickVariation,
+  RAKE_BONE_SWEEP_IDS,
+  ROD_BONE_SWEEP_IDS,
+  type FallClip,
+  type RakeBoneSweepId,
+  type RodBoneSweepId,
+  type SweepClip,
+} from './crematoryToolSfxPolicy';
 
 const CLIPS = {
   dry: '/audio/crematory/ironrake-retort-sweep-dry.wav',
+  /** Original rake-on-bone loop. Still one of the rake and brush variations. */
   bones: '/audio/crematory/ironrake-bones-sweep.wav',
+  /** Zip bone-clip-1. Sustained bone scrape. */
+  sweep1: '/audio/crematory/bone-sweep-clip1.wav',
+  /** Zip bone-clip-2. Lighter bone scrape. */
+  sweep2: '/audio/crematory/bone-sweep-clip2.wav',
+  /** Zip bone-clip-3. Sustained bone scrape. */
+  sweep3: '/audio/crematory/bone-sweep-clip3.wav',
+  /** Zip bone-clip-5. Sustained bone scrape. */
+  sweep5: '/audio/crematory/bone-sweep-clip5.wav',
   short: '/audio/crematory/sweep-bones-fall.wav',
   long: '/audio/crematory/long-sweep-bones-fall.wav',
 } as const;
@@ -30,12 +49,14 @@ class CrematoryToolSfx {
   private sweep: (Voice & { kind: SweepClip }) | null = null;
   private wanted: SweepClip | null = null;
   private lastMove = 0;
+  private lastBones: RakeBoneSweepId | null = null;
+  private lastRod: RodBoneSweepId | null = null;
   private falls: Voice[] = [];
   private generation = 0;
   private watch: number | null = null;
 
   preload(): Promise<void> {
-    if (this.buffers.size === 4) return Promise.resolve();
+    if (this.buffers.size === Object.keys(CLIPS).length) return Promise.resolve();
     if (this.loading) return this.loading;
     this.loading = this.loadAll().catch((err: unknown) => {
       this.loading = null;
@@ -65,7 +86,7 @@ class CrematoryToolSfx {
       this.applyGain(this.sweep.gain);
       return;
     }
-    if (!this.buffers.has(kind)) {
+    if (!this.sweepReady(kind)) {
       void this.preload()
         .then(() => {
           if (this.wanted === kind) this.startLoop(kind);
@@ -126,11 +147,30 @@ class CrematoryToolSfx {
     gain.gain.value = this.level();
   }
 
+  private sweepReady(kind: SweepClip): boolean {
+    if (kind === 'dry') return this.buffers.has('dry');
+    if (kind === 'rod') {
+      return ROD_BONE_SWEEP_IDS.every((id) => this.buffers.has(id));
+    }
+    return RAKE_BONE_SWEEP_IDS.every((id) => this.buffers.has(id));
+  }
+
+  /** Picked once per stroke. The same kind keeps this buffer until the tool stops. */
+  private chooseSweep(kind: SweepClip): AudioBuffer | null {
+    if (kind === 'dry') return this.buffers.get('dry') ?? null;
+    if (kind === 'rod') {
+      const id = pickVariation(ROD_BONE_SWEEP_IDS, this.lastRod);
+      this.lastRod = id;
+      return this.buffers.get(id) ?? null;
+    }
+    const id = pickVariation(RAKE_BONE_SWEEP_IDS, this.lastBones);
+    this.lastBones = id;
+    return this.buffers.get(id) ?? null;
+  }
+
   private startLoop(kind: SweepClip): void {
     this.cutSweep();
     if (this.wanted !== kind || !this.audible()) return;
-    const buffer = this.buffers.get(kind);
-    if (!buffer) return;
     const ctx = audioManager.outputContext();
     if (ctx.state !== 'running') {
       void ctx.resume().then(() => {
@@ -138,6 +178,8 @@ class CrematoryToolSfx {
       });
       return;
     }
+    const buffer = this.chooseSweep(kind);
+    if (!buffer) return;
     const voice = this.spawn(buffer, true);
     this.sweep = { ...voice, kind };
     this.ensureWatch();
@@ -172,7 +214,13 @@ class CrematoryToolSfx {
     source.loop = loop;
     source.connect(gain);
     gain.connect(ctx.destination);
-    this.applyGain(gain);
+    if (loop) {
+      const now = ctx.currentTime;
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(this.level(), now + 0.003);
+    } else {
+      this.applyGain(gain);
+    }
     source.start();
     return { source, gain };
   }

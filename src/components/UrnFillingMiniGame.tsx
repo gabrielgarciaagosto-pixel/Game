@@ -17,6 +17,7 @@ import {
   type MetalKind,
 } from './urns/BoneArt';
 import { startAshPourSfx, stopAshPourSfx } from '../utils/soundEffects';
+import { boneCrushSfx } from '../audio/boneCrushSfx';
 import { extractorSfx } from '../audio/extractorSfx';
 
 type Phase =
@@ -221,7 +222,11 @@ export const UrnFillingMiniGame: React.FC = () => {
 
   useEffect(() => {
     void extractorSfx.preload();
-    return () => extractorSfx.stop();
+    void boneCrushSfx.preload();
+    return () => {
+      extractorSfx.stop();
+      boneCrushSfx.stop();
+    };
   }, []);
 
   // Dust builds while crushing without extractor; extractor clears continuously
@@ -246,6 +251,7 @@ export const UrnFillingMiniGame: React.FC = () => {
     const y = ((clientY - rect.top) / rect.height) * 100;
     setHammerPos({ x, y });
     let struck = false;
+    let crushed = false;
     const incoming = bonesRef.current;
     const next: BoneChunk[] = [];
     for (const bone of incoming) {
@@ -258,6 +264,7 @@ export const UrnFillingMiniGame: React.FC = () => {
         next.push(bone);
         continue;
       }
+      crushed = true;
       const want = bone.stage === 0 ? 3 : bone.stage === 1 ? 2 : 1;
       const room = Math.max(1, BONE_CAP - (incoming.length - 1));
       const count = Math.max(1, Math.min(want, room));
@@ -287,6 +294,7 @@ export const UrnFillingMiniGame: React.FC = () => {
     if (Date.now() - lastHammer.current > 120) {
       lastHammer.current = Date.now();
       void hapticHammer();
+      if (crushed) boneCrushSfx.play();
     }
     if (!extractorOn) setDustLevel((d) => Math.min(70, d + 4));
     bonesRef.current = next;

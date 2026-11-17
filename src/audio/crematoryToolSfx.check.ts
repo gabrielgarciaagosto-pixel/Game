@@ -3,9 +3,13 @@
  * The app does not import this file.
  */
 import {
+  BONE_CRUSH_IDS,
+  RAKE_BONE_SWEEP_IDS,
+  ROD_BONE_SWEEP_IDS,
   fallClipFor,
   hearthHasBones,
   latchToolMoving,
+  pickVariation,
   sweepClipFor,
 } from './crematoryToolSfxPolicy.ts';
 
@@ -95,8 +99,48 @@ check(
     onHearth: true,
     touchingBones: true,
     phase: 'BURN',
+  }) === 'rod',
+  'the stirring rod scrapes when it moves through bones'
+);
+check(
+  sweepClipFor({
+    tool: 'STIRRING_ROD',
+    moving: true,
+    onHearth: true,
+    touchingBones: true,
+    phase: 'SWEEP',
+  }) === 'rod',
+  'the rod still scrapes bones during the sweep'
+);
+check(
+  sweepClipFor({
+    tool: 'STIRRING_ROD',
+    moving: true,
+    onHearth: true,
+    touchingBones: false,
+    phase: 'BURN',
   }) === null,
-  'the stirring rod is not a sweeper'
+  'the stirring rod on an empty hearth stays quiet'
+);
+check(
+  sweepClipFor({
+    tool: 'STIRRING_ROD',
+    moving: false,
+    onHearth: true,
+    touchingBones: true,
+    phase: 'BURN',
+  }) === null,
+  'a still rod is silent'
+);
+check(
+  sweepClipFor({
+    tool: 'STIRRING_ROD',
+    moving: true,
+    onHearth: false,
+    touchingBones: true,
+    phase: 'BURN',
+  }) === null,
+  'a rod off the hearth floor is silent'
 );
 check(
   sweepClipFor({
@@ -161,5 +205,40 @@ check(
   }) === null,
   'a rake with nothing left to push is silent'
 );
+
+check(
+  RAKE_BONE_SWEEP_IDS.join() === 'bones,sweep1,sweep2,sweep3,sweep5',
+  'rake and brush bone sweeps keep the original plus the four new scrapes'
+);
+check(
+  ROD_BONE_SWEEP_IDS.join() === 'sweep1,sweep2,sweep3,sweep5',
+  'the rod uses the new bone scrapes and not the old metal loop'
+);
+check(
+  BONE_CRUSH_IDS.join() === 'crushA,crushB,crushC,crushD',
+  'the hammer has the four strikes from the crushing take'
+);
+check(
+  pickVariation(['a', 'b', 'c'], null, () => 0) === 'a',
+  'the first stroke may be the first clip'
+);
+check(
+  pickVariation(['a', 'b', 'c'], 'a', () => 0) === 'b',
+  'the next stroke skips the clip that just played'
+);
+check(
+  pickVariation(['only'], 'only', () => 0) === 'only',
+  'a single clip may repeat'
+);
+let previous: string | null = null;
+for (let i = 0; i < 12; i += 1) {
+  const next: string = pickVariation(
+    ['a', 'b', 'c', 'd'],
+    previous,
+    () => (i % 7) / 7
+  );
+  check(next !== previous, 'no stroke repeats the clip just heard');
+  previous = next;
+}
 
 console.log('crematory tool sfx policy ok');
