@@ -161,6 +161,7 @@ export const ComputerRoom: React.FC = () => {
             onClick={() => setActiveStation('OVERVIEW')}
             style={{ touchAction: 'manipulation' }}
             className="px-3 py-2 rounded border border-[#7dffb2]/40 bg-black/50 text-[11px] font-bold text-[#b8f0d0] font-mono"
+            data-tutorial-target="shut-down"
           >
             Shut down
           </button>
@@ -217,6 +218,7 @@ export const ComputerRoom: React.FC = () => {
           title="State Vital Records — VR-441"
           url="https://vital.records.state.gov/cremation/vr-441"
           onClose={goDesktop}
+          deskTarget
         >
           <div className="h-full bg-[#0a1628] text-[#d7e6d2] flex flex-col overflow-hidden">
             <header className="shrink-0 border-b border-[#2f6b4f] bg-[#0f2a1c] px-3 py-2">

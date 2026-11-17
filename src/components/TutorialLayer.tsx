@@ -1,7 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { resolvePlayerName } from '../data/playerName';
 import {
-  bellSide,
   clampTutorialBell,
   defaultTutorialBell,
   snapTutorialBell,
@@ -10,7 +9,11 @@ import {
   type BellObstacle,
   type BellPoint,
 } from '../tutorial/bellPos';
-import { TUTORIAL_STEPS } from '../tutorial/steps';
+import {
+  TUTORIAL_STEPS,
+  tutorialTargetSelector,
+  type TutorialStep,
+} from '../tutorial/steps';
 import { useGameStore } from '../store/useGameStore';
 
 const DRAG_THRESHOLD = 8;
@@ -26,30 +29,6 @@ const TICKLES = [
 
 function tickleLine(): string {
   return TICKLES[Math.floor(Math.random() * TICKLES.length)] ?? TICKLES[0];
-}
-
-/** The control this step is teaching. Particles circle it. */
-function targetSelector(stepId: string): string | null {
-  switch (stepId) {
-    case 'tag':
-      return '[data-tutorial-target="cooler"]';
-    case 'files':
-      return '[data-tutorial-target="files"]';
-    case 'directive':
-      return '[data-tutorial-target="directive"]';
-    case 'computer':
-      return '[data-tutorial-target="computer"]';
-    case 'vr441':
-      return '[data-tutorial-target="vr441"]';
-    case 'permit':
-      return '[data-tutorial-target="permit"]';
-    case 'crematory':
-      return '[data-tutorial-target="crematory"]';
-    case 'archives':
-      return '[data-tutorial-target="archives"], [data-tutorial-target="files"]';
-    default:
-      return null;
-  }
 }
 
 function cssLengthPx(name: string, fallback: number): number {
@@ -171,6 +150,112 @@ function sameObstacles(a: BellObstacle[], b: BellObstacle[]): boolean {
   );
 }
 
+function dialogueTop(bounds: BellBounds): number {
+  return Math.round(Math.min(bounds.height * 0.56, bounds.height - 250));
+}
+
+/** Parked above the dialogue card, low enough that a flight to the cooler crosses the room. */
+function centerSpirit(bounds: BellBounds): BellPoint {
+  const top = dialogueTop(bounds);
+  return {
+    x: Math.round(bounds.width / 2 - TUTORIAL_SPIRIT_SIZE / 2),
+    y: Math.max(bounds.safeTop + 8, top - TUTORIAL_SPIRIT_SIZE - 18),
+  };
+}
+
+function clampSpirit(point: BellPoint, bounds: BellBounds): BellPoint {
+  return {
+    x: Math.min(Math.max(8, point.x), Math.max(8, bounds.width - TUTORIAL_SPIRIT_SIZE - 8)),
+    y: Math.min(
+      Math.max(bounds.safeTop + 4, point.y),
+      Math.max(bounds.safeTop + 4, bounds.height - TUTORIAL_SPIRIT_SIZE - 8)
+    ),
+  };
+}
+
+function easeInOut(t: number): number {
+  return t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2;
+}
+
+function mostlyVisible(rect: DOMRect): boolean {
+  const top = Math.max(rect.top, 0);
+  const bottom = Math.min(rect.bottom, window.innerHeight);
+  const left = Math.max(rect.left, 0);
+  const right = Math.min(rect.right, window.innerWidth);
+  return bottom - top > rect.height * 0.55 && right - left > rect.width * 0.4;
+}
+
+/** A control the player can actually see, not one buried under the computer. */
+function usableTarget(el: Element): boolean {
+  if (!shown(el)) return false;
+  const rect = el.getBoundingClientRect();
+  if (!mostlyVisible(rect)) return false;
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const top = document.elementFromPoint(cx, cy);
+  if (!top) return false;
+  if (top.closest('[data-tutorial-layer]')) return true;
+  return el === top || el.contains(top);
+}
+
+function orbitRadius(rect: DOMRect): number {
+  const span = Math.min(rect.width, rect.height);
+  // A big room tile has no free margin beside it. Circle on its face.
+  // A small control gets a loop just outside its edge.
+  if (span < 96) return span / 2 + TUTORIAL_SPIRIT_SIZE / 2 + 6;
+  return span * 0.34;
+}
+
+function rockButton(button: HTMLElement) {
+  if (button.dataset.tutorialRock === '1') return;
+  button.dataset.tutorialRock = '1';
+  const anim = button.animate(
+    [
+      { transform: 'rotate(0deg) translateX(0px)' },
+      { transform: 'rotate(-8deg) translateX(-6px)', offset: 0.22 },
+      { transform: 'rotate(7deg) translateX(5px)', offset: 0.5 },
+      { transform: 'rotate(-3deg) translateX(-2px)', offset: 0.74 },
+      { transform: 'rotate(0deg) translateX(0px)' },
+    ],
+    { duration: 780, easing: 'ease-in-out' }
+  );
+  const clear = () => {
+    delete button.dataset.tutorialRock;
+  };
+  anim.onfinish = clear;
+  anim.oncancel = clear;
+}
+
+function brushesButton(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  button: HTMLElement,
+  origin: { x: number; y: number }
+): boolean {
+  const rect = button.getBoundingClientRect();
+  const pad = 8;
+  const left = rect.left - origin.x - pad;
+  const top = rect.top - origin.y - pad;
+  const right = rect.right - origin.x + pad;
+  const bottom = rect.bottom - origin.y + pad;
+  const reach = TUTORIAL_SPIRIT_SIZE * 0.46;
+  for (let i = 0; i <= 4; i += 1) {
+    const t = i / 4;
+    const cx = x0 + (x1 - x0) * t + TUTORIAL_SPIRIT_SIZE / 2;
+    const cy = y0 + (y1 - y0) * t + TUTORIAL_SPIRIT_SIZE / 2;
+    const nx = Math.max(left, Math.min(cx, right));
+    const ny = Math.max(top, Math.min(cy, bottom));
+    if (Math.hypot(cx - nx, cy - ny) <= reach) return true;
+  }
+  return false;
+}
+
+function reduceMotion(): boolean {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 export const TutorialLayer: React.FC = () => {
   const titleGate = useGameStore((s) => s.titleGate);
   const hasStartedGame = useGameStore((s) => s.hasStartedGame);
@@ -194,20 +279,18 @@ export const TutorialLayer: React.FC = () => {
   const completeTutorialStep = useGameStore((s) => s.completeTutorialStep);
   const setTutorialSpirit = useGameStore((s) => s.setTutorialSpirit);
   const setTutorialSpiritMoved = useGameStore((s) => s.setTutorialSpiritMoved);
-  const [hintOpen, setHintOpen] = useState(true);
-  const [dragPos, setDragPos] = useState<BellPoint | null>(null);
+  const [dragging, setDragging] = useState(false);
   const [armed, setArmed] = useState(false);
   const [bounds, setBounds] = useState<BellBounds | null>(() =>
     typeof document === 'undefined' ? null : readBounds()
   );
   const [obstacles, setObstacles] = useState<BellObstacle[]>([]);
   const [tickle, setTickle] = useState<string | null>(null);
-  const [target, setTarget] = useState<{
-    cx: number;
-    cy: number;
-    orbit: number;
-  } | null>(null);
+  const [aim, setAim] = useState<{ cx: number; cy: number } | null>(null);
   const tickleTimer = useRef<number | null>(null);
+  const spiritRef = useRef<HTMLButtonElement>(null);
+  const flightWrapRef = useRef<HTMLSpanElement>(null);
+  const posRef = useRef<BellPoint | null>(null);
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -248,12 +331,11 @@ export const TutorialLayer: React.FC = () => {
   ]);
 
   useEffect(() => {
-    setHintOpen(true);
+    setDragging(false);
+    setTickle(null);
   }, [tutorialStep, tutorial]);
 
   useLayoutEffect(() => {
-    // The title covers the room. Measuring then would keep the title's
-    // buttons, and Continue would not scan again.
     if (tutorial !== 'active' || titleGate || !hasStartedGame) return;
     const next = screenObstacles();
     setObstacles((prev) => (sameObstacles(prev, next) ? prev : next));
@@ -268,7 +350,6 @@ export const TutorialLayer: React.FC = () => {
     settingsOpen,
     computerOpenApp,
     bounds,
-    hintOpen,
   ]);
 
   useEffect(() => {
@@ -277,12 +358,8 @@ export const TutorialLayer: React.FC = () => {
     window.addEventListener('resize', measure);
     return () => {
       window.removeEventListener('resize', measure);
-      if (longPressRef.current != null) {
-        window.clearTimeout(longPressRef.current);
-      }
-      if (tickleTimer.current != null) {
-        window.clearTimeout(tickleTimer.current);
-      }
+      if (longPressRef.current != null) window.clearTimeout(longPressRef.current);
+      if (tickleTimer.current != null) window.clearTimeout(tickleTimer.current);
     };
   }, []);
 
@@ -295,35 +372,195 @@ export const TutorialLayer: React.FC = () => {
     }, 1600);
   };
 
+  const paint = (point: BellPoint, phase: string) => {
+    posRef.current = point;
+    const el = spiritRef.current;
+    if (!el) return;
+    el.style.left = `${point.x}px`;
+    el.style.top = `${point.y}px`;
+    el.dataset.tutorialPhase = phase;
+  };
+
   useLayoutEffect(() => {
-    if (tutorial !== 'active' || !step) {
-      setTarget(null);
+    if (tutorial !== 'active' || !step || !bounds) {
+      setAim(null);
       return;
     }
-    const selector = targetSelector(step.id);
-    const el = selector ? document.querySelector(selector) : null;
-    if (!el) {
-      setTarget(null);
-      return;
+    if (step.mode !== 'point') {
+      setAim(null);
+      const wrap = flightWrapRef.current;
+      if (wrap) wrap.style.transform = '';
+      if (step.mode !== 'talk') return;
+      const dest = centerSpirit(bounds);
+      const start = posRef.current ?? dest;
+      const began = performance.now();
+      const duration = reduceMotion() || Math.hypot(dest.x - start.x, dest.y - start.y) < 8 ? 0 : 480;
+      const glide = { raf: 0, stop: false };
+      const go = (now: number) => {
+        if (glide.stop) return;
+        const raw = duration <= 0 ? 1 : Math.min(1, (now - began) / duration);
+        const t = easeInOut(raw);
+        paint(
+          {
+            x: start.x + (dest.x - start.x) * t,
+            y: start.y + (dest.y - start.y) * t,
+          },
+          raw < 1 ? 'travel' : 'center'
+        );
+        if (raw < 1) glide.raf = requestAnimationFrame(go);
+      };
+      glide.raf = requestAnimationFrame(go);
+      return () => {
+        glide.stop = true;
+        cancelAnimationFrame(glide.raf);
+      };
     }
-    const rect = el.getBoundingClientRect();
-    const origin = rootOrigin();
-    const orbit = Math.max(22, Math.min(46, Math.max(rect.width, rect.height) / 2 + 8));
-    setTarget({
-      cx: rect.left - origin.x + rect.width / 2,
-      cy: rect.top - origin.y + rect.height / 2,
-      orbit,
+    const selector = tutorialTargetSelector(step.target);
+    if (!selector) return;
+    const handle = { raf: 0, stop: false };
+    let scrolled = false;
+    document.querySelectorAll<HTMLElement>('[data-tutorial-rock]').forEach((el) => {
+      delete el.dataset.tutorialRock;
     });
+    const origin = rootOrigin();
+    const rocked = new Set<HTMLElement>();
+
+    const buttons = () =>
+      [...document.querySelectorAll('button')].filter(
+        (button): button is HTMLButtonElement =>
+          !button.closest('[data-tutorial-layer]') && shown(button)
+      );
+
+    const bumpBetween = (from: BellPoint, to: BellPoint) => {
+      for (const button of buttons()) {
+        if (rocked.has(button)) continue;
+        if (!brushesButton(from.x, from.y, to.x, to.y, button, origin)) continue;
+        rocked.add(button);
+        rockButton(button);
+      }
+    };
+
+    const lean = (dx: number, dy: number, traveling: boolean) => {
+      const wrap = flightWrapRef.current;
+      if (!wrap) return;
+      if (!traveling) {
+        wrap.style.transform = '';
+        return;
+      }
+      const speed = Math.min(1, Math.hypot(dx, dy) / 18);
+      const tilt = Math.max(-16, Math.min(16, dx * 0.35));
+      const squash = 1 + speed * 0.14;
+      const stretch = 1 - speed * 0.1;
+      wrap.style.transform = `rotate(${tilt}deg) scale(${squash}, ${stretch})`;
+    };
+
+    const finishAt = (el: Element) => {
+      const rect = el.getBoundingClientRect();
+      const cx = rect.left - origin.x + rect.width / 2;
+      const cy = rect.top - origin.y + rect.height / 2;
+      const radius = orbitRadius(rect);
+      setAim({ cx, cy });
+      const reduced = reduceMotion();
+      const start = posRef.current ?? centerSpirit(bounds);
+      const entry = Math.atan2(
+        start.y + TUTORIAL_SPIRIT_SIZE / 2 - cy,
+        start.x + TUTORIAL_SPIRIT_SIZE / 2 - cx
+      );
+      const onCircle = (ang: number) => {
+        const placed = clampSpirit(
+          {
+            x: cx + Math.cos(ang) * radius - TUTORIAL_SPIRIT_SIZE / 2,
+            y: cy + Math.sin(ang) * radius - TUTORIAL_SPIRIT_SIZE / 2,
+          },
+          bounds
+        );
+        const ceiling = Math.max(
+          bounds.safeTop + 4,
+          rect.top - origin.y - TUTORIAL_SPIRIT_SIZE - 6
+        );
+        if (placed.y < ceiling) placed.y = ceiling;
+        return placed;
+      };
+      const dest = onCircle(entry);
+      const began = performance.now();
+      const distance = Math.hypot(dest.x - start.x, dest.y - start.y);
+      const duration = reduced ? 0 : Math.min(1500, Math.max(680, distance * 1.05));
+      const omega = (0.9 + step.intensity * 0.22) * (step.mood === 'excited' ? 1.35 : 1);
+
+      const orbit = (now: number) => {
+        if (handle.stop) return;
+        const ang = entry + ((now - began - duration) / 1000) * omega;
+        const next = onCircle(ang);
+        lean(0, 0, false);
+        paint(next, 'orbit');
+        handle.raf = requestAnimationFrame(orbit);
+      };
+
+      const travel = (now: number) => {
+        if (handle.stop) return;
+        const raw = duration <= 0 ? 1 : Math.min(1, (now - began) / duration);
+        const t = easeInOut(raw);
+        const bend = {
+          x: cx - TUTORIAL_SPIRIT_SIZE / 2,
+          y: cy - TUTORIAL_SPIRIT_SIZE / 2,
+        };
+        const u = 1 - t;
+        const next = clampSpirit(
+          {
+            x: u * u * start.x + 2 * u * t * bend.x + t * t * dest.x,
+            y: u * u * start.y + 2 * u * t * bend.y + t * t * dest.y,
+          },
+          bounds
+        );
+        const prev = posRef.current ?? start;
+        bumpBetween(prev, next);
+        lean(next.x - prev.x, next.y - prev.y, raw < 1);
+        paint(next, raw < 1 ? 'travel' : 'orbit');
+        if (raw < 1) {
+          handle.raf = requestAnimationFrame(travel);
+          return;
+        }
+        if (el instanceof HTMLElement) {
+          rocked.add(el);
+          rockButton(el);
+        }
+        if (reduced) return;
+        handle.raf = requestAnimationFrame(orbit);
+      };
+
+      handle.raf = requestAnimationFrame(travel);
+    };
+
+    const watch = () => {
+      if (handle.stop) return;
+      const el = document.querySelector(selector);
+      if (!el || !usableTarget(el)) {
+        if (el && !scrolled && !mostlyVisible(el.getBoundingClientRect())) {
+          el.scrollIntoView({ block: 'center', inline: 'nearest' });
+          scrolled = true;
+        }
+        const idle = posRef.current ?? centerSpirit(bounds);
+        paint(idle, 'wait');
+        handle.raf = requestAnimationFrame(watch);
+        return;
+      }
+      finishAt(el);
+    };
+
+    watch();
+    return () => {
+      handle.stop = true;
+      cancelAnimationFrame(handle.raf);
+    };
   }, [
     tutorial,
-    step,
     tutorialStep,
+    step,
+    bounds,
     activeStation,
     filesPanelOpen,
     archivesPanelOpen,
     computerOpenApp,
-    bounds,
-    hintOpen,
   ]);
 
   if (titleGate || !hasStartedGame) return null;
@@ -339,11 +576,11 @@ export const TutorialLayer: React.FC = () => {
             className="mt-1 text-xl"
             style={{ fontFamily: 'Cinzel, Georgia, serif' }}
           >
-            A short walkthrough, {name}?
+            Walk the first case with me?
           </h2>
           <p className="mt-3 text-sm leading-relaxed text-[#d9cbb8]">
-            The Tutorial Spirit walks one case with you, from a drag, to the
-            cooler tag, and on into the files. You can skip it.
+            I'm the Tutorial Spirit. We go slow, one thing at a time. Skip me
+            if you already know the house.
           </p>
           <div className="mt-5 flex flex-col gap-2">
             <button
@@ -368,12 +605,19 @@ export const TutorialLayer: React.FC = () => {
 
   if (tutorial !== 'active' || !step || !bounds) return null;
 
-  const resting = placeBell(tutorialSpirit, bounds, obstacles);
-  const pos = dragPos ?? resting;
-  const side = bellSide(pos, bounds.width);
-  const roomBelow = bounds.height - (pos.y + TUTORIAL_SPIRIT_SIZE);
-  const openUp = roomBelow < 150;
-  const panelWidth = Math.min(288, Math.max(160, bounds.width - 24));
+  const talking = step.mode === 'talk' || (step.mode === 'drag' && !dragging);
+  if (step.mode === 'drag' && !dragging) {
+    posRef.current = centerSpirit(bounds);
+  }
+  const pos =
+    posRef.current ??
+    (talking ? centerSpirit(bounds) : placeBell(tutorialSpirit, bounds, obstacles));
+  const cardAtTop =
+    aim != null
+      ? aim.cy > bounds.height * 0.52
+      : step.target === 'files' ||
+        step.target === 'archives' ||
+        step.target === 'permit';
 
   const clearLongPress = () => {
     if (longPressRef.current != null) {
@@ -383,6 +627,7 @@ export const TutorialLayer: React.FC = () => {
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
+    if (step.mode === 'point') return;
     const origin = rootOrigin();
     dragRef.current = {
       pointerId: e.pointerId,
@@ -408,7 +653,7 @@ export const TutorialLayer: React.FC = () => {
 
   const onPointerMove = (e: React.PointerEvent) => {
     const drag = dragRef.current;
-    if (!drag || drag.pointerId !== e.pointerId) return;
+    if (!drag || drag.pointerId !== e.pointerId || step.mode !== 'drag') return;
     const origin = rootOrigin();
     const dx = e.clientX - origin.x - drag.startX;
     const dy = e.clientY - origin.y - drag.startY;
@@ -416,8 +661,10 @@ export const TutorialLayer: React.FC = () => {
     if (!drag.moved) showTickle();
     drag.moved = true;
     setArmed(true);
-    setDragPos(
-      clampTutorialBell({ x: drag.orig.x + dx, y: drag.orig.y + dy }, bounds)
+    setDragging(true);
+    paint(
+      clampTutorialBell({ x: drag.orig.x + dx, y: drag.orig.y + dy }, bounds),
+      'drag'
     );
   };
 
@@ -433,14 +680,10 @@ export const TutorialLayer: React.FC = () => {
     }
     if (!drag || drag.pointerId !== e.pointerId) return;
     if (!drag.moved) {
-      if (!drag.long) {
-        showTickle();
-        setHintOpen((open) => !open);
-      }
-      setDragPos(null);
+      if (!drag.long) showTickle();
       return;
     }
-    setTutorialSpiritMoved(true);
+    if (step.mode !== 'drag') return;
     const origin = rootOrigin();
     const next = snapTutorialBell(
       clampTutorialBell(
@@ -453,118 +696,168 @@ export const TutorialLayer: React.FC = () => {
       bounds,
       screenObstacles()
     );
-    setDragPos(null);
+    paint(next, 'rest');
     setTutorialSpirit(next);
+    setTutorialSpiritMoved(true);
   };
 
-  const spiritCx = pos.x + TUTORIAL_SPIRIT_SIZE / 2;
-  const spiritCy = pos.y + TUTORIAL_SPIRIT_SIZE / 2;
-  const trickle =
-    target == null
-      ? null
-      : {
-          dx: target.cx - spiritCx,
-          dy: target.cy - spiritCy,
-        };
-
   return (
-    <div
-      data-tutorial-layer
-      className={`fixed z-[80] flex gap-2 pointer-events-none ${
-        openUp ? 'flex-col-reverse' : 'flex-col'
-      } ${side === 'right' ? 'items-end' : 'items-start'}`}
-      style={{
-        left: side === 'left' ? pos.x : undefined,
-        right: side === 'right' ? bounds.width - (pos.x + TUTORIAL_SPIRIT_SIZE) : undefined,
-        top: openUp ? undefined : pos.y,
-        bottom: openUp ? bounds.height - (pos.y + TUTORIAL_SPIRIT_SIZE) : undefined,
-        width: panelWidth,
-      }}
-    >
-      {target && (
+    <>
+      {talking && (
         <div
-          className="tutorial-spirit-ring"
-          data-tutorial-particles
-          style={{
-            left: target.cx,
-            top: target.cy,
-            ['--orbit' as string]: `${target.orbit}px`,
-          }}
-        >
-          {Array.from({ length: 8 }, (_, i) => (
-            <i key={i} style={{ ['--i' as string]: String(i) }} />
-          ))}
-        </div>
-      )}
-      {target && trickle && (
-        <div
-          className="tutorial-spirit-trickle"
-          style={{ left: spiritCx, top: spiritCy }}
-        >
-          {Array.from({ length: 4 }, (_, i) => (
-            <i
-              key={i}
-              style={{
-                ['--i' as string]: String(i),
-                ['--dx' as string]: `${trickle.dx}px`,
-                ['--dy' as string]: `${trickle.dy}px`,
-              }}
-            />
-          ))}
-        </div>
+          data-tutorial-layer
+          data-tutorial-dim
+          className="tutorial-dim"
+        />
       )}
       <button
         type="button"
+        ref={spiritRef}
         aria-label="Tutorial Spirit"
+        data-tutorial-layer
         data-tutorial-spirit
+        data-tutorial-mode={step.mode}
+        data-tutorial-step={step.id}
+        data-tutorial-mood={step.mood}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        className={`tutorial-spirit pointer-events-auto touch-none select-none ${
+        className={`tutorial-spirit fixed z-[86] touch-none select-none ${
           armed ? 'scale-105' : ''
         }`}
-        style={{ width: TUTORIAL_SPIRIT_SIZE, height: TUTORIAL_SPIRIT_SIZE }}
+        style={{
+          left: pos.x,
+          top: pos.y,
+          width: TUTORIAL_SPIRIT_SIZE,
+          height: TUTORIAL_SPIRIT_SIZE,
+          pointerEvents: step.mode === 'point' ? 'none' : 'auto',
+        }}
       >
         {tickle ? <span className="tutorial-spirit-tickle">{tickle}</span> : null}
-        <span
-          className="tutorial-spirit-art"
-          style={{
-            ['--spirit-h' as string]: '36',
-            ['--trail-x' as string]: '16px',
-            ['--trail-y' as string]: '-8px',
-          }}
-        >
-          <span className="hub-spirit-glow" />
-          <span className="hub-spirit-core" />
-          <span className="hub-spirit-mote" style={{ ['--m' as string]: '0.45' }} />
-          <span className="hub-spirit-mote" style={{ ['--m' as string]: '0.75' }} />
-          <span className="hub-spirit-mote" style={{ ['--m' as string]: '1' }} />
+        <span ref={flightWrapRef} className="tutorial-spirit-flight">
+          <span
+            className="tutorial-spirit-art"
+            data-mood={step.mood}
+            data-intensity={String(step.intensity)}
+            style={{
+              ['--spirit-h' as string]: '36',
+              ['--trail-x' as string]: '16px',
+              ['--trail-y' as string]: '-8px',
+            }}
+          >
+            <span className="hub-spirit-glow" />
+            <span className="hub-spirit-core" />
+            <span className="hub-spirit-mote" style={{ ['--m' as string]: '0.45' }} />
+            <span className="hub-spirit-mote" style={{ ['--m' as string]: '0.75' }} />
+            <span className="hub-spirit-mote" style={{ ['--m' as string]: '1' }} />
+          </span>
         </span>
       </button>
-      {!dragPos && hintOpen && (
-        <div className="pointer-events-none w-full rounded-xl border border-amber-600/50 bg-zinc-950/95 px-3 py-2 text-[12px] leading-snug text-amber-50 shadow-xl">
-          {step.hint(name)}
-        </div>
-      )}
-      {!dragPos && (
-        <div className="pointer-events-none flex gap-1.5">
-          <button
-            type="button"
-            onClick={() => skipTutorialStep()}
-            className="pointer-events-auto rounded-full border border-amber-500/40 bg-zinc-950/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-100"
-          >
-            Skip step
-          </button>
-          <button
-            type="button"
-            onClick={() => skipTutorial()}
-            className="pointer-events-auto rounded-full border border-stone-500/50 bg-zinc-950/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-stone-200"
-          >
-            Skip tutorial
-          </button>
-        </div>
-      )}
-    </div>
+      <Lesson
+        step={step}
+        bounds={bounds}
+        talking={talking}
+        cardAtTop={cardAtTop}
+        line={step.hint(name)}
+        onOkay={() => skipTutorialStep()}
+        onSkipStep={() => skipTutorialStep()}
+        onSkip={() => skipTutorial()}
+      />
+    </>
   );
 };
+
+function Lesson({
+  step,
+  bounds,
+  talking,
+  cardAtTop,
+  line,
+  onOkay,
+  onSkipStep,
+  onSkip,
+}: {
+  step: TutorialStep;
+  bounds: BellBounds;
+  talking: boolean;
+  cardAtTop: boolean;
+  line: string;
+  onOkay: () => void;
+  onSkipStep: () => void;
+  onSkip: () => void;
+}) {
+  const skips = (
+    <div className="mt-2 flex gap-1.5">
+      <button
+        type="button"
+        onClick={onSkipStep}
+        className="rounded-full border border-amber-500/40 bg-zinc-950/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-100"
+      >
+        Skip step
+      </button>
+      <button
+        type="button"
+        onClick={onSkip}
+        className="rounded-full border border-stone-500/50 bg-zinc-950/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-stone-200"
+      >
+        Skip tutorial
+      </button>
+    </div>
+  );
+
+  if (talking) {
+    return (
+      <div
+        data-tutorial-layer
+        data-tutorial-dialogue
+        className="tutorial-dialogue"
+        style={{
+          top: dialogueTop(bounds),
+          left: 16,
+          width: Math.max(180, bounds.width - 32),
+        }}
+      >
+        <p className="text-[10px] uppercase tracking-[0.18em] text-amber-200/70">
+          Tutorial Spirit
+        </p>
+        <p data-tutorial-line className="mt-1 text-[15px] leading-relaxed text-amber-50">
+          {line}
+        </p>
+        {step.mode === 'talk' && (
+          <button
+            type="button"
+            data-tutorial-okay
+            onClick={onOkay}
+            className="mt-3 w-full rounded-lg bg-amber-700 py-3 text-sm font-bold text-amber-50"
+          >
+            Okay
+          </button>
+        )}
+        {skips}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      data-tutorial-layer
+      data-tutorial-lesson
+      className="tutorial-lesson"
+      style={{
+        left: 12,
+        right: 12,
+        top: cardAtTop ? bounds.safeTop + 8 : undefined,
+        bottom: cardAtTop ? undefined : bounds.safeBottom + 12,
+      }}
+    >
+      <p className="text-[10px] uppercase tracking-[0.18em] text-amber-200/70">
+        Tutorial Spirit
+      </p>
+      <p data-tutorial-line className="mt-1 text-[15px] leading-relaxed text-amber-50">
+        {line}
+      </p>
+      {skips}
+    </div>
+  );
+}

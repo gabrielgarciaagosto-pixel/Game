@@ -19,6 +19,7 @@ export const CoolerRoom: React.FC = () => {
     setActiveStation,
     takeCaseToStation,
     coolerCapacity,
+    tutorialCaseId,
   } = useGameStore();
 
   const coolerCases = cases.filter((c) => c.location === 'COOLER');
@@ -105,6 +106,11 @@ export const CoolerRoom: React.FC = () => {
                     selectActiveCase(body.id);
                   }}
                   className="cooler-tag relative z-20 mx-2 mt-2 bg-amber-400 text-slate-950 px-2 py-1 rounded-2xl font-extrabold text-[10px] leading-tight shadow-xl border-2 border-white text-center"
+                  data-tutorial-target={
+                    tutorialCaseId == null || body.id === tutorialCaseId
+                      ? 'toe-tag'
+                      : undefined
+                  }
                 >
                   TAP TO TAG: &quot;{body.name}&quot;
                   {tagHeld ? '' : ` (${secondsLeft}s)`}

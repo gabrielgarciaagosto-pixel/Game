@@ -2,6 +2,11 @@ import type { StationId } from '../types/game';
 
 export type TutorialPhase = 'new' | 'offer' | 'active' | 'done';
 
+export type TutorialMood = 'calm' | 'warm' | 'playful' | 'earnest' | 'excited';
+
+/** Talk sits center stage. Drag asks for a pull. Point flies to a control. */
+export type TutorialMode = 'talk' | 'drag' | 'point';
+
 export interface TutorialGate {
   /** The player has dragged the Tutorial Spirit at least once. */
   spiritMoved: boolean;
@@ -18,71 +23,262 @@ export interface TutorialGate {
 
 export interface TutorialStep {
   id: string;
+  mode: TutorialMode;
+  mood: TutorialMood;
+  /** 1 is a slow breath. 3 bounces. */
+  intensity: 1 | 2 | 3;
+  /** Control the spirit flies to. Talk and drag steps leave this empty. */
+  target?: string;
   hint: (name: string) => string;
   done: (gate: TutorialGate) => boolean;
 }
 
+const never = () => false;
+
 /**
- * The Tutorial Spirit speaks these in order.
- * First the player drags it. Then they tag, before the name can be lost.
+ * One idea at a time.
+ * Drag the spirit, then the toe tag and why it matters, then the rest of the loop.
  */
 export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 'drag',
+    mode: 'drag',
+    mood: 'playful',
+    intensity: 2,
     hint: (name) =>
-      `${name}, this is the Tutorial Spirit. Drag it where you can still see your work.`,
+      `${name}, I'm the Tutorial Spirit. I stay for this first case. Drag me off to the side, so I'm not sitting on your buttons.`,
     done: (g) => g.spiritMoved,
   },
   {
-    id: 'tag',
-    hint: (name) =>
-      `${name}, open the COOLER and tag the case. If two or three more arrive while you are busy, an untagged body loses its name.`,
+    id: 'why-tag',
+    mode: 'talk',
+    mood: 'earnest',
+    intensity: 1,
+    hint: () =>
+      'First job is the toe tag. It is the name, tied on the body. If two or three more come in while you are busy, an untagged one loses that name. Then you are guessing who is who.',
+    done: never,
+  },
+  {
+    id: 'tag-where',
+    mode: 'point',
+    mood: 'warm',
+    intensity: 2,
+    target: 'cooler',
+    hint: () =>
+      'The cooler is the cold room. Open it. Your case is waiting in a bay.',
+    done: (g) => g.activeStation === 'COOLER',
+  },
+  {
+    id: 'tag-button',
+    mode: 'point',
+    mood: 'earnest',
+    intensity: 2,
+    target: 'toe-tag',
+    hint: () =>
+      'That amber button is the tag. Tap it, and the name stays with them.',
     done: (g) => g.tagged || g.nameExpired,
   },
   {
-    id: 'files',
-    hint: (name) => `${name}, a case just arrived. Tap FILES.`,
+    id: 'tagged-good',
+    mode: 'talk',
+    mood: 'excited',
+    intensity: 3,
+    hint: () =>
+      'Ha. There it is. The name stays. That little tag is the whole trick.',
+    done: never,
+  },
+  {
+    id: 'files-why',
+    mode: 'talk',
+    mood: 'calm',
+    intensity: 1,
+    hint: () =>
+      'The family already told us what they want. That note is called the directive. It lives in the files.',
+    done: never,
+  },
+  {
+    id: 'files-open',
+    mode: 'point',
+    mood: 'playful',
+    intensity: 2,
+    target: 'files',
+    hint: () => 'Tap FILES. Orange button, down in the corner.',
     done: (g) => g.filesOpen,
   },
   {
     id: 'directive',
-    hint: (name) => `${name}, tap the case and read the family directive.`,
+    mode: 'point',
+    mood: 'warm',
+    intensity: 1,
+    target: 'directive',
+    hint: () =>
+      'Tap their name in the list. Read it slow. This family asked for a cremation.',
     done: (g) => g.fileRead,
   },
   {
+    id: 'permit-why',
+    mode: 'talk',
+    mood: 'earnest',
+    intensity: 1,
+    hint: () =>
+      'A cremation needs a permit. The state wants the same facts you just read. Name, dates, the rest. If they do not match, the form comes back.',
+    done: never,
+  },
+  {
     id: 'computer',
-    hint: (name) => `${name}, open the COMPUTER.`,
+    mode: 'point',
+    mood: 'warm',
+    intensity: 2,
+    target: 'computer',
+    hint: () => 'Open the COMPUTER. The permit desk is on that screen.',
     done: (g) => g.activeStation === 'COMPUTER',
   },
   {
     id: 'vr441',
-    hint: (name) => `${name}, open State Vital Records — the VR-441 icon.`,
+    mode: 'point',
+    mood: 'playful',
+    intensity: 2,
+    target: 'vr441',
+    hint: () =>
+      'See the little icon, State Vital Records? That is VR-441. Open it.',
     done: (g) => g.computerOpenApp === 'VR441',
   },
   {
-    id: 'permit',
-    hint: (name) =>
-      `${name}, copy the vitals from the case file and submit the permit.`,
+    id: 'permit-copy',
+    mode: 'talk',
+    mood: 'calm',
+    intensity: 1,
+    hint: () =>
+      'The form wants the same facts as the case file. Same name, same dates. The state sends it back if they differ.',
+    done: never,
+  },
+  {
+    id: 'permit-submit',
+    mode: 'point',
+    mood: 'earnest',
+    intensity: 2,
+    target: 'permit',
+    hint: () =>
+      'Copy those facts in, then press submit. The fee comes out of the house account.',
     done: (g) => g.permitFiled,
   },
   {
+    id: 'after-permit',
+    mode: 'talk',
+    mood: 'calm',
+    intensity: 1,
+    hint: () =>
+      'They read it on their own time. You do not have to watch this screen. The house can keep working.',
+    done: never,
+  },
+  {
+    id: 'leave-form',
+    mode: 'point',
+    mood: 'warm',
+    intensity: 2,
+    target: 'desk',
+    hint: () =>
+      'Tap Desktop, up at the top. That closes the form and puts you back on the office screen.',
+    done: (g) => g.computerOpenApp !== 'VR441',
+  },
+  {
+    id: 'leave-desk',
+    mode: 'point',
+    mood: 'playful',
+    intensity: 2,
+    target: 'shut-down',
+    hint: () => 'Tap Shut down. You land back in the parlor, where the rooms are.',
+    done: (g) => g.activeStation !== 'COMPUTER',
+  },
+  {
+    id: 'crematory-why',
+    mode: 'talk',
+    mood: 'earnest',
+    intensity: 1,
+    hint: () =>
+      'The burn happens in the crematory. We call the machine the retort. Wait until the permit is approved before you fire. Do it early, and the board fines the house.',
+    done: never,
+  },
+  {
     id: 'crematory',
-    hint: (name) =>
-      `${name}, open the CREMATORY. The retort runs once the permit is approved. Viewings are in the CHAPEL. Ashes finish in URN PROCESSING.`,
+    mode: 'point',
+    mood: 'warm',
+    intensity: 2,
+    target: 'crematory',
+    hint: () => 'Open the CREMATORY, so you can see the door and the tools.',
     done: (g) => g.activeStation === 'CREMATION',
   },
   {
+    id: 'chapel',
+    mode: 'talk',
+    mood: 'calm',
+    intensity: 1,
+    hint: () =>
+      'A viewing, if the family wants one, is the chapel. Bier, flowers, a quiet hour. This case asked for cremation, so you can skip that.',
+    done: never,
+  },
+  {
+    id: 'urn',
+    mode: 'talk',
+    mood: 'warm',
+    intensity: 2,
+    hint: () =>
+      'After the burn you still have bone. URN PROCESSING crushes it and fills the urn. The family picks the urn up, or it sits in the vault.',
+    done: never,
+  },
+  {
+    id: 'archives-why',
+    mode: 'talk',
+    mood: 'calm',
+    intensity: 1,
+    hint: () =>
+      'A finished service leaves the live list. It is not thrown out. It goes to the archives.',
+    done: never,
+  },
+  {
     id: 'archives',
-    hint: (name) =>
-      `${name}, a closed service leaves the file list. Open FILES, then ARCHIVES.`,
+    mode: 'point',
+    mood: 'playful',
+    intensity: 2,
+    target: 'archives',
+    hint: () => 'Open FILES, then ARCHIVES. Closed work waits on that shelf.',
     done: (g) => g.archivesOpen,
   },
 ];
 
-/** Step that first asks the player to toe-tag. The 60s clock starts here. */
+/** Step that asks the player to tap the toe tag. The 60s clock starts here. */
 export const TUTORIAL_TAG_STEP = TUTORIAL_STEPS.findIndex(
-  (step) => step.id === 'tag'
+  (step) => step.id === 'tag-button'
 );
+
+export function tutorialTargetSelector(target: string | undefined): string | null {
+  switch (target) {
+    case 'cooler':
+      return '[data-tutorial-target="cooler"]';
+    case 'toe-tag':
+      return '[data-tutorial-target="toe-tag"]';
+    case 'files':
+      return '[data-tutorial-target="files"]';
+    case 'directive':
+      return '[data-tutorial-target="directive"]';
+    case 'computer':
+      return '[data-tutorial-target="computer"]';
+    case 'vr441':
+      return '[data-tutorial-target="vr441"]';
+    case 'permit':
+      return '[data-tutorial-target="permit"]';
+    case 'desk':
+      return '[data-tutorial-target="desk"]';
+    case 'shut-down':
+      return '[data-tutorial-target="shut-down"]';
+    case 'crematory':
+      return '[data-tutorial-target="crematory"]';
+    case 'archives':
+      return '[data-tutorial-target="archives"], [data-tutorial-target="files"]';
+    default:
+      return null;
+  }
+}
 
 /**
  * While the walkthrough is still before the tag step, the tutorial case

@@ -4,6 +4,8 @@ type Props = {
   title: string;
   url: string;
   onClose: () => void;
+  /** Marks the Desktop button so the Tutorial Spirit can fly to it. */
+  deskTarget?: boolean;
   children: React.ReactNode;
 };
 
@@ -14,6 +16,7 @@ export const FakeBrowserChrome: React.FC<Props> = ({
   title,
   url,
   onClose,
+  deskTarget = false,
   children,
 }) => {
   const [address, setAddress] = useState(url);
@@ -48,6 +51,7 @@ export const FakeBrowserChrome: React.FC<Props> = ({
           onClick={onClose}
           style={{ touchAction: 'manipulation' }}
           className="mb-1 px-2 py-1 text-[10px] rounded border border-slate-600 bg-slate-900"
+          data-tutorial-target={deskTarget ? 'desk' : undefined}
         >
           − Desktop
         </button>
