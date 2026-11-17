@@ -14,6 +14,13 @@ import { permitStatusLabel } from '../data/decedentVitals';
 import type { Rank, SweepTool } from '../types/game';
 import { displayCaseName } from '../types/game';
 import { useGameStore } from '../store/useGameStore';
+import { crematoryToolSfx } from '../audio/crematoryToolSfx';
+import {
+  fallClipFor,
+  hearthHasBones,
+  latchToolMoving,
+  sweepClipFor,
+} from '../audio/crematoryToolSfxPolicy';
 import { hapticBoneContact, hapticIronRake } from '../utils/haptics';
 import { getCremationTargets } from '../utils/mortuaryMath';
 import {
@@ -522,6 +529,11 @@ export const CremationMiniGame: React.FC = () => {
   };
 
   const sweepArmed = useRef(false);
+  const audioMovingRef = useRef(false);
+  useEffect(() => {
+    void crematoryToolSfx.preload();
+    return () => crematoryToolSfx.stopAll();
+  }, []);
   useEffect(() => {
     if (progress < 1 || phase !== 'BURN' || sweepArmed.current) return;
     sweepArmed.current = true;
@@ -638,12 +650,25 @@ export const CremationMiniGame: React.FC = () => {
         showHint('Large bones are clear. Take the iron brush.');
         return;
       }
-      useGameStore.setState((s) => ({
-        retort: {
-          ...s.retort,
-          largeBonesLeft: Math.max(0, s.retort.largeBonesLeft - 20),
-        },
-      }));
+      let fall: ReturnType<typeof fallClipFor> = null;
+      useGameStore.setState((s) => {
+        const largeBefore = s.retort.largeBonesLeft;
+        const largeAfter = Math.max(0, largeBefore - 20);
+        fall = fallClipFor({
+          tool,
+          largeBefore,
+          largeAfter,
+          mediumBefore: s.retort.mediumBonesLeft,
+          mediumAfter: s.retort.mediumBonesLeft,
+        });
+        return {
+          retort: {
+            ...s.retort,
+            largeBonesLeft: largeAfter,
+          },
+        };
+      });
+      if (fall) crematoryToolSfx.playFall(fall);
       spawnDust(x, y, 'char');
       void hapticIronRake();
     } else if (tool === 'BRISTLE_BRUSH') {
@@ -655,12 +680,25 @@ export const CremationMiniGame: React.FC = () => {
         showHint('Fragments are clear. Take the hand brush.');
         return;
       }
-      useGameStore.setState((s) => ({
-        retort: {
-          ...s.retort,
-          mediumBonesLeft: Math.max(0, s.retort.mediumBonesLeft - 22),
-        },
-      }));
+      let fall: ReturnType<typeof fallClipFor> = null;
+      useGameStore.setState((s) => {
+        const mediumBefore = s.retort.mediumBonesLeft;
+        const mediumAfter = Math.max(0, mediumBefore - 22);
+        fall = fallClipFor({
+          tool,
+          largeBefore: s.retort.largeBonesLeft,
+          largeAfter: s.retort.largeBonesLeft,
+          mediumBefore,
+          mediumAfter,
+        });
+        return {
+          retort: {
+            ...s.retort,
+            mediumBonesLeft: mediumAfter,
+          },
+        };
+      });
+      if (fall) crematoryToolSfx.playFall(fall);
       spawnDust(x, y, 'char');
       void hapticIronRake();
     } else if (tool === 'HAND_BRUSH') {
@@ -681,6 +719,8 @@ export const CremationMiniGame: React.FC = () => {
   };
 
   const selectTool = (tool: SweepTool) => {
+    crematoryToolSfx.setSweep(null);
+    audioMovingRef.current = false;
     patchRetort({ activeTool: tool });
     setToolMenuOpen(false);
     setPanelZoomed(false);
@@ -703,6 +743,21 @@ export const CremationMiniGame: React.FC = () => {
     const dy = point.y - prev.y;
     const overHearth =
       point.x > 10 && point.x < 92 && point.y > 48 && point.y < 98;
+    const audioMoving = latchToolMoving(audioMovingRef.current, dist);
+    audioMovingRef.current = audioMoving;
+    const liveTool = useGameStore.getState().retort;
+    crematoryToolSfx.setSweep(
+      sweepClipFor({
+        tool: liveTool.activeTool,
+        moving: audioMoving,
+        onHearth: overHearth,
+        touchingBones:
+          overHearth &&
+          nearRemains(point.x, point.y) &&
+          hearthHasBones(liveTool.largeBonesLeft, liveTool.mediumBonesLeft),
+        phase: liveTool.phase,
+      })
+    );
 
     // Contact feedback for ALL tools (rod, rake, brushes)
     applyToolContact(point.x, point.y, moving);
@@ -1382,6 +1437,8 @@ export const CremationMiniGame: React.FC = () => {
                       if (ev.pointerId !== pointerId) return;
                       toolHeldRef.current = false;
                       setToolHeld(false);
+                      audioMovingRef.current = false;
+                      crematoryToolSfx.setSweep(null);
                       prevToolPoint.current = null;
                       resetCircularStir(circularStirRef.current);
                       window.removeEventListener('pointermove', move);
