@@ -4759,7 +4759,7 @@ export const useGameStore = create<GameState>()(
 }),
     {
       name: 'ossuarian-first-urn-v1',
-      version: 5,
+      version: 6,
       storage: yieldingSaveStorage,
       migrate: (persisted, version) => {
         const p = (persisted ?? {}) as Record<string, unknown>;
@@ -4777,6 +4777,15 @@ export const useGameStore = create<GameState>()(
               ...layout.theme,
               urnPedestalId: layout.theme?.urnPedestalId ?? null,
             },
+            // The nave grew from 500 to 680 units downward. Saved percents
+            // stay on the same tiles only if they shrink with the floor.
+            pieces:
+              version < 6
+                ? (layout.pieces ?? []).map((piece) => ({
+                    ...piece,
+                    y: piece.y * (500 / 680),
+                  }))
+                : layout.pieces,
           };
         }
         const rawInbox = (p.inboxFiles as CaseInboxFile[] | undefined) ?? [];

@@ -13,6 +13,10 @@ const FY = 470;
 const X0 = 8;
 const X1 = 360;
 const SPAN = 1.65;
+/** Floor continues toward the viewer. Negative depth, same slope. */
+const NEAR = -7.8;
+const X1_LONG = 800;
+const VIEW_H = 680;
 
 function at(x: number, y: number, depth = 0): [number, number] {
   return [x + depth * DX, y + depth * DY];
@@ -44,7 +48,7 @@ function SideCurtain({ side, drape }: { side: 'left' | 'right'; drape: string })
         const lift = i * 7;
         const shear = (left ? 1 : -1) * (8 + i * 3);
         const top = 6 + lift * 0.2;
-        const bot = 492 - lift;
+        const bot = 668 - lift;
         const pts: [number, number][] = [
           [x0, bot],
           [x1, bot - 3],
@@ -79,7 +83,7 @@ function SideCurtain({ side, drape }: { side: 'left' | 'right'; drape: string })
         )}
       </g>
       <path
-        d={left ? 'M4 468 H78' : 'M362 468 H436'}
+        d={left ? 'M4 648 H78' : 'M362 648 H436'}
         stroke="#e6c36a"
         strokeWidth="2.2"
         opacity="0.8"
@@ -89,30 +93,21 @@ function SideCurtain({ side, drape }: { side: 'left' | 'right'; drape: string })
 }
 
 function WallWindow({ x, y, w, h }: { x: number; y: number; w: number; h: number }) {
-  const shear = w * 0.22;
-  const drop = shear * (42 / 86);
-  const frame = poly([
-    [x, y + h],
-    [x + w, y + h - drop],
-    [x + w + shear * 0.15, y - drop],
-    [x + shear * 0.15, y],
-  ]);
-  const glass = poly([
-    [x + 5, y + h - 5],
-    [x + w - 5, y + h - drop - 4],
-    [x + w + shear * 0.1 - 4, y - drop + 6],
-    [x + shear * 0.1 + 5, y + 6],
-  ]);
-  const mx = x + w * 0.5;
+  const sillD = 0.16;
+  const sill: [number, number][] = [
+    [x - 6, y + h],
+    [x + w + 8, y + h],
+    [x + w + 8 + DX * sillD, y + h + DY * sillD],
+    [x - 6 + DX * sillD, y + h + DY * sillD],
+  ];
   return (
     <g>
-      <path d={frame} fill="#2c1c14" />
-      <path d={glass} fill="#ffe7a8" />
-      <path d={glass} fill="#fff6d2" opacity="0.4" />
-      <path d={`M${(mx + shear * 0.08).toFixed(1)} ${(y + 8).toFixed(1)} L${(mx - 2).toFixed(1)} ${(y + h - 8).toFixed(1)}`} stroke="#3a2a1c" strokeWidth="2.6" />
-      <path d={`M${(x + 8).toFixed(1)} ${(y + h * 0.48).toFixed(1)} L${(x + w - 4).toFixed(1)} ${(y + h * 0.48 - drop * 0.7).toFixed(1)}`} stroke="#3a2a1c" strokeWidth="2.6" />
-      <path d={`M${(x + 10).toFixed(1)} ${(y + 12).toFixed(1)} L${(x + w * 0.38).toFixed(1)} ${(y + 10).toFixed(1)}`} stroke="#fff" strokeWidth="1.7" opacity="0.75" />
-      <path d={`M${(x - 2).toFixed(1)} ${(y + h + 1).toFixed(1)} L${(x + w + 8).toFixed(1)} ${(y + h - drop).toFixed(1)}`} stroke="#c4a574" strokeWidth="4" />
+      <path d={poly(sill)} fill="#c4a574" />
+      <rect x={x} y={y} width={w} height={h} fill="#2c1c14" />
+      <rect x={x + 5} y={y + 5} width={w - 10} height={h - 10} fill="#ffe7a8" />
+      <rect x={x + 5} y={y + 5} width={(w - 10) * 0.42} height={(h - 10) * 0.36} fill="#fff6d2" opacity="0.5" />
+      <path d={`M${x + w / 2} ${y + 5} V${y + h - 5}`} stroke="#3a2a1c" strokeWidth="2.6" />
+      <path d={`M${x + 5} ${y + h / 2} H${x + w - 5}`} stroke="#3a2a1c" strokeWidth="2.6" />
     </g>
   );
 }
@@ -128,9 +123,9 @@ function Pew({
   depth: number;
   tint: string;
 }) {
-  const thick = 0.46;
+  const thick = 0.72;
   const seat = 16;
-  const back = 50;
+  const back = 46;
   const a = at(x0, FY, depth);
   const b = at(x1, FY, depth);
   const c = at(x1, FY, depth + thick);
@@ -207,6 +202,9 @@ export const ChapelNave: React.FC<{
   const nR = at(X1, FY, 0);
   const fR = at(X1, FY, SPAN);
   const fL = at(X0, FY, SPAN);
+  const nearL = at(X0, FY, NEAR);
+  const nearR = at(X1_LONG, FY, NEAR);
+  const farR = at(X1_LONG, FY, SPAN);
 
   const altarA = at(130, FY, 1.28);
   const altarB = at(250, FY, 1.28);
@@ -225,7 +223,7 @@ export const ChapelNave: React.FC<{
 
   return (
     <svg
-      viewBox="0 0 440 500"
+      viewBox={`0 0 440 ${VIEW_H}`}
       className="absolute inset-0 h-full w-full pointer-events-none"
       aria-hidden
       preserveAspectRatio="xMidYMid meet"
@@ -246,27 +244,27 @@ export const ChapelNave: React.FC<{
         </radialGradient>
       </defs>
 
-      <rect width="440" height="500" fill="url(#nave-wall)" />
+      <rect width="440" height={VIEW_H} fill="url(#nave-wall)" />
       <path d={poly([rise(fL, 250), rise(fR, 250), fR, fL])} fill="#7d64aa" />
       <path d={poly([nL, fL, rise(fL, 230), rise(nL, 150)])} fill="#5b4584" />
       <path d={poly([nR, fR, rise(fR, 250), rise(nR, 160)])} fill="#534078" />
       <SideCurtain side="left" drape={drape} />
       <SideCurtain side="right" drape={drape} />
 
-      <WallWindow x={92} y={86} w={78} h={102} />
-      <WallWindow x={268} y={74} w={78} h={102} />
+      <WallWindow x={96} y={80} w={74} h={100} />
+      <WallWindow x={274} y={80} w={74} h={100} />
 
-      <path d={poly([nL, nR, fR, fL])} fill={floor} />
-      <path d={poly([nL, nR, fR, fL])} fill="#c4a574" opacity="0.38" />
-      <path d={poly([at(132, FY, 0.15), at(196, FY, 0.15), at(196, FY, SPAN - 0.08), at(132, FY, SPAN - 0.08)])} fill="#f3e6c8" opacity="0.16" />
+      <path d={poly([nearL, nearR, farR, fL])} fill={floor} />
+      <path d={poly([nearL, nearR, farR, fL])} fill="#c4a574" opacity="0.38" />
+      <path d={poly([at(150, FY, -0.15), at(214, FY, -0.15), at(214, FY, SPAN - 0.08), at(150, FY, SPAN - 0.08)])} fill="#f3e6c8" opacity="0.16" />
       <g stroke="#f6edd8" strokeOpacity="0.8" fill="none" strokeWidth="1.5">
-        {[0.22, 0.48, 0.74, 1.0, 1.28, 1.55].map((d) => {
+        {[-7.2, -6.2, -5.2, -4.2, -3.2, -2.2, -1.2, -0.2, 0.22, 0.48, 0.74, 1.0, 1.28, 1.55].map((d) => {
           const a = at(X0, FY, d);
-          const b = at(X1, FY, d);
+          const b = at(X1_LONG, FY, d);
           return <path key={d} d={`M${a[0].toFixed(1)} ${a[1].toFixed(1)} L${b[0].toFixed(1)} ${b[1].toFixed(1)}`} />;
         })}
-        {[40, 80, 120, 160, 200, 240, 280, 320].map((x) => {
-          const a = at(x, FY, 0);
+        {[40, 80, 120, 160, 200, 240, 280, 320, 400, 480, 560, 640, 720].map((x) => {
+          const a = at(x, FY, NEAR);
           const b = at(x, FY, SPAN);
           return <path key={x} d={`M${a[0].toFixed(1)} ${a[1].toFixed(1)} L${b[0].toFixed(1)} ${b[1].toFixed(1)}`} />;
         })}
@@ -302,12 +300,10 @@ export const ChapelNave: React.FC<{
         })()}
       </g>
 
-      <Pew x0={10} x1={72} depth={0.06} tint={pew} />
-      <Pew x0={318} x1={358} depth={0.06} tint={pew} />
-      <Pew x0={14} x1={70} depth={0.48} tint={pew} />
-      <Pew x0={322} x1={356} depth={0.48} tint={pew} />
-      <Pew x0={18} x1={68} depth={0.9} tint={pew} />
-      <Pew x0={326} x1={354} depth={0.9} tint={pew} />
+      <Pew x0={371} x1={485} depth={-7.4} tint={pew} />
+      <Pew x0={645} x1={770} depth={-7.4} tint={pew} />
+      <Pew x0={237} x1={351} depth={-4.6} tint={pew} />
+      <Pew x0={516} x1={641} depth={-4.6} tint={pew} />
 
       <g>
         {[standA, standB, standC, standD].map((p, i) => (

@@ -278,7 +278,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
         <FamilyPreferenceCard prefs={currentCase.familyChapelPrefs} />
         {/* Floor */}
         <div
-          className={`relative aspect-[22/25] w-full rounded-xl border-2 border-violet-700 overflow-hidden bg-gradient-to-b ${wallGrad} touch-none shadow-[inset_0_8px_22px_rgba(0,0,0,0.18)]`}
+          className={`relative aspect-[11/17] w-full rounded-xl border-2 border-violet-700 overflow-hidden bg-gradient-to-b ${wallGrad} touch-none shadow-[inset_0_8px_22px_rgba(0,0,0,0.18)]`}
           data-chapel-floor
           data-chapel-service={serviceLive ? '1' : undefined}
         >
@@ -295,7 +295,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
             pew={pewColor}
           />
 
-          <ChapelMourners active={viewingService} />
+          <ChapelMourners active={viewingService} aisleViewer={!serviceLive} />
 
           {layout?.pieces.map((piece) => {
             const override = dragOverrides[piece.id];
