@@ -152,7 +152,7 @@ export const ChapelMourners: React.FC<{
         return (
           <div
             key={m.id}
-            className="chapel-mourner absolute text-violet-950/50"
+            className="chapel-mourner absolute text-[#f3e6c8]/50"
             style={{
               left: `${m.x * 100}%`,
               top: `${m.y * 100}%`,
