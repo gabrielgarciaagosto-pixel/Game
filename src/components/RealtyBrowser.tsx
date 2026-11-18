@@ -8,6 +8,7 @@ import {
 import { US_JURISDICTIONS } from '../data/usPlaces';
 import { useGameStore } from '../store/useGameStore';
 import { TapButton } from './TapButton';
+import { CatalogSheet } from './CatalogSheet';
 import { useSheetOpen } from './useSheetOpen';
 
 /** Deterministic faux “photo” gradients for offline/Android. */
@@ -332,8 +333,8 @@ export const RealtyBrowser: React.FC = () => {
       </main>
 
       {confirm && (
-        <div className="sheet-safe-inset absolute inset-0 z-30 bg-black/50 flex items-end sm:items-center justify-center">
-          <div className="w-full max-w-sm rounded-lg border border-[#c4b49a] bg-[#faf6ef] p-4 space-y-3 shadow-xl">
+        <CatalogSheet z={220}>
+          <div className="w-full rounded-lg border border-[#c4b49a] bg-[#faf6ef] p-4 space-y-3 shadow-xl">
             <h4
               className="font-bold text-[#2a2118]"
               style={{ fontFamily: '"Libre Baskerville", Georgia, serif' }}
@@ -341,22 +342,24 @@ export const RealtyBrowser: React.FC = () => {
               {confirm.title}
             </h4>
             <p className="text-[13px] text-[#3d3730]">{confirm.body}</p>
-            <div className="flex gap-2">
+            <div className="flex gap-2 relative z-20">
               <TapButton
+                data-catalog-back
                 onTap={() => setConfirm(null)}
-                className="flex-1 py-2 rounded border border-[#c4b49a] bg-white text-[12px] font-semibold"
+                className="flex-1 min-h-14 py-4 rounded-xl border border-[#c4b49a] bg-white text-sm font-black text-[#2a2118]"
               >
-                Cancel
+                Back
               </TapButton>
               <TapButton
+                data-catalog-buy
                 onTap={confirm.action}
-                className="flex-1 py-2 rounded bg-[#2a2118] text-[#faf6ef] text-[12px] font-bold"
+                className="flex-1 min-h-14 py-4 rounded-xl bg-[#2a2118] text-[#faf6ef] text-sm font-black"
               >
                 Confirm
               </TapButton>
             </div>
           </div>
-        </div>
+        </CatalogSheet>
       )}
     </div>
   );

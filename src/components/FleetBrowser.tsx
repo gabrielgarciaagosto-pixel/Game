@@ -11,6 +11,7 @@ import {
 } from '../data/funeralFleets';
 import { useGameStore } from '../store/useGameStore';
 import { TapButton } from './TapButton';
+import { CatalogSheet } from './CatalogSheet';
 import { useSheetOpen } from './useSheetOpen';
 import { FleetVehicleArt } from './fleets/FleetVehicleArt';
 
@@ -328,8 +329,8 @@ export const FleetBrowser: React.FC = () => {
       </main>
 
       {confirm && (
-        <div className="sheet-safe-inset absolute inset-0 z-30 bg-black/60 flex items-end justify-center">
-          <div className="w-full max-w-sm rounded-lg border border-[#c4a574]/50 bg-[#1a1612] p-4 space-y-3">
+        <CatalogSheet z={220}>
+          <div className="w-full rounded-lg border border-[#c4a574]/50 bg-[#1a1612] p-4 space-y-3">
             <h4
               className="text-[#f6efe2]"
               style={{ fontFamily: '"Libre Baskerville", Georgia, serif' }}
@@ -337,22 +338,24 @@ export const FleetBrowser: React.FC = () => {
               {confirm.title}
             </h4>
             <p className="text-[13px] text-[#e7dcc8]">{confirm.body}</p>
-            <div className="flex gap-2">
+            <div className="flex gap-2 relative z-20">
               <TapButton
+                data-catalog-back
                 onTap={() => setConfirm(null)}
-                className="flex-1 py-2 rounded border border-[#c4a574]/40 text-[12px]"
+                className="flex-1 min-h-14 py-4 rounded-xl border border-[#c4a574]/40 text-sm font-black"
               >
-                Cancel
+                Back
               </TapButton>
               <TapButton
+                data-catalog-buy
                 onTap={confirm.action}
-                className="flex-1 py-2 rounded bg-[#c4a574] text-[#1a140c] text-[12px] font-bold"
+                className="flex-1 min-h-14 py-4 rounded-xl bg-[#c4a574] text-[#1a140c] text-sm font-black"
               >
                 Confirm
               </TapButton>
             </div>
           </div>
-        </div>
+        </CatalogSheet>
       )}
     </div>
   );

@@ -10,6 +10,7 @@ import {
 import { formatDateTime12 } from '../utils/clock12';
 import { useGameStore } from '../store/useGameStore';
 import { TapButton } from './TapButton';
+import { CatalogSheet } from './CatalogSheet';
 import { useSheetOpen } from './useSheetOpen';
 
 type Tab = 'overview' | 'loans';
@@ -327,26 +328,28 @@ export const BankBrowser: React.FC = () => {
       </main>
 
       {confirm && (
-        <div className="sheet-safe-inset absolute inset-0 z-30 bg-black/70 flex items-end sm:items-center justify-center">
-          <div className="w-full max-w-sm rounded-xl border border-emerald-700 bg-slate-950 p-4 space-y-3">
+        <CatalogSheet z={220}>
+          <div className="w-full rounded-xl border border-emerald-700 bg-slate-950 p-4 space-y-3">
             <h4 className="font-bold text-emerald-50">{confirm.title}</h4>
             <p className="text-[12px] text-slate-300">{confirm.body}</p>
-            <div className="flex gap-2">
+            <div className="flex gap-2 relative z-20">
               <TapButton
+                data-catalog-back
                 onTap={() => setConfirm(null)}
-                className="flex-1 py-2 rounded-lg bg-slate-800 text-[11px] font-bold"
+                className="flex-1 min-h-14 py-4 rounded-xl bg-slate-800 text-sm font-black"
               >
-                Cancel
+                Back
               </TapButton>
               <TapButton
+                data-catalog-buy
                 onTap={confirm.action}
-                className="flex-1 py-2 rounded-lg bg-emerald-700 text-[11px] font-black"
+                className="flex-1 min-h-14 py-4 rounded-xl bg-emerald-700 text-sm font-black"
               >
                 Confirm
               </TapButton>
             </div>
           </div>
-        </div>
+        </CatalogSheet>
       )}
     </div>
   );
