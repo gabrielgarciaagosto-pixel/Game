@@ -881,12 +881,14 @@ function DraggablePiece({
               size="md"
               showPlaque={false}
               chapel
-              className="w-[18rem]"
+              lid="open"
+              className="w-[14rem]"
             />
           ) : (
             <CasketVessel
               chapel
-              className="w-[18rem]"
+              lid="open"
+              className="w-[14rem]"
               casket={{
                 id: 'bier',
                 name: 'Bier',
