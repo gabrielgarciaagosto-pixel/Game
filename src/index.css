@@ -246,13 +246,13 @@ canvas {
 }
 
 @keyframes chapel-mourner-breathe {
-  /* One coat: fill 20% times the breathe 0.18–0.27. */
+  /* Faint cream, still readable in the pews. */
   0%,
   100% {
-    opacity: 0.036;
+    opacity: 0.34;
   }
   50% {
-    opacity: 0.054;
+    opacity: 0.5;
   }
 }
 
@@ -1240,7 +1240,7 @@ canvas {
   .hub-spirit[data-placed='1'] { opacity: var(--a, 0.55); }
   .hub-spirit:not([data-placed='1']) { opacity: 0; }
   .hub-atmo-debt { opacity: 0.7; }
-  .chapel-mourner { opacity: 0.045; }
+  .chapel-mourner { opacity: 0.4; }
   .chapel-mourner-head { animation: none; }
   .chapel-service-glow,
   .hub-chapel-live-glow { opacity: 0.85; }

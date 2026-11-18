@@ -24,15 +24,15 @@ interface MournerSpec {
 }
 
 const PEW_MOURNERS: MournerSpec[] = [
-  { id: 'bow-l', pose: 'seat-bow', x: 0.14, y: 0.8, scale: 0.94, breathe: 5.4, breatheDelay: 0.2, settle: 7.2, settleDelay: 0.5, drift: 1.1, lean: 1.2, turn: 4, head: 8.8, headDelay: 1.2 },
-  { id: 'talk-l', pose: 'seat-talk', x: 0.24, y: 0.84, scale: 1, breathe: 6.3, breatheDelay: 1.8, settle: 8.6, settleDelay: 1.1, drift: -1.3, lean: 1.5, turn: 6, head: 7.1, headDelay: 0.4 },
-  { id: 'talk-l2', pose: 'seat-talk', x: 0.2, y: 0.72, scale: 0.88, breathe: 4.9, breatheDelay: 0.7, settle: 9.4, settleDelay: 2.4, drift: 1.4, lean: -1.3, turn: -5, head: 8.2, headDelay: 1.7 },
-  { id: 'pair', pose: 'pair', x: 0.16, y: 0.9, scale: 1.02, breathe: 6.8, breatheDelay: 2.6, settle: 10.2, settleDelay: 0.3, drift: 0.8, lean: 1.1, turn: -6, head: 9.6, headDelay: 2.2 },
-  { id: 'veil', pose: 'veil', x: 0.3, y: 0.88, scale: 0.9, breathe: 5.7, breatheDelay: 1.3, settle: 7.8, settleDelay: 1.9, drift: -1, lean: 1.6, turn: 3, head: 6.6, headDelay: 0.8 },
-  { id: 'aisle', pose: 'stand', x: 0.1, y: 0.66, scale: 0.98, breathe: 7.1, breatheDelay: 0.4, settle: 8.1, settleDelay: 2.8, drift: 1.2, lean: 1.8, turn: 4, head: 7.8, headDelay: 1.5 },
-  { id: 'bow-r', pose: 'seat-bow', x: 0.72, y: 0.8, scale: 0.92, breathe: 5.1, breatheDelay: 2.2, settle: 6.7, settleDelay: 0.8, drift: -1.2, lean: -1.4, turn: -4, head: 9.1, headDelay: 0.2 },
-  { id: 'talk-r', pose: 'seat-talk', x: 0.84, y: 0.84, scale: 0.9, breathe: 6.6, breatheDelay: 0.9, settle: 9.1, settleDelay: 1.6, drift: 1, lean: 1.3, turn: -6, head: 7.5, headDelay: 2.6 },
-  { id: 'stand-r', pose: 'stand', x: 0.9, y: 0.7, scale: 0.84, breathe: 4.6, breatheDelay: 1.5, settle: 8.4, settleDelay: 0.2, drift: -0.9, lean: -1.7, turn: 5, head: 6.9, headDelay: 1.1 },
+  { id: 'bow-l', pose: 'seat-bow', x: 0.1, y: 0.9, scale: 0.82, breathe: 5.4, breatheDelay: 0.2, settle: 7.2, settleDelay: 0.5, drift: 1.1, lean: 1.2, turn: 4, head: 8.8, headDelay: 1.2 },
+  { id: 'talk-l', pose: 'seat-talk', x: 0.15, y: 0.86, scale: 0.78, breathe: 6.3, breatheDelay: 1.8, settle: 8.6, settleDelay: 1.1, drift: -1.3, lean: 1.5, turn: 6, head: 7.1, headDelay: 0.4 },
+  { id: 'talk-l2', pose: 'seat-talk', x: 0.2, y: 0.82, scale: 0.74, breathe: 4.9, breatheDelay: 0.7, settle: 9.4, settleDelay: 2.4, drift: 1.4, lean: -1.3, turn: -5, head: 8.2, headDelay: 1.7 },
+  { id: 'pair', pose: 'pair', x: 0.12, y: 0.94, scale: 0.8, breathe: 6.8, breatheDelay: 2.6, settle: 10.2, settleDelay: 0.3, drift: 0.8, lean: 1.1, turn: -6, head: 9.6, headDelay: 2.2 },
+  { id: 'veil', pose: 'veil', x: 0.18, y: 0.88, scale: 0.74, breathe: 5.7, breatheDelay: 1.3, settle: 7.8, settleDelay: 1.9, drift: -1, lean: 1.6, turn: 3, head: 6.6, headDelay: 0.8 },
+  { id: 'aisle', pose: 'stand', x: 0.26, y: 0.78, scale: 0.84, breathe: 7.1, breatheDelay: 0.4, settle: 8.1, settleDelay: 2.8, drift: 1.2, lean: 1.8, turn: 4, head: 7.8, headDelay: 1.5 },
+  { id: 'bow-r', pose: 'seat-bow', x: 0.78, y: 0.9, scale: 0.78, breathe: 5.1, breatheDelay: 2.2, settle: 6.7, settleDelay: 0.8, drift: -1.2, lean: -1.4, turn: -4, head: 9.1, headDelay: 0.2 },
+  { id: 'talk-r', pose: 'seat-talk', x: 0.84, y: 0.84, scale: 0.74, breathe: 6.6, breatheDelay: 0.9, settle: 9.1, settleDelay: 1.6, drift: 1, lean: 1.3, turn: -6, head: 7.5, headDelay: 2.6 },
+  { id: 'stand-r', pose: 'stand', x: 0.74, y: 0.74, scale: 0.8, breathe: 4.6, breatheDelay: 1.5, settle: 8.4, settleDelay: 0.2, drift: -0.9, lean: -1.7, turn: 5, head: 6.9, headDelay: 1.1 },
 ];
 
 function Head({ cx, cy, rx, ry }: { cx: number; cy: number; rx: number; ry: number }) {

@@ -278,7 +278,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
         <FamilyPreferenceCard prefs={currentCase.familyChapelPrefs} />
         {/* Floor */}
         <div
-          className={`relative h-72 rounded-xl border-2 border-violet-700 overflow-hidden bg-gradient-to-b ${wallGrad} touch-none shadow-[inset_0_18px_40px_rgba(0,0,0,0.45)]`}
+          className={`relative aspect-[22/25] w-full rounded-xl border-2 border-violet-700 overflow-hidden bg-gradient-to-b ${wallGrad} touch-none shadow-[inset_0_8px_22px_rgba(0,0,0,0.18)]`}
           data-chapel-floor
           data-chapel-service={serviceLive ? '1' : undefined}
         >
@@ -882,13 +882,13 @@ function DraggablePiece({
               showPlaque={false}
               chapel
               lid="open"
-              className="w-[14rem]"
+              className="w-[9rem]"
             />
           ) : (
             <CasketVessel
               chapel
               lid="open"
-              className="w-[14rem]"
+              className="w-[9rem]"
               casket={{
                 id: 'bier',
                 name: 'Bier',
