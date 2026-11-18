@@ -8,7 +8,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   // Entry · $180
   {
     id: 'gabriel-pine-orthodox-raw-blonde-pine',
-    name: 'Eastern White Pine Orthodox — Raw Blonde Pine',
+    name: 'Eastern White Pine Orthodox, Raw Blonde Pine',
     material: 'PINE',
     silhouette: 'HALF_COUCH',
     finish: 'Raw Blonde Pine',
@@ -34,7 +34,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-pine-orthodox-honey-wax',
-    name: 'Eastern White Pine Orthodox — Honey Wax',
+    name: 'Eastern White Pine Orthodox, Honey Wax',
     material: 'PINE',
     silhouette: 'HALF_COUCH',
     finish: 'Honey Wax',
@@ -60,7 +60,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-pine-orthodox-golden-amber',
-    name: 'Eastern White Pine Orthodox — Golden Amber',
+    name: 'Eastern White Pine Orthodox, Golden Amber',
     material: 'PINE',
     silhouette: 'HALF_COUCH',
     finish: 'Golden Amber',
@@ -86,7 +86,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-pine-orthodox-weathered-grey',
-    name: 'Eastern White Pine Orthodox — Weathered Grey',
+    name: 'Eastern White Pine Orthodox, Weathered Grey',
     material: 'PINE',
     silhouette: 'HALF_COUCH',
     finish: 'Weathered Grey',
@@ -112,7 +112,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-pine-orthodox-cedar-tint',
-    name: 'Eastern White Pine Orthodox — Cedar Tint',
+    name: 'Eastern White Pine Orthodox, Cedar Tint',
     material: 'PINE',
     silhouette: 'HALF_COUCH',
     finish: 'Cedar Tint',
@@ -138,7 +138,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-poplar-mission-natural-poplar',
-    name: 'Solid Poplar Mission — Natural Poplar',
+    name: 'Solid Poplar Mission, Natural Poplar',
     material: 'POPLAR',
     silhouette: 'HALF_COUCH',
     finish: 'Natural Poplar',
@@ -164,7 +164,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-poplar-mission-pecan-stain',
-    name: 'Solid Poplar Mission — Pecan Stain',
+    name: 'Solid Poplar Mission, Pecan Stain',
     material: 'POPLAR',
     silhouette: 'HALF_COUCH',
     finish: 'Pecan Stain',
@@ -190,7 +190,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-poplar-mission-cherry-gloss',
-    name: 'Solid Poplar Mission — Cherry Gloss',
+    name: 'Solid Poplar Mission, Cherry Gloss',
     material: 'POPLAR',
     silhouette: 'HALF_COUCH',
     finish: 'Cherry Gloss',
@@ -216,7 +216,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-poplar-mission-walnut-satin',
-    name: 'Solid Poplar Mission — Walnut Satin',
+    name: 'Solid Poplar Mission, Walnut Satin',
     material: 'POPLAR',
     silhouette: 'HALF_COUCH',
     finish: 'Walnut Satin',
@@ -242,7 +242,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-poplar-mission-charcoal',
-    name: 'Solid Poplar Mission — Charcoal',
+    name: 'Solid Poplar Mission, Charcoal',
     material: 'POPLAR',
     silhouette: 'HALF_COUCH',
     finish: 'Charcoal',
@@ -268,7 +268,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-monarch-monarch-blue',
-    name: '20-Gauge Steel Monarch — Monarch Blue',
+    name: '20-Gauge Steel Monarch, Monarch Blue',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Monarch Blue',
@@ -294,7 +294,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-monarch-copper-glow',
-    name: '20-Gauge Steel Monarch — Copper Glow',
+    name: '20-Gauge Steel Monarch, Copper Glow',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Copper Glow',
@@ -320,7 +320,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-monarch-almond-white',
-    name: '20-Gauge Steel Monarch — Almond White',
+    name: '20-Gauge Steel Monarch, Almond White',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Almond White',
@@ -346,7 +346,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-monarch-charcoal-silver',
-    name: '20-Gauge Steel Monarch — Charcoal Silver',
+    name: '20-Gauge Steel Monarch, Charcoal Silver',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Charcoal Silver',
@@ -372,7 +372,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-monarch-wine-berry',
-    name: '20-Gauge Steel Monarch — Wine Berry',
+    name: '20-Gauge Steel Monarch, Wine Berry',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Wine Berry',
@@ -399,7 +399,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   // Standard · $320
   {
     id: 'gabriel-ash-linear-blonde-ash',
-    name: 'Solid Ash Linear — Blonde Ash',
+    name: 'Solid Ash Linear, Blonde Ash',
     material: 'ASH',
     silhouette: 'HALF_COUCH',
     finish: 'Blonde Ash',
@@ -425,7 +425,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-ash-linear-scandinavian-white',
-    name: 'Solid Ash Linear — Scandinavian White',
+    name: 'Solid Ash Linear, Scandinavian White',
     material: 'ASH',
     silhouette: 'HALF_COUCH',
     finish: 'Scandinavian White',
@@ -451,7 +451,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-ash-linear-warm-teak',
-    name: 'Solid Ash Linear — Warm Teak',
+    name: 'Solid Ash Linear, Warm Teak',
     material: 'ASH',
     silhouette: 'HALF_COUCH',
     finish: 'Warm Teak',
@@ -477,7 +477,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-ash-linear-slate-grey',
-    name: 'Solid Ash Linear — Slate Grey',
+    name: 'Solid Ash Linear, Slate Grey',
     material: 'ASH',
     silhouette: 'HALF_COUCH',
     finish: 'Slate Grey',
@@ -503,7 +503,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-ash-linear-espresso-black',
-    name: 'Solid Ash Linear — Espresso Black',
+    name: 'Solid Ash Linear, Espresso Black',
     material: 'ASH',
     silhouette: 'HALF_COUCH',
     finish: 'Espresso Black',
@@ -529,7 +529,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-maple-colonial-honey-maple',
-    name: 'Hard Rock Maple Colonial — Honey Maple',
+    name: 'Hard Rock Maple Colonial, Honey Maple',
     material: 'MAPLE',
     silhouette: 'HALF_COUCH',
     finish: 'Honey Maple',
@@ -555,7 +555,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-maple-colonial-autumn-harvest',
-    name: 'Hard Rock Maple Colonial — Autumn Harvest',
+    name: 'Hard Rock Maple Colonial, Autumn Harvest',
     material: 'MAPLE',
     silhouette: 'HALF_COUCH',
     finish: 'Autumn Harvest',
@@ -581,7 +581,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-maple-colonial-nutmeg',
-    name: 'Hard Rock Maple Colonial — Nutmeg',
+    name: 'Hard Rock Maple Colonial, Nutmeg',
     material: 'MAPLE',
     silhouette: 'HALF_COUCH',
     finish: 'Nutmeg',
@@ -607,7 +607,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-maple-colonial-vintage-ivory-wash',
-    name: 'Hard Rock Maple Colonial — Vintage Ivory Wash',
+    name: 'Hard Rock Maple Colonial, Vintage Ivory Wash',
     material: 'MAPLE',
     silhouette: 'HALF_COUCH',
     finish: 'Vintage Ivory Wash',
@@ -633,7 +633,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-maple-colonial-espresso',
-    name: 'Hard Rock Maple Colonial — Espresso',
+    name: 'Hard Rock Maple Colonial, Espresso',
     material: 'MAPLE',
     silhouette: 'HALF_COUCH',
     finish: 'Espresso',
@@ -659,7 +659,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-square-silver-rose',
-    name: '18-Gauge Steel Square — Silver Rose',
+    name: '18-Gauge Steel Square, Silver Rose',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Silver Rose',
@@ -685,7 +685,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-square-midnight-blue',
-    name: '18-Gauge Steel Square — Midnight Blue',
+    name: '18-Gauge Steel Square, Midnight Blue',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Midnight Blue',
@@ -711,7 +711,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-square-brushed-gold',
-    name: '18-Gauge Steel Square — Brushed Gold',
+    name: '18-Gauge Steel Square, Brushed Gold',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Brushed Gold',
@@ -737,7 +737,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-square-pearl-white',
-    name: '18-Gauge Steel Square — Pearl White',
+    name: '18-Gauge Steel Square, Pearl White',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Pearl White',
@@ -763,7 +763,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-square-copper-bronze',
-    name: '18-Gauge Steel Square — Copper Bronze',
+    name: '18-Gauge Steel Square, Copper Bronze',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Copper Bronze',
@@ -789,7 +789,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-grecian-pearl-lilac',
-    name: '18-Gauge Steel Grecian — Pearl Lilac',
+    name: '18-Gauge Steel Grecian, Pearl Lilac',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Pearl Lilac',
@@ -815,7 +815,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-grecian-sky-blue',
-    name: '18-Gauge Steel Grecian — Sky Blue',
+    name: '18-Gauge Steel Grecian, Sky Blue',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Sky Blue',
@@ -841,7 +841,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-grecian-silver-platinum',
-    name: '18-Gauge Steel Grecian — Silver Platinum',
+    name: '18-Gauge Steel Grecian, Silver Platinum',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Silver Platinum',
@@ -867,7 +867,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-grecian-dusty-rose',
-    name: '18-Gauge Steel Grecian — Dusty Rose',
+    name: '18-Gauge Steel Grecian, Dusty Rose',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Dusty Rose',
@@ -893,7 +893,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-grecian-champagne',
-    name: '18-Gauge Steel Grecian — Champagne',
+    name: '18-Gauge Steel Grecian, Champagne',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Champagne',
@@ -920,7 +920,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   // Premium · $520
   {
     id: 'gabriel-pecan-southern-natural-pecan',
-    name: 'Solid Pecan Southern — Natural Pecan',
+    name: 'Solid Pecan Southern, Natural Pecan',
     material: 'PECAN',
     silhouette: 'HALF_COUCH',
     finish: 'Natural Pecan',
@@ -946,7 +946,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-pecan-southern-toasted-almond',
-    name: 'Solid Pecan Southern — Toasted Almond',
+    name: 'Solid Pecan Southern, Toasted Almond',
     material: 'PECAN',
     silhouette: 'HALF_COUCH',
     finish: 'Toasted Almond',
@@ -972,7 +972,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-pecan-southern-bourbon-brown',
-    name: 'Solid Pecan Southern — Bourbon Brown',
+    name: 'Solid Pecan Southern, Bourbon Brown',
     material: 'PECAN',
     silhouette: 'HALF_COUCH',
     finish: 'Bourbon Brown',
@@ -998,7 +998,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-pecan-southern-dark-hickory',
-    name: 'Solid Pecan Southern — Dark Hickory',
+    name: 'Solid Pecan Southern, Dark Hickory',
     material: 'PECAN',
     silhouette: 'HALF_COUCH',
     finish: 'Dark Hickory',
@@ -1024,7 +1024,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-pecan-southern-mahogany',
-    name: 'Solid Pecan Southern — Mahogany',
+    name: 'Solid Pecan Southern, Mahogany',
     material: 'PECAN',
     silhouette: 'HALF_COUCH',
     finish: 'Mahogany',
@@ -1050,7 +1050,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-presidential-gunmetal-grey',
-    name: '16-Gauge Steel Presidential — Gunmetal Grey',
+    name: '16-Gauge Steel Presidential, Gunmetal Grey',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Gunmetal Grey',
@@ -1076,7 +1076,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-presidential-navy-blue',
-    name: '16-Gauge Steel Presidential — Navy Blue',
+    name: '16-Gauge Steel Presidential, Navy Blue',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Navy Blue',
@@ -1102,7 +1102,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-presidential-sovereign-gold',
-    name: '16-Gauge Steel Presidential — Sovereign Gold',
+    name: '16-Gauge Steel Presidential, Sovereign Gold',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Sovereign Gold',
@@ -1128,7 +1128,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-presidential-crimson-red',
-    name: '16-Gauge Steel Presidential — Crimson Red',
+    name: '16-Gauge Steel Presidential, Crimson Red',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Crimson Red',
@@ -1154,7 +1154,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-presidential-obsidian-black',
-    name: '16-Gauge Steel Presidential — Obsidian Black',
+    name: '16-Gauge Steel Presidential, Obsidian Black',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Obsidian Black',
@@ -1180,7 +1180,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-military-air-force-blue',
-    name: 'Stainless Military — Air Force Blue',
+    name: 'Stainless Military, Air Force Blue',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Air Force Blue',
@@ -1206,7 +1206,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-military-army-black',
-    name: 'Stainless Military — Army Black',
+    name: 'Stainless Military, Army Black',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Army Black',
@@ -1232,7 +1232,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-military-navy-blue',
-    name: 'Stainless Military — Navy Blue',
+    name: 'Stainless Military, Navy Blue',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Navy Blue',
@@ -1258,7 +1258,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-military-marine-dress-blue',
-    name: 'Stainless Military — Marine Dress Blue',
+    name: 'Stainless Military, Marine Dress Blue',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Marine Dress Blue',
@@ -1284,7 +1284,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-steel-military-silver-guard',
-    name: 'Stainless Military — Silver Guard',
+    name: 'Stainless Military, Silver Guard',
     material: 'STEEL',
     silhouette: 'HALF_COUCH',
     finish: 'Silver Guard',
@@ -1311,7 +1311,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   // Luxury · $780
   {
     id: 'gabriel-bronze-square-venetian-bronze',
-    name: 'Bronze Square — Venetian Bronze',
+    name: 'Bronze Square, Venetian Bronze',
     material: 'BRONZE',
     silhouette: 'HALF_COUCH',
     finish: 'Venetian Bronze',
@@ -1337,7 +1337,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-bronze-square-statuary-dark-bronze',
-    name: 'Bronze Square — Statuary Dark Bronze',
+    name: 'Bronze Square, Statuary Dark Bronze',
     material: 'BRONZE',
     silhouette: 'HALF_COUCH',
     finish: 'Statuary Dark Bronze',
@@ -1363,7 +1363,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-bronze-square-champagne-gold',
-    name: 'Bronze Square — Champagne Gold',
+    name: 'Bronze Square, Champagne Gold',
     material: 'BRONZE',
     silhouette: 'HALF_COUCH',
     finish: 'Champagne Gold',
@@ -1389,7 +1389,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-bronze-square-rose-copper',
-    name: 'Bronze Square — Rose Copper',
+    name: 'Bronze Square, Rose Copper',
     material: 'BRONZE',
     silhouette: 'HALF_COUCH',
     finish: 'Rose Copper',
@@ -1415,7 +1415,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-bronze-square-pewter-grey',
-    name: 'Bronze Square — Pewter Grey',
+    name: 'Bronze Square, Pewter Grey',
     material: 'BRONZE',
     silhouette: 'HALF_COUCH',
     finish: 'Pewter Grey',
@@ -1441,7 +1441,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-mahogany-round-red-mahogany',
-    name: 'Solid Mahogany Round — Red Mahogany',
+    name: 'Solid Mahogany Round, Red Mahogany',
     material: 'MAHOGANY',
     silhouette: 'HALF_COUCH',
     finish: 'Red Mahogany',
@@ -1467,7 +1467,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-mahogany-round-dark-espresso',
-    name: 'Solid Mahogany Round — Dark Espresso',
+    name: 'Solid Mahogany Round, Dark Espresso',
     material: 'MAHOGANY',
     silhouette: 'HALF_COUCH',
     finish: 'Dark Espresso',
@@ -1493,7 +1493,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-mahogany-round-golden-honey',
-    name: 'Solid Mahogany Round — Golden Honey',
+    name: 'Solid Mahogany Round, Golden Honey',
     material: 'MAHOGANY',
     silhouette: 'HALF_COUCH',
     finish: 'Golden Honey',
@@ -1519,7 +1519,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-mahogany-round-burnished-cherry',
-    name: 'Solid Mahogany Round — Burnished Cherry',
+    name: 'Solid Mahogany Round, Burnished Cherry',
     material: 'MAHOGANY',
     silhouette: 'HALF_COUCH',
     finish: 'Burnished Cherry',
@@ -1545,7 +1545,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-mahogany-round-ebony',
-    name: 'Solid Mahogany Round — Ebony',
+    name: 'Solid Mahogany Round, Ebony',
     material: 'MAHOGANY',
     silhouette: 'HALF_COUCH',
     finish: 'Ebony',
@@ -1572,7 +1572,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   // Signature · $1100
   {
     id: 'gabriel-copper-classic-brushed-copper',
-    name: 'Solid Copper Classic — Brushed Copper',
+    name: 'Solid Copper Classic, Brushed Copper',
     material: 'COPPER',
     silhouette: 'HALF_COUCH',
     finish: 'Brushed Copper',
@@ -1598,7 +1598,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-copper-classic-penny-bronze',
-    name: 'Solid Copper Classic — Penny Bronze',
+    name: 'Solid Copper Classic, Penny Bronze',
     material: 'COPPER',
     silhouette: 'HALF_COUCH',
     finish: 'Penny Bronze',
@@ -1624,7 +1624,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-copper-classic-aged-verdigris-tint',
-    name: 'Solid Copper Classic — Aged Verdigris Tint',
+    name: 'Solid Copper Classic, Aged Verdigris Tint',
     material: 'COPPER',
     silhouette: 'HALF_COUCH',
     finish: 'Aged Verdigris Tint',
@@ -1650,7 +1650,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-copper-classic-rose-gold',
-    name: 'Solid Copper Classic — Rose Gold',
+    name: 'Solid Copper Classic, Rose Gold',
     material: 'COPPER',
     silhouette: 'HALF_COUCH',
     finish: 'Rose Gold',
@@ -1676,7 +1676,7 @@ export const GABRIEL_CASKETS: CasketCatalogEntry[] = [
   },
   {
     id: 'gabriel-copper-classic-mocha-brown',
-    name: 'Solid Copper Classic — Mocha Brown',
+    name: 'Solid Copper Classic, Mocha Brown',
     material: 'COPPER',
     silhouette: 'HALF_COUCH',
     finish: 'Mocha Brown',

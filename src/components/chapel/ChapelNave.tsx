@@ -1,294 +1,111 @@
 import React from 'react';
-import { PEW_PLACES, PEW_SPRITE } from './pewLayout';
 
 /**
- * Chapel nave in the casket's oblique camera.
- * Length runs +x, verticals stay vertical, depth runs up and to the right
- * at dy/dx = -42/86. Parallel edges stay parallel. The casket sprite is
- * not redrawn; this room is built so the bier sits under it.
+ * Painted chapel nave. Colors come from the selected décor so family prefs
+ * still change the room. Pointers pass through to the bier and flowers.
  */
-const K = 0.558;
-const DX = 86 * K;
-const DY = -42 * K;
-const FY = 470;
-const X0 = 8;
-const X1 = 360;
-const SPAN = 1.65;
-/** Floor continues toward the viewer. Negative depth, same slope. */
-const NEAR = -7.8;
-const X1_LONG = 800;
-const VIEW_H = 680;
-
-function at(x: number, y: number, depth = 0): [number, number] {
-  return [x + depth * DX, y + depth * DY];
-}
-
-function rise(p: [number, number], h: number): [number, number] {
-  return [p[0], p[1] - h];
-}
-
-function lerp(a: [number, number], b: [number, number], t: number): [number, number] {
-  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-}
-
-function poly(pts: [number, number][]): string {
-  return `${pts
-    .map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`)
-    .join(' ')} Z`;
-}
-
-function SideCurtain({ side, drape }: { side: 'left' | 'right'; drape: string }) {
-  const left = side === 'left';
-  const folds = [0, 1, 2, 3, 4, 5];
-  return (
-    <g>
-      {folds.map((i) => {
-        const span = 15;
-        const x0 = left ? 2 + i * 13 : 438 - i * 13;
-        const x1 = left ? x0 + span : x0 - span;
-        const lift = i * 7;
-        const shear = (left ? 1 : -1) * (8 + i * 3);
-        const top = 6 + lift * 0.2;
-        const bot = 668 - lift;
-        const pts: [number, number][] = [
-          [x0, bot],
-          [x1, bot - 3],
-          [x1 + shear, top + 18],
-          [x0 + shear * 0.45, top],
-        ];
-        const cloth = i % 2 === 0 ? '#7a3d96' : '#5c2a78';
-        const lit = i % 2 === 0 ? '#b07cc8' : '#8d56aa';
-        return (
-          <g key={`${side}-${i}`}>
-            <path d={poly(pts)} fill={cloth} />
-            <path d={poly(pts)} fill={drape} />
-            <path
-              d={`M${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)} L${pts[3][0].toFixed(1)} ${pts[3][1].toFixed(1)}`}
-              stroke={lit}
-              strokeWidth="1.4"
-              fill="none"
-              opacity="0.85"
-            />
-          </g>
-        );
-      })}
-      <g stroke="#f6ead4" strokeWidth="1.1" opacity="0.75" fill="none">
-        {left ? (
-          <>
-            <path d="M8 48 H28 M10 62 H26 M8 150 H30 M10 164 H26 M8 250 H28 M10 264 H24 M8 360 H30 M10 374 H24" />
-          </>
-        ) : (
-          <>
-            <path d="M412 52 H432 M414 66 H430 M410 156 H432 M412 170 H428 M412 258 H434 M414 272 H430 M410 364 H432 M412 378 H428" />
-          </>
-        )}
-      </g>
-      <path
-        d={left ? 'M4 648 H78' : 'M362 648 H436'}
-        stroke="#e6c36a"
-        strokeWidth="2.2"
-        opacity="0.8"
-      />
-    </g>
-  );
-}
-
-function WallWindow({ x, y, w, h }: { x: number; y: number; w: number; h: number }) {
-  const sillD = 0.16;
-  const sill: [number, number][] = [
-    [x - 6, y + h],
-    [x + w + 8, y + h],
-    [x + w + 8 + DX * sillD, y + h + DY * sillD],
-    [x - 6 + DX * sillD, y + h + DY * sillD],
-  ];
-  return (
-    <g>
-      <path d={poly(sill)} fill="#c4a574" />
-      <rect x={x} y={y} width={w} height={h} fill="#2c1c14" />
-      <rect x={x + 5} y={y + 5} width={w - 10} height={h - 10} fill="#ffe7a8" />
-      <rect x={x + 5} y={y + 5} width={(w - 10) * 0.42} height={(h - 10) * 0.36} fill="#fff6d2" opacity="0.5" />
-      <path d={`M${x + w / 2} ${y + 5} V${y + h - 5}`} stroke="#3a2a1c" strokeWidth="2.6" />
-      <path d={`M${x + 5} ${y + h / 2} H${x + w - 5}`} stroke="#3a2a1c" strokeWidth="2.6" />
-    </g>
-  );
-}
-
-function Candle({ x, y }: { x: number; y: number }) {
-  return (
-    <g>
-      <ellipse cx={x} cy={y + 2} rx="14" ry="5" fill="#1a1008" opacity="0.35" />
-      <ellipse cx={x} cy={y} rx="13" ry="4.6" fill="#8a6428" />
-      <ellipse cx={x} cy={y - 2} rx="9" ry="3.2" fill="#f0d078" />
-      <rect x={x - 2} y={y - 62} width="4" height="60" rx="1" fill="#c4923a" />
-      <rect x={x - 1.1} y={y - 40} width="2.2" height="7" fill="#f0d078" />
-      <ellipse cx={x} cy={y - 62} rx="7" ry="2.6" fill="#f0d078" />
-      <rect x={x - 3.2} y={y - 84} width="6.4" height="22" rx="1.2" fill="#f7ecd2" />
-      <path d={`M${x} ${y - 100} C${x + 5} ${y - 90} ${x + 3.2} ${y - 84} ${x} ${y - 84} C${x - 3.2} ${y - 84} ${x - 5} ${y - 90} ${x} ${y - 100} Z`} fill="#fde68a" />
-      <path d={`M${x} ${y - 96} C${x + 2} ${y - 90} ${x + 1.2} ${y - 86} ${x} ${y - 86} C${x - 1.2} ${y - 86} ${x - 2} ${y - 90} ${x} ${y - 96} Z`} fill="#fff7d0" />
-      <ellipse cx={x} cy={y - 78} rx="16" ry="7" fill="#fbbf24" opacity="0.38" />
-    </g>
-  );
-}
-
 export const ChapelNave: React.FC<{
   floor: string;
   drape: string;
   light: string;
   pew: string;
 }> = ({ floor, drape, light, pew }) => {
-  const nL = at(X0, FY, 0);
-  const nR = at(X1, FY, 0);
-  const fR = at(X1, FY, SPAN);
-  const fL = at(X0, FY, SPAN);
-  const nearL = at(X0, FY, NEAR);
-  const nearR = at(X1_LONG, FY, NEAR);
-  const farR = at(X1_LONG, FY, SPAN);
-
-  const altarA = at(130, FY, 1.28);
-  const altarB = at(250, FY, 1.28);
-  const altarC = at(250, FY, 1.62);
-  const altarD = at(130, FY, 1.62);
-  const altarH = 46;
-
-  const standA = at(86, FY, 0.62);
-  const standB = at(248, FY, 0.62);
-  const standC = at(248, FY, 1.05);
-  const standD = at(86, FY, 1.05);
-  const standH = 22;
-
-  const leftFlame = at(62, FY, 0.58);
-  const rightFlame = at(286, FY, 0.72);
-
   return (
-    <>
     <svg
-      viewBox={`0 0 440 ${VIEW_H}`}
+      viewBox="0 0 360 280"
       className="absolute inset-0 h-full w-full pointer-events-none"
       aria-hidden
-      preserveAspectRatio="xMidYMid meet"
+      preserveAspectRatio="xMidYMid slice"
     >
       <defs>
-        <linearGradient id="nave-wall" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#8d74b8" />
-          <stop offset="0.45" stopColor="#6d5296" />
-          <stop offset="1" stopColor="#4e3874" />
+        <linearGradient id="nave-floor" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#000" stopOpacity="0.25" />
+          <stop offset="1" stopColor="#000" stopOpacity="0" />
         </linearGradient>
-        <radialGradient id="nave-glass-l" cx="30%" cy="22%" r="42%">
+        <radialGradient id="nave-light" cx="50%" cy="28%" r="55%">
           <stop offset="0" stopColor={light} stopOpacity="0.95" />
-          <stop offset="1" stopColor={light} stopOpacity="0" />
-        </radialGradient>
-        <radialGradient id="nave-glass-r" cx="78%" cy="26%" r="40%">
-          <stop offset="0" stopColor={light} stopOpacity="0.9" />
           <stop offset="1" stopColor={light} stopOpacity="0" />
         </radialGradient>
       </defs>
 
-      <rect width="440" height={VIEW_H} fill="url(#nave-wall)" />
-      <path d={poly([rise(fL, 250), rise(fR, 250), fR, fL])} fill="#7d64aa" />
-      <path d={poly([nL, fL, rise(fL, 230), rise(nL, 150)])} fill="#5b4584" />
-      <path d={poly([nR, fR, rise(fR, 250), rise(nR, 160)])} fill="#534078" />
-      <SideCurtain side="left" drape={drape} />
-      <SideCurtain side="right" drape={drape} />
+      <rect x="0" y="0" width="360" height="120" fill="url(#nave-light)" />
 
-      <WallWindow x={96} y={80} w={74} h={100} />
-      <WallWindow x={274} y={80} w={74} h={100} />
+      <path d="M18 18 H70 V78 H18 Z" fill="#0b1020" opacity="0.55" />
+      <path d="M290 18 H342 V78 H290 Z" fill="#0b1020" opacity="0.55" />
+      <path d="M24 24 H64 V70 H24 Z" fill="#fde68a" opacity="0.35" />
+      <path d="M296 24 H336 V70 H296 Z" fill="#fde68a" opacity="0.28" />
+      <path d="M44 24 V70 M316 24 V70" stroke="#fef3c7" strokeOpacity="0.45" />
 
-      <path d={poly([nearL, nearR, farR, fL])} fill={floor} />
-      <path d={poly([nearL, nearR, farR, fL])} fill="#c4a574" opacity="0.38" />
-      <path d={poly([at(150, FY, -0.15), at(214, FY, -0.15), at(214, FY, SPAN - 0.08), at(150, FY, SPAN - 0.08)])} fill="#f3e6c8" opacity="0.16" />
-      <g stroke="#f6edd8" strokeOpacity="0.8" fill="none" strokeWidth="1.5">
-        {[-7.2, -6.2, -5.2, -4.2, -3.2, -2.2, -1.2, -0.2, 0.22, 0.48, 0.74, 1.0, 1.28, 1.55].map((d) => {
-          const a = at(X0, FY, d);
-          const b = at(X1_LONG, FY, d);
-          return <path key={d} d={`M${a[0].toFixed(1)} ${a[1].toFixed(1)} L${b[0].toFixed(1)} ${b[1].toFixed(1)}`} />;
-        })}
-        {[40, 80, 120, 160, 200, 240, 280, 320, 400, 480, 560, 640, 720].map((x) => {
-          const a = at(x, FY, NEAR);
-          const b = at(x, FY, SPAN);
-          return <path key={x} d={`M${a[0].toFixed(1)} ${a[1].toFixed(1)} L${b[0].toFixed(1)} ${b[1].toFixed(1)}`} />;
-        })}
+      <path d="M0 0 H52 C36 80 48 160 28 280 H0 Z" fill={drape} />
+      <path d="M360 0 H308 C324 80 312 160 332 280 H360 Z" fill={drape} />
+      <path d="M14 0 C8 90 22 170 10 280" stroke="#000" strokeWidth="7" opacity="0.28" fill="none" />
+      <path d="M30 0 C22 100 36 180 24 280" stroke="#000" strokeWidth="5" opacity="0.22" fill="none" />
+      <path d="M346 0 C352 90 338 170 350 280" stroke="#000" strokeWidth="7" opacity="0.28" fill="none" />
+      <path d="M330 0 C338 100 324 180 336 280" stroke="#000" strokeWidth="5" opacity="0.22" fill="none" />
+      <g stroke="#fff" strokeOpacity="0.28" fill="none">
+        <path d="M6 36 H40 M8 48 H36 M6 110 H38 M8 122 H34 M6 190 H36 M8 202 H32" />
+        <path d="M322 48 H354 M324 60 H350 M322 140 H354 M324 152 H348 M322 220 H354 M324 232 H348" />
       </g>
 
-      <g>
-        <path d={poly([altarA, altarB, rise(altarB, altarH), rise(altarA, altarH)])} fill="#6b4e32" />
-        <path d={poly([altarB, altarC, rise(altarC, altarH), rise(altarB, altarH)])} fill="#4e3824" />
-        <path d={poly([rise(altarA, altarH), rise(altarB, altarH), rise(altarC, altarH), rise(altarD, altarH)])} fill="#c4a574" />
-        <path d={poly([altarA, altarB, rise(altarB, altarH * 0.72), rise(altarA, altarH * 0.72)])} fill="#6b3488" />
-        <path d={poly([altarA, altarB, rise(altarB, altarH * 0.72), rise(altarA, altarH * 0.72)])} fill={drape} />
-        <path d={poly([rise(altarA, altarH), rise(altarB, altarH), rise(altarC, altarH - 2), rise(altarD, altarH - 2)])} fill="#7a3d96" />
-        <path d={poly([rise(altarA, altarH), rise(altarB, altarH), rise(altarC, altarH - 2), rise(altarD, altarH - 2)])} fill={drape} />
-        <path
-          d={`M${rise(altarA, altarH - 8)[0].toFixed(1)} ${rise(altarA, altarH - 8)[1].toFixed(1)} L${rise(altarB, altarH - 8)[0].toFixed(1)} ${rise(altarB, altarH - 8)[1].toFixed(1)}`}
-          stroke="#2a1038"
-          strokeOpacity="0.45"
-        />
-        <path
-          d={`M${rise(altarA, altarH - 16)[0].toFixed(1)} ${rise(altarA, altarH - 16)[1].toFixed(1)} L${rise(altarB, altarH - 16)[0].toFixed(1)} ${rise(altarB, altarH - 16)[1].toFixed(1)}`}
-          stroke="#f3e6c8"
-          strokeOpacity="0.45"
-        />
-        {(() => {
-          const cx = rise(lerp(altarA, altarB, 0.5), altarH)[0];
-          const cy = rise(lerp(altarA, altarB, 0.5), altarH)[1];
-          return (
-            <g>
-              <rect x={cx - 2.6} y={cy - 58} width="5.2" height="56" fill="#f3e6c4" />
-              <rect x={cx - 14} y={cy - 44} width="28" height="5" fill="#f3e6c4" />
-            </g>
-          );
-        })()}
+      <path d="M48 118 L312 118 L340 280 L20 280 Z" fill={floor} />
+      <path d="M48 118 L312 118 L340 280 L20 280 Z" fill="url(#nave-floor)" />
+      <g stroke="#1c1917" strokeOpacity="0.55" fill="none" strokeWidth="1.4">
+        <path d="M70 150 L40 280 M120 150 L90 280 M180 140 L180 280 M240 150 L270 280 M290 150 L330 280" />
+        <path d="M54 150 H306 M44 190 H316 M32 230 H328 M24 265 H336" />
       </g>
+      <g fill="#fff" opacity="0.07">
+        <path d="M70 150 L120 150 L100 190 L54 190 Z" />
+        <path d="M240 150 L290 150 L316 190 L210 190 Z" />
+        <path d="M44 190 L100 190 L80 230 L32 230 Z" />
+      </g>
+      <path d="M168 130 L150 280 H210 L192 130 Z" fill="#fff" opacity="0.06" />
 
-      <g>
-        {[standA, standB, standC, standD].map((p, i) => (
+      {[
+        { y: 168, h: 16, inset: 70 },
+        { y: 198, h: 18, inset: 54 },
+        { y: 232, h: 22, inset: 36 },
+      ].map((row) => (
+        <g key={row.y}>
           <path
-            key={i}
-            d={poly([p, [p[0] + 4, p[1]], rise([p[0] + 4, p[1]], standH), rise(p, standH)])}
-            fill="#5c4030"
+            d={`M${row.inset} ${row.y} H${150 - (168 - row.y) * 0.15} L${150 - (168 - row.y) * 0.1} ${row.y + row.h} H${row.inset - 6} Z`}
+            fill={pew}
           />
-        ))}
-        <path d={poly([standA, standB, rise(standB, standH), rise(standA, standH)])} fill="#6b3488" />
-        <path d={poly([standA, standB, rise(standB, standH), rise(standA, standH)])} fill={drape} />
-        <path d={poly([standB, standC, rise(standC, standH), rise(standB, standH)])} fill="#4a2060" />
-        <path d={poly([rise(standA, standH), rise(standB, standH), rise(standC, standH), rise(standD, standH)])} fill="#d8b88a" />
-        <path
-          d={poly([
-            rise(standA, standH),
-            rise(standB, standH),
-            rise(standB, standH + 3),
-            rise(standA, standH + 3),
-          ])}
-          fill="#f0d7b0"
-        />
-      </g>
-
-      <Candle x={leftFlame[0]} y={leftFlame[1]} />
-      <Candle x={rightFlame[0]} y={rightFlame[1]} />
-
-      <rect width="440" height="220" fill="url(#nave-glass-l)" opacity="0.4" />
-      <rect width="440" height="240" fill="url(#nave-glass-r)" opacity="0.34" />
-    </svg>
-    <div
-      className="absolute inset-0 z-[2] pointer-events-none"
-      aria-hidden
-      data-chapel-pews={pew}
-    >
-      {PEW_PLACES.map((place) => (
-        <img
-          key={place.id}
-          src={PEW_SPRITE}
-          alt=""
-          draggable={false}
-          className="absolute max-w-none select-none"
-          style={{
-            left: `${place.x * 100}%`,
-            top: `${place.y * 100}%`,
-            width: `${place.w * 100}%`,
-            height: 'auto',
-          }}
-        />
+          <path
+            d={`M${360 - row.inset} ${row.y} H${210 + (168 - row.y) * 0.15} L${210 + (168 - row.y) * 0.1} ${row.y + row.h} H${366 - row.inset} Z`}
+            fill={pew}
+          />
+          <path
+            d={`M${row.inset + 4} ${row.y + 3} H${142} M${row.inset + 6} ${row.y + 7} H${140} M${218} ${row.y + 3} H${354 - row.inset} M${220} ${row.y + 7} H${350 - row.inset}`}
+            stroke="#3f2912"
+            strokeWidth="1.1"
+            strokeOpacity="0.7"
+          />
+          <path
+            d={`M${row.inset} ${row.y + row.h} H${146} V${row.y + row.h + 7} H${row.inset - 4} Z`}
+            fill="#000"
+            opacity="0.28"
+          />
+          <path
+            d={`M${214} ${row.y + row.h} H${360 - row.inset} V${row.y + row.h + 7} H${214} Z`}
+            fill="#000"
+            opacity="0.28"
+          />
+        </g>
       ))}
-    </div>
-    </>
+
+      <path d="M118 96 H242 L250 132 H110 Z" fill="#2a2118" />
+      <path d="M126 100 H234 L240 126 H120 Z" fill={drape} opacity="0.85" />
+      <path d="M132 104 H228 M140 112 H220 M148 120 H212" stroke="#000" strokeOpacity="0.2" />
+      <ellipse cx="180" cy="128" rx="54" ry="8" fill="#000" opacity="0.35" />
+
+      <g>
+        <rect x="132" y="78" width="6" height="22" rx="1" fill="#f5e6c8" />
+        <rect x="222" y="78" width="6" height="22" rx="1" fill="#f5e6c8" />
+        <ellipse cx="135" cy="74" rx="5" ry="7" fill="#fde68a" />
+        <ellipse cx="225" cy="76" rx="4" ry="6" fill="#fbbf24" />
+        <ellipse cx="135" cy="100" rx="16" ry="5" fill="#fbbf24" opacity="0.35" />
+        <ellipse cx="225" cy="102" rx="14" ry="4" fill="#fbbf24" opacity="0.28" />
+      </g>
+    </svg>
   );
 };

@@ -1425,7 +1425,7 @@ export const CasketVessel: React.FC<{
         src={showOpen ? casket.sprites.open : casket.sprites.closed}
         alt=""
         draggable={false}
-        className={`h-auto max-w-full object-contain object-bottom ${width} ${className ?? ''}`}
+        className={`h-auto max-h-full max-w-full object-contain object-center ${width} ${className ?? ''}`}
       />
     );
   }

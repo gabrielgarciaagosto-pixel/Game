@@ -1046,18 +1046,20 @@ function CasketCard({
   });
 
   return (
-    <div className="rounded-2xl border border-amber-900/40 bg-gradient-to-b from-[#2a2118] to-[#120e0b] p-2 flex flex-col min-h-[17.5rem]">
+    <div className="rounded-2xl border border-amber-900/40 bg-gradient-to-b from-[#2a2118] to-[#120e0b] p-2 flex flex-col">
       <button
         type="button"
         onClick={onInspect}
         style={{ touchAction: 'manipulation' }}
-        className="flex-1 flex flex-col items-center justify-end pb-1"
+        className="flex flex-col items-center pb-1"
       >
         <div className="w-full flex justify-between items-start gap-1 mb-1 px-0.5 min-h-[1.1rem]">
           {rare ? <RarityBadge rarity={rare.rarity} /> : <span />}
           {locked && <LockBadge required={casket.reputationRequired} />}
         </div>
-        <CasketVessel casket={casket} size="sm" className="scale-[1.16]" />
+        <div className="flex h-[6.75rem] w-full items-center justify-center">
+          <CasketVessel casket={casket} size="sm" className="max-h-[6.75rem] w-full" />
+        </div>
         <div className="mt-1 text-center px-1">
           <div className="text-[12px] font-bold text-amber-50 leading-tight">
             {casket.name}

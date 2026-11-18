@@ -359,8 +359,8 @@ export function defaultChapelLayout(
       {
         id: 'focal',
         kind: isCremationDisplay ? 'URN' : 'COFFIN',
-        x: 0.48,
-        y: 0.61,
+        x: 0.5,
+        y: 0.42,
       },
     ],
     serviceMusicId: null,
