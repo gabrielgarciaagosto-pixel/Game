@@ -248,90 +248,93 @@ canvas {
 @keyframes chapel-mourner-breathe {
   0%,
   100% {
-    opacity: 0.42;
+    opacity: 0.37;
   }
   50% {
-    opacity: 0.58;
+    opacity: 0.53;
   }
 }
 
 .chapel-mourner {
   translate: -50% -100%;
-  animation: chapel-mourner-breathe 4.8s ease-in-out infinite;
+  animation: chapel-mourner-breathe var(--breathe-dur, 5.6s) ease-in-out var(--breathe-delay, 0s) infinite;
 }
 
-.chapel-mourner-motion {
+.chapel-mourner-settle {
+  position: relative;
   width: 100%;
   height: 100%;
   transform-origin: 50% 100%;
+  animation: chapel-mourner-settle var(--settle-dur, 8s) ease-in-out var(--settle-delay, 0s) infinite;
 }
 
-.chapel-mourner-bob {
-  animation: chapel-mourner-bob 4.8s ease-in-out infinite;
+.chapel-mourner-core,
+.chapel-mourner-haze {
+  width: 100%;
+  height: 100%;
 }
 
-.chapel-mourner-sway {
-  animation: chapel-mourner-sway 7.4s ease-in-out infinite;
+.chapel-mourner-core svg {
+  filter: url(#chapel-mourner-ghost);
 }
 
-.chapel-mourner-shift {
-  animation: chapel-mourner-shift 16s ease-in-out infinite;
+.chapel-mourner-haze {
+  position: absolute;
+  inset: -4px;
+  opacity: 0.42;
+  animation: chapel-mourner-haze var(--haze-dur, 9s) ease-in-out var(--haze-delay, 0s) infinite;
+  pointer-events: none;
 }
 
-.chapel-mourner-talk .chapel-mourner-head {
+.chapel-mourner-haze svg {
+  filter: blur(1.8px);
+}
+
+.chapel-mourner-head {
   transform-box: fill-box;
-  transform-origin: center 80%;
-  animation: chapel-mourner-turn 8s ease-in-out infinite;
+  transform-origin: center 82%;
+  animation: chapel-mourner-tilt var(--head-dur, 8s) ease-in-out var(--head-delay, 0s) infinite;
 }
 
-@keyframes chapel-mourner-bob {
+@keyframes chapel-mourner-settle {
   0%,
   100% {
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0) rotate(0deg);
   }
-  50% {
-    transform: translateY(-1.5px);
+  32% {
+    transform: translate3d(var(--drift, 1px), -1.1px, 0) rotate(var(--lean, 1.2deg));
   }
-}
-
-@keyframes chapel-mourner-sway {
-  0%,
-  100% {
-    transform: rotate(-1.4deg);
-  }
-  50% {
-    transform: rotate(1.6deg);
-  }
-}
-
-@keyframes chapel-mourner-shift {
-  0%,
-  18%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-  42% {
-    transform: translate3d(var(--shift, 8px), -1px, 0);
-  }
-  64% {
-    transform: translate3d(calc(var(--shift, 8px) * 0.45), 0, 0);
+  61% {
+    transform: translate3d(calc(var(--drift, 1px) * -0.65), 0.4px, 0) rotate(calc(var(--lean, 1.2deg) * -0.8));
   }
   82% {
-    transform: translate3d(var(--shift, 8px), -1px, 0);
+    transform: translate3d(calc(var(--drift, 1px) * 0.3), -0.7px, 0) rotate(calc(var(--lean, 1.2deg) * 0.35));
   }
 }
 
-@keyframes chapel-mourner-turn {
+@keyframes chapel-mourner-haze {
   0%,
-  24%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.26;
+  }
+  50% {
+    transform: translate(1px, -1px) scale(1.035);
+    opacity: 0.46;
+  }
+}
+
+@keyframes chapel-mourner-tilt {
+  0%,
+  22%,
   100% {
     transform: rotate(0deg);
   }
-  48% {
-    transform: rotate(var(--turn, -8deg));
+  46% {
+    transform: rotate(var(--turn, 4deg));
   }
   74% {
-    transform: rotate(calc(var(--turn, -8deg) * -0.3));
+    transform: rotate(calc(var(--turn, 4deg) * -0.4));
   }
 }
 
@@ -1244,7 +1247,8 @@ canvas {
   .hub-candle-wax,
   .hub-petal,
   .chapel-mourner,
-  .chapel-mourner-motion,
+  .chapel-mourner-settle,
+  .chapel-mourner-haze,
   .chapel-mourner-head,
   .chapel-service-glow,
   .hub-chapel-live-glow,
@@ -1261,8 +1265,8 @@ canvas {
   .hub-spirit[data-placed='1'] { opacity: var(--a, 0.55); }
   .hub-spirit:not([data-placed='1']) { opacity: 0; }
   .hub-atmo-debt { opacity: 0.7; }
-  .chapel-mourner { opacity: 0.5; }
-  .chapel-mourner-talk .chapel-mourner-head { animation: none; }
+  .chapel-mourner { opacity: 0.45; }
+  .chapel-mourner-head { animation: none; }
   .chapel-service-glow,
   .hub-chapel-live-glow { opacity: 0.85; }
 }

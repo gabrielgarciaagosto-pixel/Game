@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
 type Pose = 'seat-bow' | 'seat-talk' | 'veil' | 'stand' | 'pair';
-type Motion = 'bob' | 'talk' | 'shift' | 'sway';
 
 interface MournerSpec {
   id: string;
@@ -11,26 +10,31 @@ interface MournerSpec {
   /** Feet line. Keep them in the pews, clear of the bier. */
   y: number;
   scale: number;
-  delay: number;
-  /** How long one motion cycle takes. */
-  dur: number;
-  motion: Motion;
-  /** Degrees the head turns toward a neighbor. */
+  /** Own clocks so the room does not breathe as one. */
+  breathe: number;
+  breatheDelay: number;
+  settle: number;
+  settleDelay: number;
+  /** A pixel or two. They rock where they are. */
+  drift: number;
+  lean: number;
   turn: number;
-  /** Pixels a standing figure eases along the pew. */
-  shift: number;
+  head: number;
+  headDelay: number;
+  haze: number;
+  hazeDelay: number;
 }
 
 const PEW_MOURNERS: MournerSpec[] = [
-  { id: 'bow-l', pose: 'seat-bow', x: 0.15, y: 0.7, scale: 0.94, delay: 0.2, dur: 5.2, motion: 'bob', turn: 0, shift: 0 },
-  { id: 'talk-l', pose: 'seat-talk', x: 0.27, y: 0.73, scale: 1, delay: 0.8, dur: 8.4, motion: 'talk', turn: 8, shift: 0 },
-  { id: 'talk-l2', pose: 'seat-talk', x: 0.37, y: 0.69, scale: 0.88, delay: 1.4, dur: 7.6, motion: 'talk', turn: -7, shift: 0 },
-  { id: 'pair', pose: 'pair', x: 0.22, y: 0.86, scale: 1.02, delay: 0.4, dur: 9.2, motion: 'talk', turn: -8, shift: 0 },
-  { id: 'veil', pose: 'veil', x: 0.34, y: 0.84, scale: 0.9, delay: 1.1, dur: 6.4, motion: 'sway', turn: 0, shift: 0 },
-  { id: 'aisle', pose: 'stand', x: 0.5, y: 0.78, scale: 0.98, delay: 0.6, dur: 16, motion: 'shift', turn: 0, shift: 9, },
-  { id: 'bow-r', pose: 'seat-bow', x: 0.64, y: 0.71, scale: 0.92, delay: 1.6, dur: 5.6, motion: 'bob', turn: 0, shift: 0 },
-  { id: 'talk-r', pose: 'seat-talk', x: 0.76, y: 0.74, scale: 0.9, delay: 0.3, dur: 8.8, motion: 'talk', turn: -8, shift: 0 },
-  { id: 'stand-r', pose: 'stand', x: 0.86, y: 0.67, scale: 0.84, delay: 2, dur: 7.2, motion: 'sway', turn: 6, shift: 0 },
+  { id: 'bow-l', pose: 'seat-bow', x: 0.15, y: 0.7, scale: 0.94, breathe: 5.4, breatheDelay: 0.2, settle: 7.2, settleDelay: 0.5, drift: 1.1, lean: 1.2, turn: 4, head: 8.8, headDelay: 1.2, haze: 9.4, hazeDelay: 0.6 },
+  { id: 'talk-l', pose: 'seat-talk', x: 0.27, y: 0.73, scale: 1, breathe: 6.3, breatheDelay: 1.8, settle: 8.6, settleDelay: 1.1, drift: -1.3, lean: 1.5, turn: 6, head: 7.1, headDelay: 0.4, haze: 11.2, hazeDelay: 2.1 },
+  { id: 'talk-l2', pose: 'seat-talk', x: 0.37, y: 0.69, scale: 0.88, breathe: 4.9, breatheDelay: 0.7, settle: 9.4, settleDelay: 2.4, drift: 1.4, lean: -1.3, turn: -5, head: 8.2, headDelay: 1.7, haze: 8.6, hazeDelay: 0.2 },
+  { id: 'pair', pose: 'pair', x: 0.22, y: 0.86, scale: 1.02, breathe: 6.8, breatheDelay: 2.6, settle: 10.2, settleDelay: 0.3, drift: 0.8, lean: 1.1, turn: -6, head: 9.6, headDelay: 2.2, haze: 12.4, hazeDelay: 1.4 },
+  { id: 'veil', pose: 'veil', x: 0.34, y: 0.84, scale: 0.9, breathe: 5.7, breatheDelay: 1.3, settle: 7.8, settleDelay: 1.9, drift: -1, lean: 1.6, turn: 3, head: 6.6, headDelay: 0.8, haze: 10.1, hazeDelay: 3.2 },
+  { id: 'aisle', pose: 'stand', x: 0.5, y: 0.78, scale: 0.98, breathe: 7.1, breatheDelay: 0.4, settle: 8.1, settleDelay: 2.8, drift: 1.2, lean: 1.8, turn: 4, head: 7.8, headDelay: 1.5, haze: 9.8, hazeDelay: 0.9 },
+  { id: 'bow-r', pose: 'seat-bow', x: 0.64, y: 0.71, scale: 0.92, breathe: 5.1, breatheDelay: 2.2, settle: 6.7, settleDelay: 0.8, drift: -1.2, lean: -1.4, turn: -4, head: 9.1, headDelay: 0.2, haze: 8.2, hazeDelay: 1.8 },
+  { id: 'talk-r', pose: 'seat-talk', x: 0.76, y: 0.74, scale: 0.9, breathe: 6.6, breatheDelay: 0.9, settle: 9.1, settleDelay: 1.6, drift: 1, lean: 1.3, turn: -6, head: 7.5, headDelay: 2.6, haze: 11.6, hazeDelay: 0.4 },
+  { id: 'stand-r', pose: 'stand', x: 0.86, y: 0.67, scale: 0.84, breathe: 4.6, breatheDelay: 1.5, settle: 8.4, settleDelay: 0.2, drift: -0.9, lean: -1.7, turn: 5, head: 6.9, headDelay: 1.1, haze: 10.8, hazeDelay: 2.7 },
 ];
 
 function Head({ cx, cy, rx, ry }: { cx: number; cy: number; rx: number; ry: number }) {
@@ -147,27 +151,44 @@ export const ChapelMourners: React.FC<{
         transition: 'opacity 1.1s ease',
       }}
     >
+      <svg width="0" height="0" className="absolute" aria-hidden>
+        <filter id="chapel-mourner-ghost" x="-40%" y="-40%" width="180%" height="180%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" seed="3" result="noise" />
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.4" xChannelSelector="R" yChannelSelector="G" result="warp" />
+          <feGaussianBlur in="warp" stdDeviation="0.55" />
+        </filter>
+      </svg>
       {PEW_MOURNERS.map((m) => {
         const size = sizeFor(m.pose, m.scale);
         return (
           <div
             key={m.id}
-            className="chapel-mourner absolute text-[#f3e6c8]/45"
+            className="chapel-mourner absolute text-[#f3e6c8]/40"
             style={{
               left: `${m.x * 100}%`,
               top: `${m.y * 100}%`,
               width: `${size.w}px`,
               height: `${size.h}px`,
-              animationDelay: `${m.delay}s`,
+              ['--breathe-dur' as string]: `${m.breathe}s`,
+              ['--breathe-delay' as string]: `${m.breatheDelay}s`,
+              ['--settle-dur' as string]: `${m.settle}s`,
+              ['--settle-delay' as string]: `${m.settleDelay}s`,
+              ['--haze-dur' as string]: `${m.haze}s`,
+              ['--haze-delay' as string]: `${m.hazeDelay}s`,
+              ['--head-dur' as string]: `${m.head}s`,
+              ['--head-delay' as string]: `${m.headDelay}s`,
+              ['--drift' as string]: `${m.drift}px`,
+              ['--lean' as string]: `${m.lean}deg`,
               ['--turn' as string]: `${m.turn}deg`,
-              ['--shift' as string]: `${m.shift}px`,
             }}
           >
-            <div
-              className={`chapel-mourner-motion chapel-mourner-${m.motion}`}
-              style={{ animationDuration: `${m.dur}s`, animationDelay: `${m.delay}s` }}
-            >
-              <MournerPose pose={m.pose} />
+            <div className="chapel-mourner-settle">
+              <div className="chapel-mourner-haze" aria-hidden>
+                <MournerPose pose={m.pose} />
+              </div>
+              <div className="chapel-mourner-core">
+                <MournerPose pose={m.pose} />
+              </div>
             </div>
           </div>
         );
