@@ -246,18 +246,19 @@ canvas {
 }
 
 @keyframes chapel-mourner-breathe {
+  /* One coat: fill 20% times the breathe 0.18–0.27. */
   0%,
   100% {
-    opacity: 0.37;
+    opacity: 0.036;
   }
   50% {
-    opacity: 0.53;
+    opacity: 0.054;
   }
 }
 
 .chapel-mourner {
   translate: -50% -100%;
-  animation: chapel-mourner-breathe var(--breathe-dur, 5.6s) ease-in-out var(--breathe-delay, 0s) infinite;
+  animation: chapel-mourner-breathe var(--breathe-dur, 5.6s) ease-in-out var(--breathe-delay, 0s) infinite both;
 }
 
 .chapel-mourner-settle {
@@ -268,26 +269,13 @@ canvas {
   animation: chapel-mourner-settle var(--settle-dur, 8s) ease-in-out var(--settle-delay, 0s) infinite;
 }
 
-.chapel-mourner-core,
-.chapel-mourner-haze {
+.chapel-mourner-core {
   width: 100%;
   height: 100%;
 }
 
 .chapel-mourner-core svg {
-  filter: url(#chapel-mourner-ghost);
-}
-
-.chapel-mourner-haze {
-  position: absolute;
-  inset: -4px;
-  opacity: 0.42;
-  animation: chapel-mourner-haze var(--haze-dur, 9s) ease-in-out var(--haze-delay, 0s) infinite;
-  pointer-events: none;
-}
-
-.chapel-mourner-haze svg {
-  filter: blur(1.8px);
+  filter: url(#chapel-mourner-ghost) blur(0.7px);
 }
 
 .chapel-mourner-head {
@@ -309,18 +297,6 @@ canvas {
   }
   82% {
     transform: translate3d(calc(var(--drift, 1px) * 0.3), -0.7px, 0) rotate(calc(var(--lean, 1.2deg) * 0.35));
-  }
-}
-
-@keyframes chapel-mourner-haze {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-    opacity: 0.26;
-  }
-  50% {
-    transform: translate(1px, -1px) scale(1.035);
-    opacity: 0.46;
   }
 }
 
@@ -1248,7 +1224,6 @@ canvas {
   .hub-petal,
   .chapel-mourner,
   .chapel-mourner-settle,
-  .chapel-mourner-haze,
   .chapel-mourner-head,
   .chapel-service-glow,
   .hub-chapel-live-glow,
@@ -1265,7 +1240,7 @@ canvas {
   .hub-spirit[data-placed='1'] { opacity: var(--a, 0.55); }
   .hub-spirit:not([data-placed='1']) { opacity: 0; }
   .hub-atmo-debt { opacity: 0.7; }
-  .chapel-mourner { opacity: 0.45; }
+  .chapel-mourner { opacity: 0.045; }
   .chapel-mourner-head { animation: none; }
   .chapel-service-glow,
   .hub-chapel-live-glow { opacity: 0.85; }

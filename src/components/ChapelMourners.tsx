@@ -21,20 +21,18 @@ interface MournerSpec {
   turn: number;
   head: number;
   headDelay: number;
-  haze: number;
-  hazeDelay: number;
 }
 
 const PEW_MOURNERS: MournerSpec[] = [
-  { id: 'bow-l', pose: 'seat-bow', x: 0.15, y: 0.7, scale: 0.94, breathe: 5.4, breatheDelay: 0.2, settle: 7.2, settleDelay: 0.5, drift: 1.1, lean: 1.2, turn: 4, head: 8.8, headDelay: 1.2, haze: 9.4, hazeDelay: 0.6 },
-  { id: 'talk-l', pose: 'seat-talk', x: 0.27, y: 0.73, scale: 1, breathe: 6.3, breatheDelay: 1.8, settle: 8.6, settleDelay: 1.1, drift: -1.3, lean: 1.5, turn: 6, head: 7.1, headDelay: 0.4, haze: 11.2, hazeDelay: 2.1 },
-  { id: 'talk-l2', pose: 'seat-talk', x: 0.37, y: 0.69, scale: 0.88, breathe: 4.9, breatheDelay: 0.7, settle: 9.4, settleDelay: 2.4, drift: 1.4, lean: -1.3, turn: -5, head: 8.2, headDelay: 1.7, haze: 8.6, hazeDelay: 0.2 },
-  { id: 'pair', pose: 'pair', x: 0.22, y: 0.86, scale: 1.02, breathe: 6.8, breatheDelay: 2.6, settle: 10.2, settleDelay: 0.3, drift: 0.8, lean: 1.1, turn: -6, head: 9.6, headDelay: 2.2, haze: 12.4, hazeDelay: 1.4 },
-  { id: 'veil', pose: 'veil', x: 0.34, y: 0.84, scale: 0.9, breathe: 5.7, breatheDelay: 1.3, settle: 7.8, settleDelay: 1.9, drift: -1, lean: 1.6, turn: 3, head: 6.6, headDelay: 0.8, haze: 10.1, hazeDelay: 3.2 },
-  { id: 'aisle', pose: 'stand', x: 0.5, y: 0.78, scale: 0.98, breathe: 7.1, breatheDelay: 0.4, settle: 8.1, settleDelay: 2.8, drift: 1.2, lean: 1.8, turn: 4, head: 7.8, headDelay: 1.5, haze: 9.8, hazeDelay: 0.9 },
-  { id: 'bow-r', pose: 'seat-bow', x: 0.64, y: 0.71, scale: 0.92, breathe: 5.1, breatheDelay: 2.2, settle: 6.7, settleDelay: 0.8, drift: -1.2, lean: -1.4, turn: -4, head: 9.1, headDelay: 0.2, haze: 8.2, hazeDelay: 1.8 },
-  { id: 'talk-r', pose: 'seat-talk', x: 0.76, y: 0.74, scale: 0.9, breathe: 6.6, breatheDelay: 0.9, settle: 9.1, settleDelay: 1.6, drift: 1, lean: 1.3, turn: -6, head: 7.5, headDelay: 2.6, haze: 11.6, hazeDelay: 0.4 },
-  { id: 'stand-r', pose: 'stand', x: 0.86, y: 0.67, scale: 0.84, breathe: 4.6, breatheDelay: 1.5, settle: 8.4, settleDelay: 0.2, drift: -0.9, lean: -1.7, turn: 5, head: 6.9, headDelay: 1.1, haze: 10.8, hazeDelay: 2.7 },
+  { id: 'bow-l', pose: 'seat-bow', x: 0.15, y: 0.7, scale: 0.94, breathe: 5.4, breatheDelay: 0.2, settle: 7.2, settleDelay: 0.5, drift: 1.1, lean: 1.2, turn: 4, head: 8.8, headDelay: 1.2 },
+  { id: 'talk-l', pose: 'seat-talk', x: 0.27, y: 0.73, scale: 1, breathe: 6.3, breatheDelay: 1.8, settle: 8.6, settleDelay: 1.1, drift: -1.3, lean: 1.5, turn: 6, head: 7.1, headDelay: 0.4 },
+  { id: 'talk-l2', pose: 'seat-talk', x: 0.37, y: 0.69, scale: 0.88, breathe: 4.9, breatheDelay: 0.7, settle: 9.4, settleDelay: 2.4, drift: 1.4, lean: -1.3, turn: -5, head: 8.2, headDelay: 1.7 },
+  { id: 'pair', pose: 'pair', x: 0.22, y: 0.86, scale: 1.02, breathe: 6.8, breatheDelay: 2.6, settle: 10.2, settleDelay: 0.3, drift: 0.8, lean: 1.1, turn: -6, head: 9.6, headDelay: 2.2 },
+  { id: 'veil', pose: 'veil', x: 0.34, y: 0.84, scale: 0.9, breathe: 5.7, breatheDelay: 1.3, settle: 7.8, settleDelay: 1.9, drift: -1, lean: 1.6, turn: 3, head: 6.6, headDelay: 0.8 },
+  { id: 'aisle', pose: 'stand', x: 0.5, y: 0.78, scale: 0.98, breathe: 7.1, breatheDelay: 0.4, settle: 8.1, settleDelay: 2.8, drift: 1.2, lean: 1.8, turn: 4, head: 7.8, headDelay: 1.5 },
+  { id: 'bow-r', pose: 'seat-bow', x: 0.64, y: 0.71, scale: 0.92, breathe: 5.1, breatheDelay: 2.2, settle: 6.7, settleDelay: 0.8, drift: -1.2, lean: -1.4, turn: -4, head: 9.1, headDelay: 0.2 },
+  { id: 'talk-r', pose: 'seat-talk', x: 0.76, y: 0.74, scale: 0.9, breathe: 6.6, breatheDelay: 0.9, settle: 9.1, settleDelay: 1.6, drift: 1, lean: 1.3, turn: -6, head: 7.5, headDelay: 2.6 },
+  { id: 'stand-r', pose: 'stand', x: 0.86, y: 0.67, scale: 0.84, breathe: 4.6, breatheDelay: 1.5, settle: 8.4, settleDelay: 0.2, drift: -0.9, lean: -1.7, turn: 5, head: 6.9, headDelay: 1.1 },
 ];
 
 function Head({ cx, cy, rx, ry }: { cx: number; cy: number; rx: number; ry: number }) {
@@ -54,7 +52,7 @@ function MournerPose({ pose }: { pose: Pose }) {
           fill="currentColor"
           d="M15 26c1-4 6-6 10-5 5 1 8 4 9 8 2 7 3 15 1 23-8 5-20 5-28 0 0-9 2-19 8-26z"
         />
-        <path fill="currentColor" opacity="0.92" d="M16 32c-7 2-10 8-8 13 3-2 7-3 9-2z" />
+        <path fill="currentColor" d="M16 32c-7 2-10 8-8 13 3-2 7-3 9-2z" />
       </svg>
     );
   }
@@ -65,7 +63,7 @@ function MournerPose({ pose }: { pose: Pose }) {
           fill="currentColor"
           d="M13 29c2-5 8-7 13-5 4 2 7 6 8 11 2 8 1 16-1 21-8 5-19 4-26-1 1-8 2-19 6-26z"
         />
-        <path fill="currentColor" opacity="0.9" d="M15 35c-6 3-8 9-5 13 3-2 6-3 8-2z" />
+        <path fill="currentColor" d="M15 35c-6 3-8 9-5 13 3-2 6-3 8-2z" />
         <Head cx={28} cy={15} rx={6.5} ry={7.5} />
       </svg>
     );
@@ -95,7 +93,7 @@ function MournerPose({ pose }: { pose: Pose }) {
         />
         <path fill="currentColor" d="M15.2 54.5h4.2l-.8 24h-5z" />
         <path fill="currentColor" d="M21.4 54.5h4.2l1.6 24h-5z" />
-        <path fill="currentColor" opacity="0.88" d="M14 34c2 3 10 3 12 0-2 5-10 5-12 0z" />
+        <path fill="currentColor" d="M14 34c2 3 10 3 12 0-2 5-10 5-12 0z" />
       </svg>
     );
   }
@@ -163,7 +161,7 @@ export const ChapelMourners: React.FC<{
         return (
           <div
             key={m.id}
-            className="chapel-mourner absolute text-[#f3e6c8]/40"
+            className="chapel-mourner absolute text-[#f3e6c8]"
             style={{
               left: `${m.x * 100}%`,
               top: `${m.y * 100}%`,
@@ -173,8 +171,6 @@ export const ChapelMourners: React.FC<{
               ['--breathe-delay' as string]: `${m.breatheDelay}s`,
               ['--settle-dur' as string]: `${m.settle}s`,
               ['--settle-delay' as string]: `${m.settleDelay}s`,
-              ['--haze-dur' as string]: `${m.haze}s`,
-              ['--haze-delay' as string]: `${m.hazeDelay}s`,
               ['--head-dur' as string]: `${m.head}s`,
               ['--head-delay' as string]: `${m.headDelay}s`,
               ['--drift' as string]: `${m.drift}px`,
@@ -183,9 +179,6 @@ export const ChapelMourners: React.FC<{
             }}
           >
             <div className="chapel-mourner-settle">
-              <div className="chapel-mourner-haze" aria-hidden>
-                <MournerPose pose={m.pose} />
-              </div>
               <div className="chapel-mourner-core">
                 <MournerPose pose={m.pose} />
               </div>
