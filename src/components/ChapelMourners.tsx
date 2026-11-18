@@ -1,77 +1,126 @@
 import React, { useEffect, useState } from 'react';
 
-type MournerVariant = 0 | 1 | 2 | 3;
+type Pose = 'seat-bow' | 'seat-talk' | 'veil' | 'stand' | 'pair';
+type Motion = 'bob' | 'talk' | 'shift' | 'sway';
 
 interface MournerSpec {
   id: string;
-  variant: MournerVariant;
-  /** Normalized x within chapel floor */
+  pose: Pose;
+  /** Normalized x within the chapel floor */
   x: number;
-  /** Normalized y — keep in pew band, behind focal */
+  /** Feet line. Keep them in the pews, clear of the bier. */
   y: number;
   scale: number;
   delay: number;
+  /** How long one motion cycle takes. */
+  dur: number;
+  motion: Motion;
+  /** Degrees the head turns toward a neighbor. */
+  turn: number;
+  /** Pixels a standing figure eases along the pew. */
+  shift: number;
 }
 
 const PEW_MOURNERS: MournerSpec[] = [
-  { id: 'm1', variant: 0, x: 0.18, y: 0.78, scale: 0.92, delay: 0 },
-  { id: 'm2', variant: 1, x: 0.3, y: 0.82, scale: 1, delay: 0.4 },
-  { id: 'm3', variant: 2, x: 0.7, y: 0.81, scale: 0.95, delay: 0.8 },
-  { id: 'm4', variant: 3, x: 0.82, y: 0.77, scale: 1.05, delay: 0.2 },
-  { id: 'm5', variant: 1, x: 0.22, y: 0.68, scale: 0.85, delay: 1.1 },
-  { id: 'm6', variant: 0, x: 0.78, y: 0.69, scale: 0.88, delay: 0.6 },
+  { id: 'bow-l', pose: 'seat-bow', x: 0.15, y: 0.7, scale: 0.94, delay: 0.2, dur: 5.2, motion: 'bob', turn: 0, shift: 0 },
+  { id: 'talk-l', pose: 'seat-talk', x: 0.27, y: 0.73, scale: 1, delay: 0.8, dur: 8.4, motion: 'talk', turn: 8, shift: 0 },
+  { id: 'talk-l2', pose: 'seat-talk', x: 0.37, y: 0.69, scale: 0.88, delay: 1.4, dur: 7.6, motion: 'talk', turn: -7, shift: 0 },
+  { id: 'pair', pose: 'pair', x: 0.22, y: 0.86, scale: 1.02, delay: 0.4, dur: 9.2, motion: 'talk', turn: -8, shift: 0 },
+  { id: 'veil', pose: 'veil', x: 0.34, y: 0.84, scale: 0.9, delay: 1.1, dur: 6.4, motion: 'sway', turn: 0, shift: 0 },
+  { id: 'aisle', pose: 'stand', x: 0.5, y: 0.78, scale: 0.98, delay: 0.6, dur: 16, motion: 'shift', turn: 0, shift: 9, },
+  { id: 'bow-r', pose: 'seat-bow', x: 0.64, y: 0.71, scale: 0.92, delay: 1.6, dur: 5.6, motion: 'bob', turn: 0, shift: 0 },
+  { id: 'talk-r', pose: 'seat-talk', x: 0.76, y: 0.74, scale: 0.9, delay: 0.3, dur: 8.8, motion: 'talk', turn: -8, shift: 0 },
+  { id: 'stand-r', pose: 'stand', x: 0.86, y: 0.67, scale: 0.84, delay: 2, dur: 7.2, motion: 'sway', turn: 6, shift: 0 },
 ];
 
-function MournerSvg({ variant }: { variant: MournerVariant }) {
-  // Soft standing / seated silhouettes — simple shapes, no faces
-  if (variant === 0) {
+function Head({ cx, cy, rx, ry }: { cx: number; cy: number; rx: number; ry: number }) {
+  return (
+    <g className="chapel-mourner-head">
+      <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="currentColor" />
+    </g>
+  );
+}
+
+function MournerPose({ pose }: { pose: Pose }) {
+  if (pose === 'seat-bow') {
     return (
-      <svg viewBox="0 0 40 70" className="w-full h-full" aria-hidden>
-        <ellipse cx="20" cy="12" rx="8" ry="9" fill="currentColor" />
+      <svg viewBox="0 0 48 62" className="h-full w-full" aria-hidden>
+        <Head cx={24} cy={14} rx={6.6} ry={7.4} />
         <path
-          d="M10 24 Q20 20 30 24 L32 58 Q20 62 8 58 Z"
           fill="currentColor"
+          d="M15 26c1-4 6-6 10-5 5 1 8 4 9 8 2 7 3 15 1 23-8 5-20 5-28 0 0-9 2-19 8-26z"
+        />
+        <path fill="currentColor" opacity="0.92" d="M16 32c-7 2-10 8-8 13 3-2 7-3 9-2z" />
+      </svg>
+    );
+  }
+  if (pose === 'seat-talk') {
+    return (
+      <svg viewBox="0 0 48 62" className="h-full w-full" aria-hidden>
+        <path
+          fill="currentColor"
+          d="M13 29c2-5 8-7 13-5 4 2 7 6 8 11 2 8 1 16-1 21-8 5-19 4-26-1 1-8 2-19 6-26z"
+        />
+        <path fill="currentColor" opacity="0.9" d="M15 35c-6 3-8 9-5 13 3-2 6-3 8-2z" />
+        <Head cx={28} cy={15} rx={6.5} ry={7.5} />
+      </svg>
+    );
+  }
+  if (pose === 'veil') {
+    return (
+      <svg viewBox="0 0 46 64" className="h-full w-full" aria-hidden>
+        <path
+          fill="currentColor"
+          d="M14 18c2-8 16-9 20-2 2 4 2 10 0 16-1 2-8 1-10 0-2 1-9 2-10 0 0-5 0-10 0-14z"
+        />
+        <Head cx={23} cy={16} rx={6.2} ry={7} />
+        <path
+          fill="currentColor"
+          d="M12 32c2-4 8-6 12-5s9 3 11 7c2 8 3 16 1 22-8 4-18 4-26 0 1-8 1-16 2-24z"
         />
       </svg>
     );
   }
-  if (variant === 1) {
+  if (pose === 'stand') {
     return (
-      <svg viewBox="0 0 40 70" className="w-full h-full" aria-hidden>
-        <circle cx="20" cy="11" r="8" fill="currentColor" />
+      <svg viewBox="0 0 40 86" className="h-full w-full" aria-hidden>
+        <Head cx={20} cy={11} rx={6.2} ry={7} />
         <path
-          d="M12 22 L28 22 L30 40 L26 55 L14 55 L10 40 Z"
           fill="currentColor"
+          d="M12 22c-3 2-5 8-4 16l1 16h4.5l-.6-14h9.2l-.6 14H26l1-16c1-8-1-14-4-16-3 2-7 2-11 0z"
         />
-        <path d="M8 38 Q4 48 10 52" fill="currentColor" opacity="0.7" />
-      </svg>
-    );
-  }
-  if (variant === 2) {
-    return (
-      <svg viewBox="0 0 44 70" className="w-full h-full" aria-hidden>
-        <ellipse cx="22" cy="13" rx="9" ry="10" fill="currentColor" />
-        <path
-          d="M8 26 Q22 18 36 26 L34 50 Q22 58 10 50 Z"
-          fill="currentColor"
-        />
+        <path fill="currentColor" d="M15.2 54.5h4.2l-.8 24h-5z" />
+        <path fill="currentColor" d="M21.4 54.5h4.2l1.6 24h-5z" />
+        <path fill="currentColor" opacity="0.88" d="M14 34c2 3 10 3 12 0-2 5-10 5-12 0z" />
       </svg>
     );
   }
   return (
-    <svg viewBox="0 0 36 68" className="w-full h-full" aria-hidden>
-      <circle cx="18" cy="10" r="7" fill="currentColor" />
-      <rect x="10" y="20" width="16" height="28" rx="4" fill="currentColor" />
-      <path d="M10 48 L8 62 L14 62 L16 48 Z" fill="currentColor" />
-      <path d="M26 48 L28 62 L22 62 L20 48 Z" fill="currentColor" />
+    <svg viewBox="0 0 76 64" className="h-full w-full" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M8 32c2-5 8-7 13-5 4 1 6 5 7 9 1 8 0 16-2 20-7 4-17 3-23-1 1-7 2-16 5-23z"
+      />
+      <ellipse cx="18" cy="16" rx="6.2" ry="7.2" fill="currentColor" />
+      <path
+        fill="currentColor"
+        d="M36 33c2-5 9-8 15-5 4 2 7 6 8 11 1 8 0 15-2 19-8 4-18 3-24 0 1-8 1-18 3-25z"
+      />
+      <Head cx={52} cy={16} rx={6.3} ry={7.3} />
     </svg>
   );
 }
 
+function sizeFor(pose: Pose, scale: number): { w: number; h: number } {
+  if (pose === 'stand') return { w: 26 * scale, h: 56 * scale };
+  if (pose === 'pair') return { w: 46 * scale, h: 40 * scale };
+  if (pose === 'veil') return { w: 28 * scale, h: 46 * scale };
+  return { w: 30 * scale, h: 44 * scale };
+}
+
 /**
- * Semi-translucent mourners during active viewing services.
- * pointer-events-none — never blocks bier/urn/flower drags.
- * Not part of chapel layout pieces — ignored by satisfaction scoring.
+ * Ghostly mourners during a viewing.
+ * Pointers pass through. They are not chapel layout pieces.
  */
 export const ChapelMourners: React.FC<{
   active: boolean;
@@ -90,28 +139,39 @@ export const ChapelMourners: React.FC<{
 
   return (
     <div
-      className="absolute inset-0 pointer-events-none z-[1] overflow-hidden"
+      className="chapel-mourners absolute inset-0 pointer-events-none z-[1] overflow-hidden"
       aria-hidden
+      data-chapel-mourners
       style={{
         opacity: visible ? 1 : 0,
         transition: 'opacity 1.1s ease',
       }}
     >
-      {PEW_MOURNERS.map((m) => (
-        <div
-          key={m.id}
-          className="absolute -translate-x-1/2 -translate-y-full text-violet-950/45"
-          style={{
-            left: `${m.x * 100}%`,
-            top: `${m.y * 100}%`,
-            width: `${28 * m.scale}px`,
-            height: `${48 * m.scale}px`,
-            animation: `chapel-mourner-breathe 3.6s ease-in-out ${m.delay}s infinite`,
-          }}
-        >
-          <MournerSvg variant={m.variant} />
-        </div>
-      ))}
+      {PEW_MOURNERS.map((m) => {
+        const size = sizeFor(m.pose, m.scale);
+        return (
+          <div
+            key={m.id}
+            className="chapel-mourner absolute text-violet-950/50"
+            style={{
+              left: `${m.x * 100}%`,
+              top: `${m.y * 100}%`,
+              width: `${size.w}px`,
+              height: `${size.h}px`,
+              animationDelay: `${m.delay}s`,
+              ['--turn' as string]: `${m.turn}deg`,
+              ['--shift' as string]: `${m.shift}px`,
+            }}
+          >
+            <div
+              className={`chapel-mourner-motion chapel-mourner-${m.motion}`}
+              style={{ animationDuration: `${m.dur}s`, animationDelay: `${m.delay}s` }}
+            >
+              <MournerPose pose={m.pose} />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 };

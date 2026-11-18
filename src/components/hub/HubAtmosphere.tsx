@@ -357,9 +357,15 @@ export const HubAtmosphere: React.FC = () => {
         </div>
       )}
       {chapelOn && (
-        <div className="hub-atmo-chapel">
-          <span className="hub-candle" />
-          <span className="hub-candle hub-candle-b" />
+        <div className="hub-atmo-chapel" data-hub-candles>
+          <span className="hub-candle">
+            <i className="hub-candle-flame" />
+            <i className="hub-candle-wax" />
+          </span>
+          <span className="hub-candle hub-candle-b">
+            <i className="hub-candle-flame" />
+            <i className="hub-candle-wax" />
+          </span>
           <span className="hub-petal" />
           <span className="hub-petal hub-petal-b" />
         </div>

@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { CaseTransferBar } from './CaseTransferBar';
 import { displayCaseName, decayLabel } from '../types/game';
 import { caseAtLocation, useGameStore } from '../store/useGameStore';
-import { gameNow } from '../utils/gameNow';
+import { isChapelGathering, serviceTiming } from '../data/pacing';
+import { useGameNow } from '../hooks/useGameNow';
 import { getUrnById, URN_CATALOG } from '../data/urnCatalog';
 import { CASKET_CATALOG, getCasketById } from '../data/casketCatalog';
 import {
@@ -59,6 +60,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
   } = useGameStore();
 
   const currentCase = caseAtLocation(cases, 'CHAPEL', activeCaseId);
+  const now = useGameNow(currentCase?.serviceDateMs != null);
 
   useEffect(() => {
     if (currentCase && currentCase.id !== activeCaseId) {
@@ -185,19 +187,16 @@ export const ShowroomAndChapelModal: React.FC = () => {
   }
 
   const lateService =
-    currentCase.serviceDateMs != null &&
-    gameNow() > currentCase.serviceDateMs;
+    currentCase.serviceDateMs != null && now > currentCase.serviceDateMs;
   const graceService =
-    lateService &&
-    gameNow() - (currentCase.serviceDateMs ?? 0) <= 45 * 60 * 1000;
+    lateService && now - (currentCase.serviceDateMs ?? 0) <= 45 * 60 * 1000;
   const offered = getUrnById(currentCase.offeredUrnId);
   const offeredCasket = getCasketById(currentCase.offeredCasketId);
   const urnStandService = caseUsesUrnStand(currentCase);
   const isMemorial = currentCase.directive === 'CREMATION_THEN_VIEWING';
-  const viewingService =
-    currentCase.directive === 'BURIAL_VIEWING' ||
-    currentCase.directive === 'VIEWING_THEN_CREMATION' ||
-    currentCase.directive === 'CREMATION_THEN_VIEWING';
+  const viewingService = isChapelGathering(currentCase.directive);
+  const serviceLive =
+    viewingService && serviceTiming(currentCase.serviceDateMs, now) === 'grace';
   const urnMatch =
     offered != null && offered.material === currentCase.preferredUrnMaterial;
   const casketMatch =
@@ -281,7 +280,14 @@ export const ShowroomAndChapelModal: React.FC = () => {
         <div
           className={`relative h-72 rounded-xl border-2 border-violet-700 overflow-hidden bg-gradient-to-b ${wallGrad} touch-none shadow-[inset_0_18px_40px_rgba(0,0,0,0.45)]`}
           data-chapel-floor
+          data-chapel-service={serviceLive ? '1' : undefined}
         >
+          {serviceLive && (
+            <>
+              <div className="chapel-service-glow" aria-hidden />
+              <p className="chapel-service-label">SERVICE IN PROGRESS</p>
+            </>
+          )}
           <ChapelNave
             floor={floorColor}
             drape={drapeColor}

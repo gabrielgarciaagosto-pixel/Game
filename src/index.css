@@ -248,12 +248,142 @@ canvas {
 @keyframes chapel-mourner-breathe {
   0%,
   100% {
-    transform: translateY(0);
-    opacity: 0.42;
+    opacity: 0.47;
   }
   50% {
-    transform: translateY(-2px);
-    opacity: 0.58;
+    opacity: 0.63;
+  }
+}
+
+.chapel-mourner {
+  translate: -50% -100%;
+  animation: chapel-mourner-breathe 4.8s ease-in-out infinite;
+}
+
+.chapel-mourner-motion {
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 100%;
+}
+
+.chapel-mourner-bob {
+  animation: chapel-mourner-bob 4.8s ease-in-out infinite;
+}
+
+.chapel-mourner-sway {
+  animation: chapel-mourner-sway 7.4s ease-in-out infinite;
+}
+
+.chapel-mourner-shift {
+  animation: chapel-mourner-shift 16s ease-in-out infinite;
+}
+
+.chapel-mourner-talk .chapel-mourner-head {
+  transform-box: fill-box;
+  transform-origin: center 80%;
+  animation: chapel-mourner-turn 8s ease-in-out infinite;
+}
+
+@keyframes chapel-mourner-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1.5px);
+  }
+}
+
+@keyframes chapel-mourner-sway {
+  0%,
+  100% {
+    transform: rotate(-1.4deg);
+  }
+  50% {
+    transform: rotate(1.6deg);
+  }
+}
+
+@keyframes chapel-mourner-shift {
+  0%,
+  18%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  42% {
+    transform: translate3d(var(--shift, 8px), -1px, 0);
+  }
+  64% {
+    transform: translate3d(calc(var(--shift, 8px) * 0.45), 0, 0);
+  }
+  82% {
+    transform: translate3d(var(--shift, 8px), -1px, 0);
+  }
+}
+
+@keyframes chapel-mourner-turn {
+  0%,
+  24%,
+  100% {
+    transform: rotate(0deg);
+  }
+  48% {
+    transform: rotate(var(--turn, -8deg));
+  }
+  74% {
+    transform: rotate(calc(var(--turn, -8deg) * -0.3));
+  }
+}
+
+.chapel-service-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 1.5px rgba(253, 230, 138, 0.42),
+    inset 0 0 26px rgba(251, 191, 36, 0.16);
+  animation: chapel-service-glow 3.4s ease-in-out infinite;
+}
+
+.chapel-service-label {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  z-index: 20;
+  translate: -50% 0;
+  pointer-events: none;
+  padding: 2px 8px;
+  border: 1px solid rgba(253, 230, 138, 0.32);
+  border-radius: 999px;
+  background: rgba(28, 16, 40, 0.4);
+  color: rgba(254, 243, 199, 0.92);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  line-height: 1.4;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.65);
+}
+
+.hub-chapel-live-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 28px rgba(253, 230, 138, 0.34),
+    inset 0 0 0 1px rgba(252, 211, 77, 0.35);
+  animation: chapel-service-glow 2.8s ease-in-out infinite;
+}
+
+@keyframes chapel-service-glow {
+  0%,
+  100% {
+    opacity: 0.62;
+  }
+  50% {
+    opacity: 1;
   }
 }
 
@@ -751,11 +881,52 @@ canvas {
   bottom: 18%;
   width: 10px;
   height: 18px;
+  pointer-events: none;
+}
+.hub-candle-b { left: 30%; height: 14px; }
+.hub-candle-flame {
+  position: absolute;
+  inset: 0;
   border-radius: 40%;
   background: radial-gradient(circle at 50% 30%, #fff7d6, #fbbf24 55%, transparent 72%);
   animation: hub-flicker 1.2s ease-in-out infinite;
 }
-.hub-candle-b { left: 30%; animation-delay: 0.3s; height: 14px; }
+.hub-candle-b .hub-candle-flame { animation-delay: 0.3s; }
+/* Wax under the flame. Top and bottom both fade, so the candle has no edge. */
+.hub-candle-wax {
+  position: absolute;
+  left: 50%;
+  bottom: -26px;
+  width: 9px;
+  height: 38px;
+  translate: -50% 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 248, 230, 0) 0%,
+    rgba(255, 244, 214, 0.46) 18%,
+    rgba(244, 214, 168, 0.2) 42%,
+    rgba(220, 180, 130, 0.05) 72%,
+    rgba(200, 160, 110, 0) 100%
+  );
+  filter: blur(0.65px);
+  mask-image: linear-gradient(to right, transparent, #000 28%, #000 72%, transparent);
+  animation: hub-candle-hover 3.8s ease-in-out infinite;
+}
+.hub-candle-b .hub-candle-wax {
+  width: 8px;
+  height: 30px;
+  bottom: -20px;
+  animation-delay: 0.45s;
+}
+@keyframes hub-candle-hover {
+  0%,
+  100% {
+    opacity: 0.78;
+  }
+  50% {
+    opacity: 1;
+  }
+}
 .hub-petal {
   position: absolute;
   left: 42%;
@@ -1069,7 +1240,14 @@ canvas {
   .hub-atmo-frost span,
   .hub-atmo-dust span,
   .hub-candle,
+  .hub-candle-flame,
+  .hub-candle-wax,
   .hub-petal,
+  .chapel-mourner,
+  .chapel-mourner-motion,
+  .chapel-mourner-head,
+  .chapel-service-glow,
+  .hub-chapel-live-glow,
   .hub-atmo-crt,
   .hub-atmo-debt,
   .hub-spirit,
@@ -1083,6 +1261,10 @@ canvas {
   .hub-spirit[data-placed='1'] { opacity: var(--a, 0.55); }
   .hub-spirit:not([data-placed='1']) { opacity: 0; }
   .hub-atmo-debt { opacity: 0.7; }
+  .chapel-mourner { opacity: 0.55; }
+  .chapel-mourner-talk .chapel-mourner-head { animation: none; }
+  .chapel-service-glow,
+  .hub-chapel-live-glow { opacity: 0.85; }
 }
 
 @media (pointer: coarse) {

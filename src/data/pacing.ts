@@ -169,6 +169,22 @@ export function serviceTiming(
   return 'missed';
 }
 
+/** Chapel gatherings. A direct cremation does not light the chapel. */
+export function isChapelGathering(directive: string): boolean {
+  return (
+    directive === 'BURIAL_VIEWING' ||
+    directive === 'VIEWING_THEN_CREMATION' ||
+    directive === 'CREMATION_THEN_VIEWING'
+  );
+}
+
+/** 0 at the scheduled hour, 100 at the end of the grace window. */
+export function serviceProgressPct(serviceDateMs: number, now: number): number {
+  const elapsed = now - serviceDateMs;
+  if (elapsed <= 0) return 0;
+  return Math.min(100, Math.max(0, Math.round((elapsed / SERVICE_GRACE_MS) * 100)));
+}
+
 export function formatHourSpan(ms: number): string {
   const total = Math.max(0, Math.ceil(ms / 1000));
   const h = Math.floor(total / 3600);

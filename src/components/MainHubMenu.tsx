@@ -6,6 +6,12 @@ import {
 import { resolveCortege } from '../data/funeralFleets';
 import { getUrnById } from '../data/urnCatalog';
 import { useTapAction } from '../hooks/useTapAction';
+import {
+  isChapelGathering,
+  serviceProgressPct,
+  serviceTiming,
+} from '../data/pacing';
+import { useGameNow } from '../hooks/useGameNow';
 import { getCremationTargets } from '../utils/mortuaryMath';
 import { retortProgress } from '../retort/retortTypes';
 import { directiveLabel, displayCaseName, type StationId } from '../types/game';
@@ -154,20 +160,24 @@ function HubRoomButton({
   title,
   subtitle,
   badge,
+  badgeTone,
   color,
   wide,
   bob,
   bursting,
+  live,
   onPick,
 }: {
   id: StationId;
   title: string;
   subtitle: string;
   badge?: string;
+  badgeTone?: 'alert' | 'live';
   color: string;
   wide: boolean;
   bob: { dur: string; delay: string };
   bursting: boolean;
+  live?: boolean;
   onPick: (id: StationId) => void;
 }) {
   const tap = useTapAction(() => onPick(id));
@@ -197,15 +207,23 @@ function HubRoomButton({
                       ? 'urn'
                       : undefined
         }
+        data-chapel-live={id === 'SHOWROOM' && live ? '1' : undefined}
         className={`h-full min-h-0 w-full rounded-2xl bg-gradient-to-br ${color} border p-2 flex flex-col justify-between items-start text-left shadow-[0_10px_30px_rgba(0,0,0,0.35)] active:scale-[0.98] relative overflow-hidden`}
       >
+        {live && <span className="hub-chapel-live-glow" aria-hidden />}
         {bursting && <HubBurst id={id} />}
         <span aria-hidden className="absolute -right-2 -bottom-3 text-5xl opacity-[0.1] font-black pointer-events-none">
           {title.slice(0, 1)}
         </span>
         <span className="relative text-[14px] font-extrabold tracking-wide leading-tight">{title}</span>
         {badge && (
-          <span className="relative px-2 py-1 text-[10px] font-bold bg-red-600 text-white rounded animate-pulse">
+          <span
+            className={`relative px-2 py-1 text-[10px] font-bold rounded ${
+              badgeTone === 'live'
+                ? 'bg-amber-300 text-stone-950'
+                : 'bg-red-600 text-white animate-pulse'
+            }`}
+          >
             {badge}
           </span>
         )}
@@ -274,6 +292,19 @@ export const MainHubMenu: React.FC = () => {
   const [burst, setBurst] = useState<StationId | null>(null);
   const navTimer = useRef<number | null>(null);
 
+  const clockOn = cases.some((c) => c.serviceDateMs != null);
+  const now = useGameNow(clockOn);
+  const liveServices = cases
+    .filter(
+      (c) => isChapelGathering(c.directive) && serviceTiming(c.serviceDateMs, now) === 'grace'
+    )
+    .sort((a, b) => (a.serviceDateMs ?? 0) - (b.serviceDateMs ?? 0));
+  const leadService = liveServices[0] ?? null;
+  const servicePct =
+    leadService?.serviceDateMs != null
+      ? serviceProgressPct(leadService.serviceDateMs, now)
+      : null;
+
   const untaggedUrgentCount = coolerCases.filter(
     (c) => !c.isTagged && !c.nameExpired && c.tagRemainingMs > 0 && c.tagRemainingMs <= TAG_WINDOW_MS
   ).length;
@@ -302,7 +333,9 @@ export const MainHubMenu: React.FC = () => {
     title: string;
     subtitle: string;
     badge?: string;
+    badgeTone?: 'alert' | 'live';
     color: string;
+    live?: boolean;
   }[] = [
     {
       id: 'COOLER',
@@ -338,8 +371,13 @@ export const MainHubMenu: React.FC = () => {
     {
       id: 'SHOWROOM',
       title: 'CHAPEL',
-      subtitle: 'Bier, flowers, family service',
-      color: 'from-violet-950/75 via-slate-950/60 to-slate-950/78 border-violet-500/45',
+      subtitle: servicePct != null ? 'SERVICE IN PROGRESS' : 'Bier, flowers, family service',
+      badge: servicePct != null ? `SERVICE ${servicePct}%` : undefined,
+      badgeTone: servicePct != null ? 'live' : undefined,
+      live: servicePct != null,
+      color: servicePct != null
+        ? 'from-amber-950/80 via-violet-950/75 to-slate-950/80 border-amber-200/55'
+        : 'from-violet-950/75 via-slate-950/60 to-slate-950/78 border-violet-500/45',
     },
     {
       id: 'URN_VAULT',
@@ -517,10 +555,12 @@ export const MainHubMenu: React.FC = () => {
             title={tile.title}
             subtitle={tile.subtitle}
             badge={tile.badge}
+            badgeTone={tile.badgeTone}
             color={tile.color}
             wide={tile.id === 'COMPUTER'}
             bob={BOB[index] ?? BOB[0]}
-            bursting={burst === tile.id}
+            bursting={burst === tile.id || Boolean(tile.live)}
+            live={tile.live}
             onPick={pickRoom}
           />
         ))}
