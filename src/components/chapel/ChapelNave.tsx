@@ -1,4 +1,5 @@
 import React from 'react';
+import { PEW_PLACES, PEW_SPRITE } from './pewLayout';
 
 /**
  * Chapel nave in the casket's oblique camera.
@@ -112,69 +113,6 @@ function WallWindow({ x, y, w, h }: { x: number; y: number; w: number; h: number
   );
 }
 
-function Pew({
-  x0,
-  x1,
-  depth,
-  tint,
-}: {
-  x0: number;
-  x1: number;
-  depth: number;
-  tint: string;
-}) {
-  const thick = 0.72;
-  const seat = 16;
-  const back = 46;
-  const a = at(x0, FY, depth);
-  const b = at(x1, FY, depth);
-  const c = at(x1, FY, depth + thick);
-  const d = at(x0, FY, depth + thick);
-  const slats = [0.06, 0.28, 0.5, 0.72].map((t) => {
-    const p = lerp(d, c, t);
-    const q = lerp(d, c, t + 0.18);
-    return poly([rise(p, seat + 2), rise(q, seat + 2), rise(q, back - 6), rise(p, back - 6)]);
-  });
-  const endTop = rise(b, back + 4);
-  const endBack = rise(c, back + 8);
-  const arch = `M${b[0].toFixed(1)} ${b[1].toFixed(1)} L${rise(b, seat)[0].toFixed(1)} ${rise(b, seat)[1].toFixed(1)} L${endTop[0].toFixed(1)} ${(endTop[1] + 8).toFixed(1)} Q${((endTop[0] + endBack[0]) / 2).toFixed(1)} ${(endTop[1] - 10).toFixed(1)} ${endBack[0].toFixed(1)} ${endBack[1].toFixed(1)} L${rise(c, seat)[0].toFixed(1)} ${rise(c, seat)[1].toFixed(1)} L${c[0].toFixed(1)} ${c[1].toFixed(1)} Z`;
-  return (
-    <g>
-      {[a, b, c, d].map((p, i) => (
-        <path
-          key={i}
-          d={poly([p, [p[0] + 3.5, p[1]], rise([p[0] + 3.5, p[1]], seat), rise(p, seat)])}
-          fill="#5a3b24"
-        />
-      ))}
-      <path d={poly([a, b, rise(b, seat), rise(a, seat)])} fill="#8d5a32" />
-      <path d={poly([a, b, rise(b, 6), rise(a, 6)])} fill="#2c1a10" />
-      <path d={poly([rise(a, seat), rise(b, seat), rise(c, seat), rise(d, seat)])} fill="#f0d7b0" />
-      <path d={poly([b, c, rise(c, seat), rise(b, seat)])} fill="#6b4428" />
-      <path d={poly([rise(d, seat), rise(c, seat), rise(c, back), rise(d, back)])} fill="#4e301c" />
-      <path d={poly([rise(d, seat), rise(c, seat), rise(c, back), rise(d, back)])} fill={tint} opacity="0.18" />
-      {slats.map((dPath) => (
-        <path key={dPath} d={dPath} fill="#b8895a" />
-      ))}
-      <path
-        d={poly([rise(d, back - 6), rise(c, back - 6), rise(c, back + 3), rise(d, back + 3)])}
-        fill="#f7ead2"
-      />
-      <path d={arch} fill="#5c3a22" stroke="#f0d7b0" strokeWidth="1.2" />
-      <circle cx={rise(b, back - 10)[0] + 7} cy={rise(b, back - 10)[1]} r="4.5" fill="#f6e6c8" />
-      <path
-        d={poly([
-          rise(lerp(d, c, 0.12), seat - 1),
-          rise(lerp(d, c, 0.88), seat - 1),
-          rise(lerp(d, c, 0.88), seat - 6),
-          rise(lerp(d, c, 0.12), seat - 6),
-        ])}
-        fill="#3a2416"
-      />
-    </g>
-  );
-}
-
 function Candle({ x, y }: { x: number; y: number }) {
   return (
     <g>
@@ -222,6 +160,7 @@ export const ChapelNave: React.FC<{
   const rightFlame = at(286, FY, 0.72);
 
   return (
+    <>
     <svg
       viewBox={`0 0 440 ${VIEW_H}`}
       className="absolute inset-0 h-full w-full pointer-events-none"
@@ -300,11 +239,6 @@ export const ChapelNave: React.FC<{
         })()}
       </g>
 
-      <Pew x0={371} x1={485} depth={-7.4} tint={pew} />
-      <Pew x0={645} x1={770} depth={-7.4} tint={pew} />
-      <Pew x0={237} x1={351} depth={-4.6} tint={pew} />
-      <Pew x0={516} x1={641} depth={-4.6} tint={pew} />
-
       <g>
         {[standA, standB, standC, standD].map((p, i) => (
           <path
@@ -334,5 +268,27 @@ export const ChapelNave: React.FC<{
       <rect width="440" height="220" fill="url(#nave-glass-l)" opacity="0.4" />
       <rect width="440" height="240" fill="url(#nave-glass-r)" opacity="0.34" />
     </svg>
+    <div
+      className="absolute inset-0 z-[2] pointer-events-none"
+      aria-hidden
+      data-chapel-pews={pew}
+    >
+      {PEW_PLACES.map((place) => (
+        <img
+          key={place.id}
+          src={PEW_SPRITE}
+          alt=""
+          draggable={false}
+          className="absolute max-w-none select-none"
+          style={{
+            left: `${place.x * 100}%`,
+            top: `${place.y * 100}%`,
+            width: `${place.w * 100}%`,
+            height: 'auto',
+          }}
+        />
+      ))}
+    </div>
+    </>
   );
 };
