@@ -1,6 +1,6 @@
 {
-  "versionName": "0.9.69-demo",
-  "versionCode": 87,
-  "apkUrl": "https://github.com/gabrielgarciaagosto-pixel/Game/raw/76c2f787a29db616955a356a44c4a7ef2e76eb1f/demo/Ossuarian-FirstUrn-v0.9.69-demo.apk",
-  "notes": "The fragment brush is a hearth brush, and the hatch sweep uses the hand brush."
+  "versionName": "0.9.70-demo",
+  "versionCode": 88,
+  "apkUrl": "https://github.com/gabrielgarciaagosto-pixel/Game/raw/f27b04efbc0e1e970757d86a1943f17cd1bd3dd7/demo/Ossuarian-FirstUrn-v0.9.70-demo.apk",
+  "notes": "The chapel glows during a service, and the mourners are a fainter cream."
 }
