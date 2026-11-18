@@ -379,8 +379,8 @@ function chainLine(a: number, b: number, base: number, liftAt: (u: number) => nu
 type LidMode = 'head' | 'both' | 'none';
 
 function resolveLid(casket: CasketCatalogEntry, lid?: 'open' | 'closed'): LidMode {
-  if (isCoffin(casket.silhouette)) return 'none';
   if (lid === 'closed') return 'none';
+  if (isCoffin(casket.silhouette)) return lid === 'open' ? 'both' : 'none';
   if (lid === 'open') return casket.silhouette === 'HALF_COUCH' ? 'head' : 'both';
   if (casket.silhouette === 'FULL_COUCH') return 'both';
   if (casket.silhouette === 'HALF_COUCH') return 'head';
@@ -761,7 +761,23 @@ const HEX: UV[] = [
   { u: 0.0, w: 0.68 },
 ];
 
-function CoffinBody({
+function insetHex(hex: UV[], f: number): UV[] {
+  const cu = hex.reduce((s, p) => s + p.u, 0) / hex.length;
+  const cw = hex.reduce((s, p) => s + p.w, 0) / hex.length;
+  return hex.map((p) => ({
+    u: cu + (p.u - cu) * f,
+    w: cw + (p.w - cw) * f,
+  }));
+}
+
+/** Lid hinged on the far edge, near edge swung up. Same oblique as the closed cap. */
+function coffinLidLift(p: UV): Pt {
+  const front = Math.min(1, Math.max(0, (0.78 - p.w) / 0.78));
+  const eased = front * front * (3 - 2 * front);
+  return P(p.u, BODY + 6 + eased * 96, p.w - eased * 0.28);
+}
+
+function CoffinOpen({
   casket,
   uid,
   look,
@@ -769,6 +785,54 @@ function CoffinBody({
   casket: CasketCatalogEntry;
   uid: string;
   look: Look;
+}) {
+  const pine = casket.material === 'PINE';
+  const bed = insetHex(HEX, 0.84);
+  const sheet = insetHex(HEX, 0.7);
+  const outer = HEX.map(coffinLidLift);
+  const inner = insetHex(HEX, 0.8).map(coffinLidLift);
+  const mid = coffinLidLift({ u: 0.42, w: 0.34 });
+  const pillow = P(0.14, BODY - 3, 0.5);
+  return (
+    <g>
+      <path d={dPts(projectPoly(HEX, BODY))} fill={look.frontDeep} />
+      <path d={dPts(projectPoly(bed, BODY - 1))} fill={look.lining} />
+      <path d={dPts(projectPoly(sheet, BODY - 3))} fill={look.customCloth ? look.lining : '#fbf9f7'} />
+      <g stroke="#e4ddd6" strokeWidth="1.05" fill="none">
+        {[0.28, 0.46, 0.64].map((tw) => (
+          <path key={tw} d={dPts(spanLine(sheet, BODY - 3, tw), false)} />
+        ))}
+      </g>
+      <ellipse cx={pillow[0]} cy={pillow[1]} rx="22" ry="8" fill="#f7f4f1" />
+      <ellipse cx={pillow[0]} cy={pillow[1] - 1} rx="16" ry="5" fill="#fff" opacity="0.55" />
+      <path d={dPts(outer)} fill={look.frontDeep} />
+      <path d={dPts(inner)} fill={`url(#${uid}-lidface)`} stroke={look.frontDeep} strokeWidth="1.6" />
+      <path d={dPts(insetHex(HEX, 0.62).map(coffinLidLift))} fill={look.lining} />
+      {pine && !casket.dress ? (
+        <g stroke="#e6c48a" strokeWidth="2.2" strokeLinecap="round">
+          <path d={`M${fmt(mid[0])} ${fmt(mid[1] - 12)} V${fmt(mid[1] + 12)}`} />
+          <path d={`M${fmt(mid[0] - 8)} ${fmt(mid[1] - 2)} H${fmt(mid[0] + 8)}`} />
+        </g>
+      ) : look.embroidery === 'roses' ? (
+        <RosePanel mid={mid} />
+      ) : (
+        <Motif mid={mid} look={look} />
+      )}
+      <Screws hex={insetHex(HEX, 0.92)} v={BODY + 8} metal={look.metal} />
+    </g>
+  );
+}
+
+function CoffinBody({
+  casket,
+  uid,
+  look,
+  open,
+}: {
+  casket: CasketCatalogEntry;
+  uid: string;
+  look: Look;
+  open: boolean;
 }) {
   const pine = casket.material === 'PINE';
   const lidHex = HEX;
@@ -803,35 +867,45 @@ function CoffinBody({
           </g>
         );
       })}
-      <path d={dPts(projectPoly(lidHex, BODY))} fill={look.frontDeep} />
-      <path d={dPts(projectPoly(lidHex, lidH))} fill={`url(#${uid}-top)`} />
-      <path d={dPts([P(HEX[1].u, lidH, HEX[1].w), P(HEX[2].u, lidH, HEX[2].w)], false)} stroke={look.topHi} strokeWidth="1.4" fill="none" opacity="0.55" />
-      {pine && (
-        <g stroke={look.grain} strokeWidth="0.9" fill="none" opacity="0.35">
-          {[0.25, 0.45, 0.65].map((tw) => (
-            <path key={tw} d={dPts(spanLine(lidHex, lidH, tw), false)} />
-          ))}
+      {open ? (
+        <CoffinOpen casket={casket} uid={uid} look={look} />
+      ) : (
+        <g>
+          <path d={dPts(projectPoly(lidHex, BODY))} fill={look.frontDeep} />
+          <path d={dPts(projectPoly(lidHex, lidH))} fill={`url(#${uid}-top)`} />
+          <path d={dPts([P(HEX[1].u, lidH, HEX[1].w), P(HEX[2].u, lidH, HEX[2].w)], false)} stroke={look.topHi} strokeWidth="1.4" fill="none" opacity="0.55" />
+          {pine && (
+            <g stroke={look.grain} strokeWidth="0.9" fill="none" opacity="0.35">
+              {[0.25, 0.45, 0.65].map((tw) => (
+                <path key={tw} d={dPts(spanLine(lidHex, lidH, tw), false)} />
+              ))}
+            </g>
+          )}
+          {pine && (
+            <g>
+              <Knot x={P(0.42, lidH, 0.42)} />
+              <Knot x={P(0.62, lidH, 0.58)} small />
+            </g>
+          )}
+          {pine && !casket.dress && <CoffinCross />}
+          {casket.dress && look.embroidery !== 'plain' && <CoffinEmblem look={look} />}
+          {look.texture === 'hammered' && (
+            <g fill={look.topHi} opacity="0.4">
+              {[0.32, 0.48, 0.64, 0.78].map((u) => {
+                const p = P(u, lidH, 0.46);
+                return <ellipse key={u} cx={p[0]} cy={p[1]} rx="4" ry="1.8" />;
+              })}
+            </g>
+          )}
+          <Screws hex={lidHex} v={lidH} metal={look.metal} />
         </g>
       )}
       {pine && (
         <g>
-          <Knot x={P(0.42, lidH, 0.42)} />
-          <Knot x={P(0.62, lidH, 0.58)} small />
           <Knot x={P(0.55, BODY * 0.55, 0.08)} />
           <Knot x={P(0.78, BODY * 0.4, 0.16)} small />
         </g>
       )}
-      {pine && !casket.dress && <CoffinCross />}
-      {casket.dress && look.embroidery !== 'plain' && <CoffinEmblem look={look} />}
-      {look.texture === 'hammered' && (
-        <g fill={look.topHi} opacity="0.4">
-          {[0.32, 0.48, 0.64, 0.78].map((u) => {
-            const p = P(u, lidH, 0.46);
-            return <ellipse key={u} cx={p[0]} cy={p[1]} rx="4" ry="1.8" />;
-          })}
-        </g>
-      )}
-      <Screws hex={lidHex} v={lidH} metal={look.metal} />
       {casket.dress && look.hardware !== 'bail' ? (
         <CoffinRail look={look} uid={uid} />
       ) : (
@@ -1343,7 +1417,13 @@ export const CasketVessel: React.FC<{
         : size === 'sm'
           ? 'w-full'
           : 'w-72';
-  const viewBox = coffin ? '30 150 640 210' : open ? '24 8 660 360' : '30 124 640 230';
+  const viewBox = coffin
+    ? open
+      ? '16 100 690 250'
+      : '30 150 640 210'
+    : open
+      ? '24 8 660 360'
+      : '30 124 640 230';
   const frontClip = dPts([
     P(0.0, 0, 0),
     P(1, 0, 0),
@@ -1393,7 +1473,7 @@ export const CasketVessel: React.FC<{
         </clipPath>
       </defs>
       {coffin ? (
-        <CoffinBody casket={casket} uid={uid} look={look} />
+        <CoffinBody casket={casket} uid={uid} look={look} open={open} />
       ) : (
         <American casket={casket} uid={uid} look={look} mode={mode} chapel={chapel} />
       )}

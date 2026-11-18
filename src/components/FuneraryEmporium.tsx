@@ -1213,7 +1213,6 @@ function CasketInspectModal({
     reputationRequired: casket.reputationRequired ?? 0,
     stock: rare ? stock : undefined,
   });
-  const coffin = casket.silhouette === 'TAPERED' || casket.silhouette === 'OCTAGON';
   const [lid, setLid] = useState<'open' | 'closed' | null>(null);
 
   const lidShown =
@@ -1239,12 +1238,11 @@ function CasketInspectModal({
         <div className="my-4 flex justify-center pointer-events-none">
           <div className="relative">
             <div className="absolute inset-0 blur-2xl bg-amber-600/20 rounded-full" />
-            <CasketVessel casket={casket} size="lg" className="relative scale-110" lid={lid ?? undefined} />
+            <CasketVessel casket={casket} size="lg" className="relative scale-110" lid={lidShown} />
           </div>
         </div>
 
-        {!coffin && (
-          <div className="flex justify-center gap-2 mb-3 relative z-20">
+        <div className="flex justify-center gap-2 mb-3 relative z-20">
             <TapButton
               onTap={() => setLid('open')}
               className={`min-h-12 px-4 py-3 rounded-xl text-sm font-black ${
@@ -1266,7 +1264,6 @@ function CasketInspectModal({
               Lid closed
             </TapButton>
           </div>
-        )}
 
         <p className="text-sm text-stone-200 leading-snug">{casket.blurb}</p>
         <p className="text-[11px] text-amber-200/80 mt-2">
