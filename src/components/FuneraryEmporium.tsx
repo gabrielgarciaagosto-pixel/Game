@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   CASKET_CATALOG,
+  CASKET_TIER_LABEL,
+  CASKET_TIER_ORDER,
   type CasketCatalogEntry,
 } from '../data/casketCatalog';
 import { CHAPEL_DECOR_CATALOG } from '../data/chapelDecor';
@@ -168,9 +170,18 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
   const alwaysCaskets = useMemo(
     () =>
       ALWAYS_CASKET_IDS.map((id) => catalogCasket(id)).filter(
-        (c): c is CasketCatalogEntry => !!c
+        (c): c is CasketCatalogEntry => !!c && !c.retired
       ),
     []
+  );
+  const casketsByTier = useMemo(
+    () =>
+      CASKET_TIER_ORDER.map((tier) => ({
+        tier,
+        label: CASKET_TIER_LABEL[tier],
+        items: alwaysCaskets.filter((casket) => casket.tier === tier),
+      })).filter((group) => group.items.length > 0),
+    [alwaysCaskets]
   );
 
   const rareUrnRows = useMemo(
@@ -204,7 +215,7 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
         .filter((e) => e.kind === 'casket')
         .map((entry) => {
           const casket = catalogCasket(entry.id);
-          if (!casket) return null;
+          if (!casket || casket.retired) return null;
           return {
             casket,
             entry,
@@ -228,7 +239,10 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
     [upcoming]
   );
   const upcomingCaskets = useMemo(
-    () => upcoming.filter((e) => e.kind === 'casket'),
+    () =>
+      upcoming.filter(
+        (e) => e.kind === 'casket' && !catalogCasket(e.id)?.retired
+      ),
     [upcoming]
   );
 
@@ -450,24 +464,26 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
               </section>
             )}
 
-            <section>
-              <SectionLabel>Always in stock</SectionLabel>
-              <div className="grid grid-cols-2 gap-2.5">
-                {alwaysCaskets.map((casket) => (
-                  <CasketCard
-                    key={casket.id}
-                    casket={casket}
-                    owned={casketInventory[casket.id] ?? 0}
-                    reputation={reputation}
-                    cash={cash}
-                    onInspect={() =>
-                      setInspect({ kind: 'casket', id: casket.id })
-                    }
-                    onBuy={() => requestBuy("Confirm casket", `Purchase for listed price?`, () => { buyCasket(casket.id); })}
-                  />
-                ))}
-              </div>
-            </section>
+            {casketsByTier.map((group) => (
+              <section key={group.tier}>
+                <SectionLabel>{group.label}</SectionLabel>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {group.items.map((casket) => (
+                    <CasketCard
+                      key={casket.id}
+                      casket={casket}
+                      owned={casketInventory[casket.id] ?? 0}
+                      reputation={reputation}
+                      cash={cash}
+                      onInspect={() =>
+                        setInspect({ kind: 'casket', id: casket.id })
+                      }
+                      onBuy={() => requestBuy("Confirm casket", `Purchase for listed price?`, () => { buyCasket(casket.id); })}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
 
             {upcomingCaskets.length > 0 && (
               <ComingUpSection

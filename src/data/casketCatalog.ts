@@ -1,3 +1,4 @@
+import { GABRIEL_CASKETS } from './gabrielCaskets';
 import { VARIETY_CASKETS } from './casketVariety';
 
 export type CasketMaterial =
@@ -5,10 +6,32 @@ export type CasketMaterial =
   | 'CHERRY'
   | 'WALNUT'
   | 'PINE'
+  | 'MAPLE'
+  | 'POPLAR'
+  | 'ASH'
+  | 'PECAN'
   | 'MAHOGANY'
   | 'STEEL'
   | 'BRONZE'
   | 'COPPER';
+
+export type CasketTier = 'ENTRY' | 'STANDARD' | 'PREMIUM' | 'LUXURY' | 'SIGNATURE';
+
+export const CASKET_TIER_ORDER: CasketTier[] = [
+  'ENTRY',
+  'STANDARD',
+  'PREMIUM',
+  'LUXURY',
+  'SIGNATURE',
+];
+
+export const CASKET_TIER_LABEL: Record<CasketTier, string> = {
+  ENTRY: 'Entry',
+  STANDARD: 'Standard',
+  PREMIUM: 'Premium',
+  LUXURY: 'Luxury',
+  SIGNATURE: 'Signature',
+};
 
 export type CasketSilhouette =
   | 'HALF_COUCH'
@@ -75,6 +98,12 @@ export interface CasketCatalogEntry {
   };
   /** Absent on the original ten, which keep the v0.9.23 look. */
   dress?: CasketDress;
+  /** Shop grouping for Gabriel sheet caskets. */
+  tier?: CasketTier;
+  /** Closed and half-couch open sprites. When set, the vessel draws these instead of SVG. */
+  sprites?: { closed: string; open: string };
+  /** Kept for saves that already own it. Hidden from the Emporium. */
+  retired?: boolean;
 }
 
 export const CASKET_MATERIALS: CasketMaterial[] = [
@@ -82,13 +111,17 @@ export const CASKET_MATERIALS: CasketMaterial[] = [
   'CHERRY',
   'WALNUT',
   'PINE',
+  'MAPLE',
+  'POPLAR',
+  'ASH',
+  'PECAN',
   'MAHOGANY',
   'STEEL',
   'BRONZE',
   'COPPER',
 ];
 
-export const CASKET_CATALOG: CasketCatalogEntry[] = [
+const CLASSIC_CASKETS: CasketCatalogEntry[] = [
   {
     id: 'casket_oak_half',
     name: 'Heritage Oak Half-Couch',
@@ -299,7 +332,17 @@ export const CASKET_CATALOG: CasketCatalogEntry[] = [
       trim: '#52525b',
     },
   },
-  ...VARIETY_CASKETS,
+];
+
+function retired(entries: CasketCatalogEntry[]): CasketCatalogEntry[] {
+  return entries.map((entry) => ({ ...entry, retired: true }));
+}
+
+/** Gabriel sheet caskets first. Older procedural SKUs stay resolvable but are off the floor. */
+export const CASKET_CATALOG: CasketCatalogEntry[] = [
+  ...GABRIEL_CASKETS,
+  ...retired(CLASSIC_CASKETS),
+  ...retired(VARIETY_CASKETS),
 ];
 
 export function getCasketById(id: string | null | undefined) {

@@ -1169,8 +1169,8 @@ export function freshPersistedGameFields() {
       urn_walnut_pillar: 1,
     } as Record<string, number>,
     casketInventory: {
-      casket_oak_half: 1,
-      casket_pine_tapered: 1,
+      'gabriel-pine-orthodox-raw-blonde-pine': 1,
+      'gabriel-poplar-mission-natural-poplar': 1,
     } as Record<string, number>,
     chapelOwnedDecor: [] as string[],
     chapelLayouts: {} as Record<string, ChapelServiceLayout>,

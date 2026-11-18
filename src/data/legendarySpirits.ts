@@ -44,7 +44,7 @@ export const LEGENDARY_SPIRITS: readonly LegendarySpirit[] = [
     secret:
       'Two or three new arrivals, and an untagged name slips. Tag first. The paperwork can wait a minute.',
     vesselKind: 'casket',
-    vesselId: 'casket_bronze_octagon',
+    vesselId: 'gabriel-bronze-square-venetian-bronze',
   },
   {
     id: 'june-keel',
@@ -72,7 +72,7 @@ export const LEGENDARY_SPIRITS: readonly LegendarySpirit[] = [
     secret:
       'The coach you send is the one the town remembers. A plain honest car beats a borrowed shine.',
     vesselKind: 'casket',
-    vesselId: 'casket_bronze_octagon',
+    vesselId: 'gabriel-bronze-square-venetian-bronze',
   },
   {
     id: 'captain-voss',

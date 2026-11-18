@@ -1405,10 +1405,6 @@ export const CasketVessel: React.FC<{
   lid?: 'open' | 'closed';
 }> = ({ casket, className, showPlaque = false, size = 'md', chapel = false, lid }) => {
   const uid = useId().replace(/:/g, '');
-  const look = lookFor(casket);
-  const coffin = isCoffin(casket.silhouette);
-  const mode = resolveLid(casket, lid);
-  const open = mode !== 'none';
   const width =
     className && /w-/.test(className)
       ? ''
@@ -1417,6 +1413,26 @@ export const CasketVessel: React.FC<{
         : size === 'sm'
           ? 'w-full'
           : 'w-72';
+  if (casket.sprites) {
+    const showOpen =
+      lid === 'closed'
+        ? false
+        : lid === 'open' ||
+          casket.silhouette === 'HALF_COUCH' ||
+          casket.silhouette === 'FULL_COUCH';
+    return (
+      <img
+        src={showOpen ? casket.sprites.open : casket.sprites.closed}
+        alt=""
+        draggable={false}
+        className={`h-auto max-w-full object-contain object-bottom ${width} ${className ?? ''}`}
+      />
+    );
+  }
+  const look = lookFor(casket);
+  const coffin = isCoffin(casket.silhouette);
+  const mode = resolveLid(casket, lid);
+  const open = mode !== 'none';
   const viewBox = coffin
     ? open
       ? '16 100 690 250'

@@ -21,7 +21,8 @@ export type RareTone = 'LIGHT' | 'DARK';
  * (Gabriel). `endHour` should be startHour+2 (wrapping midnight). A short
  * grace lets a purchase finish if the player is mid-checkout.
  */
-import { VARIETY_ALWAYS, VARIETY_RARES } from './casketVariety';
+import { GABRIEL_CASKET_IDS } from './gabrielCaskets';
+import { VARIETY_RARES } from './casketVariety';
 import { MODERN_URN_RARES } from './urnVariety';
 
 export const RARE_DURATION_HOURS = 2;
@@ -219,14 +220,8 @@ export const ALWAYS_URN_IDS = [
   'urn_cobalt_art_deco',
 ] as const;
 
-export const ALWAYS_CASKET_IDS: string[] = [
-  'casket_pine_tapered',
-  'casket_oak_half',
-  'casket_cherry_panel',
-  'casket_steel_silver',
-  'casket_oak_octagon',
-  ...VARIETY_ALWAYS,
-];
+/** Gabriel sheet caskets, Entry through Signature. Older SKUs are retired. */
+export const ALWAYS_CASKET_IDS: string[] = [...GABRIEL_CASKET_IDS];
 
 export interface ShopRotationState {
   /**

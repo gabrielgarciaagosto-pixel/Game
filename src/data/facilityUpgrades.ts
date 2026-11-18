@@ -201,8 +201,8 @@ export const FACILITY_UPGRADES: FacilityUpgradeDef[] = [
         requires: [
           {
             kind: 'casket',
-            id: 'casket_pine_tapered',
-            label: 'Country Pine Tapered',
+            id: 'gabriel-pine-orthodox-raw-blonde-pine',
+            label: 'Eastern White Pine Orthodox',
           },
         ],
       },
@@ -215,13 +215,13 @@ export const FACILITY_UPGRADES: FacilityUpgradeDef[] = [
         requires: [
           {
             kind: 'casket',
-            id: 'casket_oak_half',
-            label: 'Heritage Oak Half-Couch',
+            id: 'gabriel-maple-colonial-honey-maple',
+            label: 'Hard Rock Maple Colonial',
           },
           {
             kind: 'casket',
-            id: 'casket_cherry_panel',
-            label: 'Cherry Panel Couch',
+            id: 'gabriel-pecan-southern-natural-pecan',
+            label: 'Solid Pecan Southern',
           },
         ],
       },
@@ -234,18 +234,18 @@ export const FACILITY_UPGRADES: FacilityUpgradeDef[] = [
         requires: [
           {
             kind: 'casket',
-            id: 'casket_mahogany_full',
-            label: 'Mahogany Full-Couch',
+            id: 'gabriel-mahogany-round-red-mahogany',
+            label: 'Solid Mahogany Round',
           },
           {
             kind: 'casket',
-            id: 'casket_bronze_octagon',
-            label: 'Cast Bronze Octagon',
+            id: 'gabriel-bronze-square-venetian-bronze',
+            label: 'Bronze Square',
           },
           {
             kind: 'casket',
-            id: 'casket_walnut_dome',
-            label: 'Black Walnut Dome',
+            id: 'gabriel-pecan-southern-dark-hickory',
+            label: 'Solid Pecan Southern, Dark Hickory',
           },
         ],
       },
