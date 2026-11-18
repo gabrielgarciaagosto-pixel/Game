@@ -23,6 +23,8 @@ type ClipId = keyof typeof CLIPS;
 const HANDOFF_SEC = 4;
 const XFADE_SEC = 0.12;
 const OFF_FADE_SEC = 0.08;
+/** Share of the interface bus. The motor used to take the whole bus. */
+const BUS_SHARE = 0.45;
 
 class ExtractorSfx {
   private buffers = new Map<ClipId, AudioBuffer>();
@@ -90,7 +92,7 @@ class ExtractorSfx {
 
   private level(): number {
     if (audioManager.isInterfaceMuted()) return 0;
-    return audioManager.getSfxVolume();
+    return audioManager.getSfxVolume() * BUS_SHARE;
   }
 
   private play(gen: number): void {

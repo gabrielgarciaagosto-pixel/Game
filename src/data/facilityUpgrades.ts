@@ -316,6 +316,18 @@ export function cremulatorSpeed(level: number): number {
   return 1.5;
 }
 
+/** Unupgraded mill, real time. Each run rolls inside this window. */
+export const CREMULATOR_RUN_MIN_MS = 2 * 60 * 1000;
+export const CREMULATOR_RUN_MAX_MS = 3 * 60 * 1000;
+
+/** Wall-clock length of one engage. `roll` is 0–1. Facility speed still shortens it. */
+export function cremulatorRunMs(level: number, roll = Math.random()): number {
+  const t = Math.min(1, Math.max(0, roll));
+  const base =
+    CREMULATOR_RUN_MIN_MS + t * (CREMULATOR_RUN_MAX_MS - CREMULATOR_RUN_MIN_MS);
+  return base / cremulatorSpeed(level);
+}
+
 export function cremulatorDamageChance(level: number): number {
   if (level <= 0) return 0.35;
   if (level === 1) return 0.18;

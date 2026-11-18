@@ -7,6 +7,8 @@ import { audioManager } from '../utils/audioManager';
 
 const URL = '/audio/processor/cremulator-running.wav';
 const OFF_FADE_SEC = 0.12;
+/** Share of the interface bus. The bed used to take the whole bus. */
+const BUS_SHARE = 0.45;
 
 class CremulatorSfx {
   private buffer: AudioBuffer | null = null;
@@ -55,6 +57,7 @@ class CremulatorSfx {
     if (!this.running && !this.master) return;
     this.running = false;
     this.generation += 1;
+    this.clearWatch();
     this.fadeOut();
   }
 
@@ -68,7 +71,7 @@ class CremulatorSfx {
 
   private level(): number {
     if (audioManager.isInterfaceMuted()) return 0;
-    return audioManager.getSfxVolume();
+    return audioManager.getSfxVolume() * BUS_SHARE;
   }
 
   private play(gen: number): void {

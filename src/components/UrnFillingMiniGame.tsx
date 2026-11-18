@@ -25,6 +25,10 @@ import { crematoryToolSfx } from '../audio/crematoryToolSfx';
 import { latchToolMoving, sweepClipFor } from '../audio/crematoryToolSfxPolicy';
 import { extractorSfx } from '../audio/extractorSfx';
 import { cremulatorSfx } from '../audio/cremulatorSfx';
+import {
+  cremulatorDamageChance,
+  cremulatorRunMs,
+} from '../data/facilityUpgrades';
 import { ToolArt, type BrushFlex } from './crematory/crematoryArt';
 
 type Phase =
@@ -208,6 +212,7 @@ export const UrnFillingMiniGame: React.FC = () => {
   const pourRef = useRef<HTMLDivElement>(null);
   const lastHammer = useRef(0);
   const millToken = useRef(0);
+  const millTimer = useRef<number | null>(null);
 
   const familyUrn = getUrnById(currentCase?.familyRequestedUrnId ?? null);
   const offeredUrn = getUrnById(currentCase?.offeredUrnId ?? null);
@@ -255,6 +260,11 @@ export const UrnFillingMiniGame: React.FC = () => {
     void cremulatorSfx.preload();
     void crematoryToolSfx.preload();
     return () => {
+      if (millTimer.current != null) {
+        window.clearInterval(millTimer.current);
+        millTimer.current = null;
+      }
+      millToken.current += 1;
       extractorSfx.stop();
       boneCrushSfx.stop();
       cremulatorSfx.stop();
@@ -491,25 +501,23 @@ export const UrnFillingMiniGame: React.FC = () => {
     );
   };
 
+  const shutCremulator = (done: boolean) => {
+    if (millTimer.current != null) {
+      window.clearInterval(millTimer.current);
+      millTimer.current = null;
+    }
+    millToken.current += 1;
+    setProcessing(false);
+    if (done) setCremulatorProgress(100);
+    cremulatorSfx.stop();
+  };
+
   const engageCremulator = () => {
     if (!hatchLoaded || !cremulatorOwned || processing) return;
     const levels = useGameStore.getState().facilityLevels;
-    const dmgChance = (() => {
-      const lvl = levels.cremulator || 0;
-      if (lvl <= 0) return 0.35;
-      if (lvl === 1) return 0.18;
-      if (lvl === 2) return 0.08;
-      return 0.02;
-    })();
-    const speed = (() => {
-      const lvl = levels.cremulator || 0;
-      if (lvl <= 0) return 1;
-      if (lvl === 1) return 1.1;
-      if (lvl === 2) return 1.25;
-      return 1.5;
-    })();
+    const level = levels.cremulator || 0;
     if (!magnetCleared && !allMetalsCleared) {
-      if (Math.random() < dmgChance) {
+      if (Math.random() < cremulatorDamageChance(level)) {
         damageCremulator();
       } else {
         useGameStore.setState({
@@ -520,29 +528,30 @@ export const UrnFillingMiniGame: React.FC = () => {
       dumpHatchForMagnetRecovery();
       return;
     }
+    if (millTimer.current != null) {
+      window.clearInterval(millTimer.current);
+      millTimer.current = null;
+    }
     setProcessing(true);
     setLoadingSorting(false);
+    setCremulatorProgress(0);
     cremulatorSfx.start();
     const token = ++millToken.current;
     const start = performance.now();
-    const duration = 2800 / speed;
-    const tick = (now: number) => {
+    const duration = cremulatorRunMs(level);
+    millTimer.current = window.setInterval(() => {
       if (millToken.current !== token) return;
-      const p = Math.min(100, ((now - start) / duration) * 100);
-      setCremulatorProgress(p);
-      if (p < 100) requestAnimationFrame(tick);
-      else {
-        setProcessing(false);
-        cremulatorSfx.stop();
+      const p = Math.min(100, ((performance.now() - start) / duration) * 100);
+      if (p >= 100) {
+        shutCremulator(true);
+        return;
       }
-    };
-    requestAnimationFrame(tick);
+      setCremulatorProgress(p);
+    }, 200);
   };
 
   const emergencyStop = () => {
-    millToken.current += 1;
-    setProcessing(false);
-    cremulatorSfx.stop();
+    shutCremulator(false);
   };
 
   const applyPourAt = (clientY: number) => {
