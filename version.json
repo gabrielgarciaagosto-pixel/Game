@@ -1,6 +1,6 @@
 {
-  "versionName": "0.9.70-demo",
-  "versionCode": 88,
-  "apkUrl": "https://github.com/gabrielgarciaagosto-pixel/Game/raw/f27b04efbc0e1e970757d86a1943f17cd1bd3dd7/demo/Ossuarian-FirstUrn-v0.9.70-demo.apk",
-  "notes": "The chapel glows during a service, and the mourners are a fainter cream."
+  "versionName": "0.9.71-demo",
+  "versionCode": 89,
+  "apkUrl": "https://github.com/gabrielgarciaagosto-pixel/Game/raw/6e2f22df4ee7f2a88a7e9b5f779106fc2d6db455/demo/Ossuarian-FirstUrn-v0.9.71-demo.apk",
+  "notes": "The extractor and cremulator are quieter, and a mill run lasts a few minutes."
 }
