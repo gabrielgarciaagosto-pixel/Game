@@ -34,13 +34,13 @@ check(
 );
 
 const offer = parseVersionOffer({
-  versionName: '0.9.72-demo',
-  versionCode: 91,
+  versionName: '0.9.73-demo',
+  versionCode: 92,
   apkUrl:
     'https://github.com/gabrielgarciaagosto-pixel/Game/raw/abc/demo/Ossuarian-FirstUrn-v0.9.70-demo.apk',
   notes: 'A short line.',
 });
-check(offer?.versionCode === 91, 'a newer https feed becomes an offer');
+check(offer?.versionCode === 92, 'a newer https feed becomes an offer');
 check(offer?.notes === 'A short line.', 'notes come through');
 check(
   parseVersionOffer({
