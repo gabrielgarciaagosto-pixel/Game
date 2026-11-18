@@ -1,6 +1,6 @@
 {
-  "versionName": "0.9.71-demo",
-  "versionCode": 89,
-  "apkUrl": "https://github.com/gabrielgarciaagosto-pixel/Game/raw/6e2f22df4ee7f2a88a7e9b5f779106fc2d6db455/demo/Ossuarian-FirstUrn-v0.9.71-demo.apk",
-  "notes": "The extractor and cremulator are quieter, and a mill run lasts a few minutes."
+  "versionName": "0.9.72-demo",
+  "versionCode": 90,
+  "apkUrl": "https://github.com/gabrielgarciaagosto-pixel/Game/raw/1aad7cccca2eda3e4f04fb4ba5468440295ee4d7/demo/Ossuarian-FirstUrn-v0.9.72-demo.apk",
+  "notes": "Shop buy windows stay on top, and crematory gear is sold only at Craigmile."
 }
