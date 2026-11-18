@@ -22,6 +22,7 @@ import { FuneraryEmporium } from './FuneraryEmporium';
 import { FleetBrowser } from './FleetBrowser';
 import { RealtyBrowser } from './RealtyBrowser';
 import { CrematoryCatalog } from './crematory/CrematoryCatalog';
+import { CoolComposureCatalog } from './cooler/CoolComposureCatalog';
 import { PhoneDesk } from './PhoneDesk';
 
 type DesktopApp =
@@ -32,6 +33,7 @@ type DesktopApp =
   | 'REALTY'
   | 'FLEETS'
   | 'CRAIGMILE'
+  | 'COOL'
   | 'PHONE';
 
 const BROWSER_APPS: DesktopApp[] = [
@@ -41,6 +43,7 @@ const BROWSER_APPS: DesktopApp[] = [
   'REALTY',
   'FLEETS',
   'CRAIGMILE',
+  'COOL',
 ];
 
 /**
@@ -180,6 +183,7 @@ export const ComputerRoom: React.FC = () => {
           <DesktopAppIcon kind="REALTY" onOpen={() => openApp('REALTY')} />
           <DesktopAppIcon kind="FLEETS" onOpen={() => openApp('FLEETS')} />
           <DesktopAppIcon kind="CRAIGMILE" onOpen={() => openApp('CRAIGMILE')} />
+          <DesktopAppIcon kind="COOL" onOpen={() => openApp('COOL')} />
           <DesktopAppIcon kind="PHONE" onOpen={() => openApp('PHONE')} />
           <DesktopAppIcon kind="SETTINGS" onOpen={() => setSettingsOpen(true)} />
         </div>
@@ -524,6 +528,18 @@ export const ComputerRoom: React.FC = () => {
             onClose={goDesktop}
           >
             <CrematoryCatalog />
+          </FakeBrowserChrome>
+        </div>
+      )}
+
+      {app === 'COOL' && (
+        <div className="absolute inset-0 z-20" style={{ inset: 0 }}>
+          <FakeBrowserChrome
+            title="Cool Composure"
+            url="https://www.coolcomposure.biz/catalog"
+            onClose={goDesktop}
+          >
+            <CoolComposureCatalog />
           </FakeBrowserChrome>
         </div>
       )}

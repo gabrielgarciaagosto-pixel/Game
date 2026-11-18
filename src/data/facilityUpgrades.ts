@@ -1,6 +1,8 @@
 /**
- * Permanent tiered facility upgrades. The Emporium sells the house lines.
+ * Permanent tiered facility upgrades. The Emporium sells the house lines
+ * that are not a vendor's: embalming and the urn vault.
  * Cremulator, retort efficiency, and extra retorts are Craigmile only.
+ * Cooler bays are Cool Composure only.
  *
  * Collection gates are OWNERSHIP-ONLY: required urns/caskets must be in the
  * player's collection (count ≥ 1). Buying an upgrade NEVER consumes them.
@@ -46,9 +48,22 @@ export const CRAIGMILE_ONLY_UPGRADES: readonly FacilityUpgradeId[] = [
   'retort_bay',
 ];
 
+/** Sold only at Cool Composure. Owned bay levels stay on the save. */
+export const COOL_COMPOSURE_UPGRADES: readonly FacilityUpgradeId[] = [
+  'cooler_bays',
+];
+
 export function emporiumFacilityUpgrades(): FacilityUpgradeDef[] {
   return FACILITY_UPGRADES.filter(
-    (def) => !CRAIGMILE_ONLY_UPGRADES.includes(def.id)
+    (def) =>
+      !CRAIGMILE_ONLY_UPGRADES.includes(def.id) &&
+      !COOL_COMPOSURE_UPGRADES.includes(def.id)
+  );
+}
+
+export function coolComposureUpgrades(): FacilityUpgradeDef[] {
+  return FACILITY_UPGRADES.filter((def) =>
+    COOL_COMPOSURE_UPGRADES.includes(def.id)
   );
 }
 

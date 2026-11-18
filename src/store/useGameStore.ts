@@ -303,7 +303,7 @@ interface GameState {
    * Which Computer desktop app to open (null = desktop).
    * EMPORIUM redirects here with 'SHOP'. Not persisted.
    */
-  computerOpenApp: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS' | 'CRAIGMILE' | 'PHONE' | null;
+  computerOpenApp: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS' | 'CRAIGMILE' | 'COOL' | 'PHONE' | null;
   /** Optional deep-link tab when opening BANK (not persisted) */
   bankOpenTab: 'overview' | 'loans' | 'listings' | null;
   cases: DecedentCase[];
@@ -477,7 +477,7 @@ interface GameState {
   hardResetGameState: (toast?: string | null) => void;
   setActiveStation: (station: StationId) => void;
   setComputerOpenApp: (
-    app: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS' | 'CRAIGMILE' | 'PHONE' | null
+    app: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS' | 'CRAIGMILE' | 'COOL' | 'PHONE' | null
   ) => void;
   buyFleetVehicle: (id: string) => { ok: boolean; message: string };
   assignFleetVehicle: (fleetClass: FleetClass, id: string | null) => void;
