@@ -5,7 +5,7 @@ import {
 } from '../data/casketCatalog';
 import { CHAPEL_DECOR_CATALOG } from '../data/chapelDecor';
 import {
-  FACILITY_UPGRADES,
+  emporiumFacilityUpgrades,
   missingCollectionReqs,
   nextFacilityTier,
   totalFacilitySpaceUsed,
@@ -546,7 +546,7 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
               {ownedProperty?.label ?? 'home'}.
             </p>
             {(spaceBlock ||
-              FACILITY_UPGRADES.some((def) => {
+              emporiumFacilityUpgrades().some((def) => {
                 const level = facilityLevels[def.id as FacilityUpgradeId] ?? 0;
                 const next = nextFacilityTier(def.id, level);
                 return !!next && spaceUsed + next.space > spaceTotal;
@@ -568,7 +568,7 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                 </TapButton>
               </div>
             )}
-            {FACILITY_UPGRADES.map((def) => {
+            {emporiumFacilityUpgrades().map((def) => {
               const level = facilityLevels[def.id as FacilityUpgradeId] ?? 0;
               const next = nextFacilityTier(def.id, level);
               const missing = next

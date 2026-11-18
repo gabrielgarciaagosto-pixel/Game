@@ -63,6 +63,12 @@ export const CrematoryCatalog: React.FC = () => {
   const fuelAfter = fuelOffer ? fuelAsk(fuelOffer.tier) : fuelNow;
   const chamber = nextFacilityTier('retort_bay', levels.retort_bay ?? 0);
   const house = levels.crematory ?? 0;
+  const efficiency = nextFacilityTier('crematory', house);
+  const mill = nextFacilityTier('cremulator', levels.cremulator ?? 0);
+  const needs = (tier: { requires: { label: string }[] } | null) =>
+    tier && tier.requires.length > 0
+      ? ` Own ${tier.requires.map((req) => req.label).join(', ')}.`
+      : '';
 
   const flash = (result: { ok: boolean; message: string }) => {
     setNote(result.ok ? result.message : result.message);
@@ -223,6 +229,62 @@ export const CrematoryCatalog: React.FC = () => {
                     message:
                       result.message ??
                       (result.ok ? 'Chamber added' : 'Cannot add a chamber'),
+                  });
+                }
+              : undefined
+          }
+        />
+        <Card
+          kicker="House"
+          title={efficiency?.label ?? 'Retort efficiency'}
+          now={house === 0 ? 'Stock burners' : `House efficiency ${house}`}
+          next={efficiency ? efficiency.effect : 'Afterburner fitted'}
+          price={efficiency?.cost ?? null}
+          flavor={
+            efficiency
+              ? `${efficiency.effect}.${needs(efficiency)} Uses facility space.`
+              : 'The house burners are as quick as this kit goes.'
+          }
+          owned={!efficiency}
+          onBuy={
+            efficiency
+              ? () => {
+                  const result = buyFacilityUpgrade('crematory');
+                  flash({
+                    ok: result.ok,
+                    message:
+                      result.message ??
+                      (result.ok ? 'Efficiency fitted' : 'Cannot fit that kit'),
+                  });
+                }
+              : undefined
+          }
+        />
+        <Card
+          kicker="Mill"
+          title={mill?.label ?? 'Cremulator'}
+          now={
+            (levels.cremulator ?? 0) === 0
+              ? 'Stock mill'
+              : `Cremulator ${levels.cremulator}`
+          }
+          next={mill ? mill.effect : 'Industrial mill fitted'}
+          price={mill?.cost ?? null}
+          flavor={
+            mill
+              ? `${mill.effect}.${needs(mill)} The mill stays in the urn room.`
+              : 'The cremulator is as fast and tough as this line gets.'
+          }
+          owned={!mill}
+          onBuy={
+            mill
+              ? () => {
+                  const result = buyFacilityUpgrade('cremulator');
+                  flash({
+                    ok: result.ok,
+                    message:
+                      result.message ??
+                      (result.ok ? 'Mill refit installed' : 'Cannot refit the mill'),
                   });
                 }
               : undefined

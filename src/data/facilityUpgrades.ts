@@ -1,5 +1,6 @@
 /**
- * Permanent tiered facility upgrades sold in the Funerary Emporium.
+ * Permanent tiered facility upgrades. The Emporium sells the house lines.
+ * Cremulator, retort efficiency, and extra retorts are Craigmile only.
  *
  * Collection gates are OWNERSHIP-ONLY: required urns/caskets must be in the
  * player's collection (count ≥ 1). Buying an upgrade NEVER consumes them.
@@ -33,6 +34,22 @@ export interface FacilityUpgradeDef {
   name: string;
   blurb: string;
   tiers: FacilityTier[];
+}
+
+/**
+ * Sold only at Craigmile Crematory. Owned levels stay on the save and
+ * still spend facility space. The Emporium does not list them.
+ */
+export const CRAIGMILE_ONLY_UPGRADES: readonly FacilityUpgradeId[] = [
+  'cremulator',
+  'crematory',
+  'retort_bay',
+];
+
+export function emporiumFacilityUpgrades(): FacilityUpgradeDef[] {
+  return FACILITY_UPGRADES.filter(
+    (def) => !CRAIGMILE_ONLY_UPGRADES.includes(def.id)
+  );
 }
 
 export const FACILITY_UPGRADES: FacilityUpgradeDef[] = [
