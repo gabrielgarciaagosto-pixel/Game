@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   CASKET_CATALOG,
   CASKET_TIER_LABEL,
@@ -38,6 +39,7 @@ import { CasketVessel } from './caskets/CasketVessel';
 import { UrnVessel } from './urns/UrnVessel';
 import { TapButton } from './TapButton';
 import { CatalogSheet } from './CatalogSheet';
+import { armSheetGhostGuard, sheetGhostGuardActive } from './sheetGhostGuard';
 import { useSheetOpen } from './useSheetOpen';
 
 type ShopTab = 'URNS' | 'CASKETS' | 'CHAPEL' | 'UPGRADES' | 'MERCH';
@@ -70,6 +72,15 @@ function catalogUrn(id: string): UrnCatalogEntry | undefined {
 
 function catalogCasket(id: string): CasketCatalogEntry | undefined {
   return CASKET_CATALOG.find((c) => c.id === id);
+}
+
+function guardedClick(event: React.MouseEvent, run: () => void) {
+  if (sheetGhostGuardActive()) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+  run();
 }
 
 function canPurchase(opts: {
@@ -130,7 +141,27 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
     run: () => void;
   } | null>(null);
   const [spaceBlock, setSpaceBlock] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [bumpedId, setBumpedId] = useState<string | null>(null);
+  const noteTimer = useRef<number | null>(null);
   useSheetOpen(confirmBuy != null || inspect != null);
+
+  const showNote = (text: string, bumpId?: string) => {
+    setNote(text);
+    setBumpedId(bumpId ?? null);
+    if (noteTimer.current != null) window.clearTimeout(noteTimer.current);
+    noteTimer.current = window.setTimeout(() => {
+      setNote(null);
+      setBumpedId(null);
+      noteTimer.current = null;
+    }, 3800);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (noteTimer.current != null) window.clearTimeout(noteTimer.current);
+    };
+  }, []);
 
   const spaceUsed = totalFacilitySpaceUsed(facilityLevels);
   const spaceTotal = ownedProperty?.spaceTotal ?? 20;
@@ -139,6 +170,67 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
 
   const requestBuy = (title: string, body: string, run: () => void) => {
     setConfirmBuy({ title, body, run });
+  };
+
+  const purchaseUrn = (id: string) => {
+    const urn = catalogUrn(id);
+    if (!urn) return;
+    const state = useGameStore.getState();
+    const ask = quotedPrice(urn.cost, 'URNS', state.newsWire, gameNow());
+    if (state.cash < ask) {
+      showNote(`Not enough cash for ${urn.name}.`);
+      return;
+    }
+    if (state.reputation < (urn.reputationRequired ?? 0)) {
+      showNote(`${urn.name} needs reputation ${urn.reputationRequired}.`);
+      return;
+    }
+    if (buyUrn(id)) showNote(`Purchased ${urn.name} for $${ask}`, id);
+    else showNote(`${urn.name} is not available.`);
+  };
+
+  const purchaseCasket = (id: string) => {
+    const casket = catalogCasket(id);
+    if (!casket) return;
+    const state = useGameStore.getState();
+    const ask = quotedPrice(casket.cost, 'CASKETS', state.newsWire, gameNow());
+    if (state.cash < ask) {
+      showNote(`Not enough cash for ${casket.name}.`);
+      return;
+    }
+    if (state.reputation < (casket.reputationRequired ?? 0)) {
+      showNote(`${casket.name} needs reputation ${casket.reputationRequired}.`);
+      return;
+    }
+    if (buyCasket(id)) showNote(`Purchased ${casket.name} for $${ask}`, id);
+    else showNote(`${casket.name} is not available.`);
+  };
+
+  const askBuyUrn = (id: string) => {
+    const urn = catalogUrn(id);
+    if (!urn) return;
+    const ask = quotedPrice(urn.cost, 'URNS', useGameStore.getState().newsWire, gameNow());
+    if (useGameStore.getState().cash < ask) {
+      showNote(`Not enough cash for ${urn.name}.`);
+      return;
+    }
+    requestBuy('Confirm urn', 'Purchase for listed price?', () => purchaseUrn(id));
+  };
+
+  const askBuyCasket = (id: string) => {
+    const casket = catalogCasket(id);
+    if (!casket) return;
+    const ask = quotedPrice(
+      casket.cost,
+      'CASKETS',
+      useGameStore.getState().newsWire,
+      gameNow()
+    );
+    if (useGameStore.getState().cash < ask) {
+      showNote(`Not enough cash for ${casket.name}.`);
+      return;
+    }
+    requestBuy('Confirm casket', 'Purchase for listed price?', () => purchaseCasket(id));
   };
 
   useEffect(() => {
@@ -368,6 +460,7 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
       )}
 
       <div
+        data-shop-catalog
         className={`relative flex-1 min-h-0 overflow-y-auto p-2 pb-3 ${
           confirmBuy || inspect ? 'pointer-events-none' : ''
         }`}
@@ -389,7 +482,8 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                       rare={entry}
                       stock={stock}
                       onInspect={() => setInspect({ kind: 'urn', id: urn.id })}
-                      onBuy={() => requestBuy("Confirm urn", `Purchase for listed price?`, () => { buyUrn(urn.id); })}
+                      onBuy={() => askBuyUrn(urn.id)}
+                      bumpedId={bumpedId}
                     />
                   ))}
                 </div>
@@ -407,7 +501,8 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                     reputation={reputation}
                     cash={cash}
                     onInspect={() => setInspect({ kind: 'urn', id: urn.id })}
-                    onBuy={() => requestBuy("Confirm urn", `Purchase for listed price?`, () => { buyUrn(urn.id); })}
+                    onBuy={() => askBuyUrn(urn.id)}
+                    bumpedId={bumpedId}
                   />
                 ))}
               </div>
@@ -424,7 +519,8 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                     reputation={reputation}
                     cash={cash}
                     onInspect={() => setInspect({ kind: 'urn', id: urn.id })}
-                    onBuy={() => requestBuy("Confirm urn", `Purchase for listed price?`, () => { buyUrn(urn.id); })}
+                    onBuy={() => askBuyUrn(urn.id)}
+                    bumpedId={bumpedId}
                   />
                 ))}
               </div>
@@ -457,7 +553,8 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                       onInspect={() =>
                         setInspect({ kind: 'casket', id: casket.id })
                       }
-                      onBuy={() => requestBuy("Confirm casket", `Purchase for listed price?`, () => { buyCasket(casket.id); })}
+                      onBuy={() => askBuyCasket(casket.id)}
+                      bumpedId={bumpedId}
                     />
                   ))}
                 </div>
@@ -478,7 +575,8 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                       onInspect={() =>
                         setInspect({ kind: 'casket', id: casket.id })
                       }
-                      onBuy={() => requestBuy("Confirm casket", `Purchase for listed price?`, () => { buyCasket(casket.id); })}
+                      onBuy={() => askBuyCasket(casket.id)}
+                      bumpedId={bumpedId}
                     />
                   ))}
                 </div>
@@ -527,16 +625,23 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                       </span>
                     ) : (
                       <TapButton
-                        disabled={!canBuy}
-                        onTap={() =>
+                        onTap={() => {
+                          if (cash < item.cost) {
+                            showNote(`Not enough cash for ${item.name}.`);
+                            return;
+                          }
                           requestBuy(
                             'Confirm décor',
                             `Buy ${item.name} for $${item.cost}?`,
                             () => {
-                              buyChapelDecor(item.id);
+                              if (buyChapelDecor(item.id)) {
+                                showNote(`Purchased ${item.name} for $${item.cost}`);
+                              } else {
+                                showNote(`Could not purchase ${item.name}.`);
+                              }
                             }
-                          )
-                        }
+                          );
+                        }}
                         className={`shrink-0 px-3 py-2 rounded font-bold text-xs ${
                           canBuy
                             ? 'bg-amber-500 text-stone-950'
@@ -651,7 +756,9 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                                   </span>
                                   <button
                                     type="button"
-                                    onClick={() => jumpToCollection(req)}
+                                    onClick={(event) =>
+                                      guardedClick(event, () => jumpToCollection(req))
+                                    }
                                     style={{ touchAction: 'manipulation' }}
                                     className="shrink-0 px-2 py-0.5 rounded border border-stone-700 bg-stone-900 text-[9px] font-bold text-amber-100"
                                   >
@@ -666,16 +773,22 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
 
                       <button
                         type="button"
-                        disabled={
-                          !next ||
-                          missing.length > 0 ||
-                          (spaceOk && cash < next.cost)
-                        }
-                        onClick={() => {
+                        disabled={!next || missing.length > 0}
+                        onClick={(event) => {
+                          if (sheetGhostGuardActive()) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            return;
+                          }
+                          if (!next) return;
                           if (!spaceOk) {
                             setSpaceBlock(
                               `Needs more facility space (${spaceUsed + next.space} required, ${spaceTotal} available). Relocate via Lychgate Realty.`
                             );
+                            return;
+                          }
+                          if (cash < next.cost) {
+                            showNote(`Not enough cash for ${next.label}.`);
                             return;
                           }
                           requestBuy(
@@ -683,11 +796,21 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                             `${def.name}: ${next.label} for $${next.cost}? Uses ${next.space} space.`,
                             () => {
                               const r = buyFacilityUpgrade(def.id);
-                              if (!r.ok && r.reason === 'space') {
-                                setSpaceBlock(r.message ?? 'Needs more space');
-                              } else {
+                              if (r.ok) {
                                 setSpaceBlock(null);
+                                showNote(`Purchased ${next.label} for $${next.cost}`);
+                                return;
                               }
+                              if (r.reason === 'space') {
+                                setSpaceBlock(r.message ?? 'Needs more facility space.');
+                                return;
+                              }
+                              if (r.reason === 'cash') {
+                                showNote(`Not enough cash for ${next.label}.`);
+                                return;
+                              }
+                              setSpaceBlock(null);
+                              showNote(`Could not purchase ${next.label}.`);
                             }
                           );
                         }}
@@ -739,16 +862,23 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
                   </div>
                 </div>
                 <TapButton
-                  disabled={cash < ask}
-                  onTap={() =>
+                  onTap={() => {
+                    if (cash < ask) {
+                      showNote(`Not enough cash for ${item.name}.`);
+                      return;
+                    }
                     requestBuy(
                       'Confirm merch',
                       `Buy ${item.name} for $${ask}?`,
                       () => {
+                        const before = useGameStore.getState().cash;
                         buyShowroomItem(item.id);
+                        const spent = before - useGameStore.getState().cash;
+                        if (spent > 0) showNote(`Purchased ${item.name} for $${spent}`);
+                        else showNote(`Could not purchase ${item.name}.`);
                       }
-                    )
-                  }
+                    );
+                  }}
                   className={`px-3 py-2 rounded font-bold text-xs shrink-0 ${
                     cash >= ask
                       ? 'bg-amber-500 text-stone-950'
@@ -769,7 +899,21 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
         )}
       </div>
 
-      
+      {note &&
+        createPortal(
+          <div
+            data-shop-toast
+            role="status"
+            className="pointer-events-none fixed inset-x-0 z-[480] flex justify-center px-3"
+            style={{ bottom: 'calc(var(--safe-bottom, 0px) + 1.25rem)' }}
+          >
+            <p className="w-full max-w-md rounded-xl border border-amber-300 bg-[#1c140c]/95 px-3 py-3 text-center text-[13px] font-semibold leading-snug text-amber-50 shadow-xl">
+              {note}
+            </p>
+          </div>,
+          document.body
+        )}
+
       {confirmBuy && (
         <CatalogSheet z={220}>
           <div className="w-full rounded-xl border border-amber-700 bg-stone-950 p-4 space-y-3">
@@ -778,14 +922,19 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
             <div className="flex gap-2 relative z-20">
               <TapButton
                 data-catalog-back
-                onTap={() => setConfirmBuy(null)}
+                onTap={() => {
+                  armSheetGhostGuard();
+                  setConfirmBuy(null);
+                }}
                 className="flex-1 min-h-14 py-4 rounded-xl bg-stone-800 text-sm font-black"
               >
                 Back
               </TapButton>
               <TapButton
                 data-catalog-buy
+                data-catalog-dismiss
                 onTap={() => {
+                  armSheetGhostGuard();
                   confirmBuy.run();
                   setConfirmBuy(null);
                 }}
@@ -811,7 +960,8 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
               : undefined
           }
           onClose={() => setInspect(null)}
-          onBuy={() => requestBuy("Confirm urn", `Purchase for listed price?`, () => { buyUrn(inspectedUrn.id); })}
+          onBuy={() => askBuyUrn(inspectedUrn.id)}
+          bumped={bumpedId === inspectedUrn.id}
         />
       )}
 
@@ -828,7 +978,8 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
               : undefined
           }
           onClose={() => setInspect(null)}
-          onBuy={() => requestBuy("Confirm casket", `Purchase for listed price?`, () => { buyCasket(inspectedCasket.id); })}
+          onBuy={() => askBuyCasket(inspectedCasket.id)}
+          bumped={bumpedId === inspectedCasket.id}
         />
       )}
     </div>
@@ -887,7 +1038,7 @@ function FilterChip({
   return (
     <button
       type="button"
-      onClick={onPress}
+      onClick={(event) => guardedClick(event, onPress)}
       style={{ touchAction: 'manipulation' }}
       className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-black tracking-wide border ${
         active
@@ -943,6 +1094,7 @@ function UrnCard({
   stock,
   onInspect,
   onBuy,
+  bumpedId,
 }: {
   urn: UrnCatalogEntry;
   owned: number;
@@ -952,10 +1104,12 @@ function UrnCard({
   stock?: number;
   onInspect: () => void;
   onBuy: () => void;
+  bumpedId?: string | null;
 }) {
   const newsWire = useGameStore((s) => s.newsWire);
   const ask = quotedPrice(urn.cost, 'URNS', newsWire, gameNow());
   const locked = reputation < (urn.reputationRequired ?? 0);
+  const soldOut = rare != null && (stock ?? 0) <= 0;
   const canBuy = canPurchase({
     cash,
     cost: ask,
@@ -965,10 +1119,14 @@ function UrnCard({
   });
 
   return (
-    <div className="rounded-2xl border border-amber-900/40 bg-gradient-to-b from-[#2a2118] to-[#120e0b] p-2 flex flex-col min-h-[15rem]">
+    <div
+      data-urn-card={urn.id}
+      className="rounded-2xl border border-amber-900/40 bg-gradient-to-b from-[#2a2118] to-[#120e0b] p-2 flex flex-col min-h-[15rem]"
+    >
       <button
         type="button"
-        onClick={onInspect}
+        data-urn-open={urn.id}
+        onClick={(event) => guardedClick(event, onInspect)}
         style={{ touchAction: 'manipulation' }}
         className="flex-1 flex flex-col items-center justify-end pb-1"
       >
@@ -994,13 +1152,19 @@ function UrnCard({
         </div>
       </button>
       <div className="flex items-center justify-between gap-1 mt-1">
-        <span className="text-[10px] text-amber-200/80 font-mono">
+        <span
+          data-own-count={urn.id}
+          className={`text-[10px] text-amber-200/80 font-mono ${
+            bumpedId === urn.id ? 'own-bump' : ''
+          }`}
+        >
           Own {owned}
         </span>
         <button
           type="button"
-          disabled={!canBuy}
-          onClick={onBuy}
+          data-urn-buy={urn.id}
+          disabled={locked || soldOut}
+          onClick={(event) => guardedClick(event, onBuy)}
           style={{ touchAction: 'manipulation' }}
           className={`px-2.5 py-1.5 rounded text-[10px] font-black ${
             canBuy
@@ -1024,6 +1188,7 @@ function CasketCard({
   stock,
   onInspect,
   onBuy,
+  bumpedId,
 }: {
   casket: CasketCatalogEntry;
   owned: number;
@@ -1033,10 +1198,12 @@ function CasketCard({
   stock?: number;
   onInspect: () => void;
   onBuy: () => void;
+  bumpedId?: string | null;
 }) {
   const newsWire = useGameStore((s) => s.newsWire);
   const ask = quotedPrice(casket.cost, 'CASKETS', newsWire, gameNow());
   const locked = reputation < (casket.reputationRequired ?? 0);
+  const soldOut = rare != null && (stock ?? 0) <= 0;
   const canBuy = canPurchase({
     cash,
     cost: ask,
@@ -1046,10 +1213,14 @@ function CasketCard({
   });
 
   return (
-    <div className="rounded-2xl border border-amber-900/40 bg-gradient-to-b from-[#2a2118] to-[#120e0b] p-2 flex flex-col">
+    <div
+      data-casket-card={casket.id}
+      className="rounded-2xl border border-amber-900/40 bg-gradient-to-b from-[#2a2118] to-[#120e0b] p-2 flex flex-col"
+    >
       <button
         type="button"
-        onClick={onInspect}
+        data-casket-open={casket.id}
+        onClick={(event) => guardedClick(event, onInspect)}
         style={{ touchAction: 'manipulation' }}
         className="flex flex-col items-center pb-1"
       >
@@ -1075,13 +1246,19 @@ function CasketCard({
         </div>
       </button>
       <div className="flex items-center justify-between gap-1 mt-1">
-        <span className="text-[10px] text-amber-200/80 font-mono">
+        <span
+          data-own-count={casket.id}
+          className={`text-[10px] text-amber-200/80 font-mono ${
+            bumpedId === casket.id ? 'own-bump' : ''
+          }`}
+        >
           Own {owned}
         </span>
         <button
           type="button"
-          disabled={!canBuy}
-          onClick={onBuy}
+          data-casket-buy={casket.id}
+          disabled={locked || soldOut}
+          onClick={(event) => guardedClick(event, onBuy)}
           style={{ touchAction: 'manipulation' }}
           className={`px-2.5 py-1.5 rounded text-[10px] font-black ${
             canBuy
@@ -1105,6 +1282,7 @@ function UrnInspectModal({
   stock,
   onClose,
   onBuy,
+  bumped = false,
 }: {
   urn: UrnCatalogEntry;
   owned: number;
@@ -1114,6 +1292,7 @@ function UrnInspectModal({
   stock?: number;
   onClose: () => void;
   onBuy: () => void;
+  bumped?: boolean;
 }) {
   const newsWire = useGameStore((s) => s.newsWire);
   const ask = quotedPrice(urn.cost, 'URNS', newsWire, gameNow());
@@ -1154,8 +1333,8 @@ function UrnInspectModal({
           Finish: {urn.finish}. Decoration: {urn.decoration}.
         </p>
         <p className="text-[11px] text-stone-400 mt-1">
-          Resale to families ${urn.resaleValue} · Prestige +{urn.prestigeBonus} ·
-          Owned {owned}
+          Resale to families ${urn.resaleValue} · Prestige +{urn.prestigeBonus} ·{' '}
+          <span className={bumped ? 'own-bump' : ''}>Owned {owned}</span>
         </p>
         {rare && (
           <p className="text-[11px] text-amber-200/70 mt-1 font-mono">
@@ -1171,7 +1350,10 @@ function UrnInspectModal({
         <div className="mt-4 flex gap-2 relative z-20">
           <TapButton
             data-catalog-back
-            onTap={onClose}
+            onTap={() => {
+              armSheetGhostGuard();
+              onClose();
+            }}
             className="flex-1 min-h-14 py-4 rounded-xl bg-stone-800 text-sm font-black text-stone-100"
           >
             Back
@@ -1180,7 +1362,8 @@ function UrnInspectModal({
             data-catalog-buy
             aria-disabled={!canBuy}
             onTap={() => {
-              if (canBuy) onBuy();
+              if (locked || (rare != null && (stock ?? 0) <= 0)) return;
+              onBuy();
             }}
             className={`flex-[1.4] min-h-14 py-4 rounded-xl text-sm font-black ${
               canBuy
@@ -1211,6 +1394,7 @@ function CasketInspectModal({
   stock,
   onClose,
   onBuy,
+  bumped = false,
 }: {
   casket: CasketCatalogEntry;
   owned: number;
@@ -1220,6 +1404,7 @@ function CasketInspectModal({
   stock?: number;
   onClose: () => void;
   onBuy: () => void;
+  bumped?: boolean;
 }) {
   const newsWire = useGameStore((s) => s.newsWire);
   const ask = quotedPrice(casket.cost, 'CASKETS', newsWire, gameNow());
@@ -1288,8 +1473,8 @@ function CasketInspectModal({
           Finish: {casket.finish}. Hardware: {casket.hardware}.
         </p>
         <p className="text-[11px] text-stone-400 mt-1">
-          Resale ${casket.resaleValue} · Prestige +{casket.prestigeBonus} · Owned{' '}
-          {owned}
+          Resale ${casket.resaleValue} · Prestige +{casket.prestigeBonus} ·{' '}
+          <span className={bumped ? 'own-bump' : ''}>Owned {owned}</span>
         </p>
         {rare && (
           <p className="text-[11px] text-amber-200/70 mt-1 font-mono">
@@ -1306,7 +1491,10 @@ function CasketInspectModal({
         <div className="mt-4 flex gap-2 relative z-20">
           <TapButton
             data-catalog-back
-            onTap={onClose}
+            onTap={() => {
+              armSheetGhostGuard();
+              onClose();
+            }}
             className="flex-1 min-h-14 py-4 rounded-xl bg-stone-800 text-sm font-black text-stone-100"
           >
             Back
@@ -1315,7 +1503,8 @@ function CasketInspectModal({
             data-catalog-buy
             aria-disabled={!canBuy}
             onTap={() => {
-              if (canBuy) onBuy();
+              if (locked || (rare != null && (stock ?? 0) <= 0)) return;
+              onBuy();
             }}
             className={`flex-[1.4] min-h-14 py-4 rounded-xl text-sm font-black ${
               canBuy
