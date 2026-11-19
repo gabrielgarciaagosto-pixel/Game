@@ -343,7 +343,7 @@ export interface ChapelServiceLayout {
   caseId: string;
   theme: ChapelThemeSelection;
   pieces: ChapelLayoutPiece[];
-  /** Player-selected service music track id (null = playlist default) */
+  /** null until a pick. 'none' is silence. 'playlist' is the house order. A track id plays that track. */
   serviceMusicId?: string | null;
 }
 

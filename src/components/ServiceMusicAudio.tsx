@@ -4,6 +4,12 @@ import {
   audioManager,
   CROSSFADE_MS,
 } from '../utils/audioManager';
+import { serviceTiming } from '../data/pacing';
+import {
+  SERVICE_MUSIC_NONE,
+  serviceMusicIsTrack,
+} from '../data/familyChapelPrefs';
+import { useGameNow } from '../hooks/useGameNow';
 import {
   buildPlayOrder,
   isServiceBedId,
@@ -21,7 +27,8 @@ function isViewingService(directive: string): boolean {
 }
 
 /**
- * Soft service playlist in Chapel during viewing / Ossuary Memorial.
+ * Soft service playlist while a chapel service is in progress.
+ * Before that hour, and when No music is chosen, the chapel stays quiet.
  * Crossfades between tracks; fades out on leave; replaces crematory beds
  * so burn audio and chapel music never clash.
  */
@@ -51,11 +58,20 @@ export const ServiceMusicAudio: React.FC = () => {
       ? chapelLayouts[chapelCase.id]?.serviceMusicId ?? null
       : null;
 
+  const now = useGameNow(
+    activeStation === 'SHOWROOM' && chapelCase?.serviceDateMs != null
+  );
+  const serviceLive =
+    chapelCase != null &&
+    serviceTiming(chapelCase.serviceDateMs ?? null, now) === 'grace';
+
   const serviceActive =
     !titleGate &&
     activeStation === 'SHOWROOM' &&
     chapelCase != null &&
-    isViewingService(chapelCase.directive);
+    isViewingService(chapelCase.directive) &&
+    serviceLive &&
+    preferredMusicId !== SERVICE_MUSIC_NONE;
 
   useEffect(() => {
     audioManager.installGestureUnlock();
@@ -117,13 +133,10 @@ export const ServiceMusicAudio: React.FC = () => {
       let forceRestart = false;
       const prevPreferred = lastPreferredRef.current;
       lastPreferredRef.current = preferredMusicId;
-      // Player/family music pick: prefer that track; else full playlist order
-      if (
-        preferredMusicId &&
-        manifest.tracks.some((t) => t.id === preferredMusicId)
-      ) {
+      // A named track leads. Playlist, or an untouched pick, uses the house order.
+      if (serviceMusicIsTrack(preferredMusicId)) {
         const nextOrder = [
-          preferredMusicId,
+          preferredMusicId as string,
           ...manifest.tracks
             .map((t) => t.id)
             .filter((id) => id !== preferredMusicId),
@@ -133,8 +146,10 @@ export const ServiceMusicAudio: React.FC = () => {
         }
         orderRef.current = nextOrder;
         indexRef.current = 0;
-      } else if (prevPreferred != null && preferredMusicId == null) {
-        // Cleared pick → restore default playlist and crossfade
+      } else if (
+        serviceMusicIsTrack(prevPreferred) ||
+        (prevPreferred != null && preferredMusicId == null)
+      ) {
         orderRef.current = buildPlayOrder(manifest);
         indexRef.current = 0;
         forceRestart = true;

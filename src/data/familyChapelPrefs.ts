@@ -48,6 +48,35 @@ export function serviceMusicOptions(): ReadonlyArray<{
   return SERVICE_MUSIC_OPTIONS;
 }
 
+/** Explicit silence. Distinct from an untouched pick, which still plays during a service. */
+export const SERVICE_MUSIC_NONE = 'none';
+
+/** The player chose the house playlist, including before the service hour. */
+export const SERVICE_MUSIC_PLAYLIST = 'playlist';
+
+/**
+ * What the picker should show.
+ * An untouched pick is silent until the service, then the house playlist.
+ */
+export function chapelMusicChoice(
+  serviceMusicId: string | null | undefined,
+  serviceLive: boolean
+): string {
+  if (serviceMusicId === SERVICE_MUSIC_NONE) return SERVICE_MUSIC_NONE;
+  if (serviceMusicId === SERVICE_MUSIC_PLAYLIST) return SERVICE_MUSIC_PLAYLIST;
+  if (serviceMusicId) return serviceMusicId;
+  return serviceLive ? SERVICE_MUSIC_PLAYLIST : SERVICE_MUSIC_NONE;
+}
+
+export function serviceMusicIsTrack(id: string | null | undefined): boolean {
+  return (
+    !!id &&
+    id !== SERVICE_MUSIC_NONE &&
+    id !== SERVICE_MUSIC_PLAYLIST &&
+    SERVICE_MUSIC_OPTIONS.some((track) => track.id === id)
+  );
+}
+
 export function serviceMusicLabel(id: string | null | undefined): string {
   if (!id) return 'Any';
   return SERVICE_MUSIC_OPTIONS.find((t) => t.id === id)?.label ?? id;

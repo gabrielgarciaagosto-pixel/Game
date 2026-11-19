@@ -19,9 +19,12 @@ import {
   satisfactionToRewards,
 } from '../utils/chapelSatisfaction';
 import {
+  chapelMusicChoice,
   chapelPrefMatchBonus,
   decorPrefLabel,
   evaluateChapelPrefMatches,
+  SERVICE_MUSIC_NONE,
+  SERVICE_MUSIC_PLAYLIST,
   serviceMusicLabel,
   serviceMusicOptions,
 } from '../data/familyChapelPrefs';
@@ -33,6 +36,73 @@ import { CasketVessel } from './caskets/CasketVessel';
 import { ChapelNave, CHAPEL_ART_ASPECT } from './chapel/ChapelNave';
 
 const FLOWER_TYPES = ['LILIES', 'ROSES', 'WREATH'] as const;
+
+function ChapelMusicPicker({
+  choice,
+  requiredId,
+  onPick,
+}: {
+  choice: string;
+  requiredId?: string | null;
+  onPick: (id: string) => void;
+}) {
+  const chip = (on: boolean) =>
+    `px-2 py-1 rounded text-[11px] border ${
+      on
+        ? 'border-amber-400 bg-amber-900/50 text-amber-100'
+        : 'border-violet-700 bg-violet-950/60'
+    }`;
+  return (
+    <div className="space-y-1" data-chapel-music-picker>
+      <div className="text-[10px] uppercase tracking-wider text-amber-200">
+        {requiredId ? (
+          <>
+            Required music · {serviceMusicLabel(requiredId)}
+            <span className="ml-1 rounded bg-amber-400 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-950">
+              Non-negotiable
+            </span>
+          </>
+        ) : (
+          'Music'
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          data-chapel-music="none"
+          aria-pressed={choice === SERVICE_MUSIC_NONE}
+          onPointerDown={() => onPick(SERVICE_MUSIC_NONE)}
+          className={chip(choice === SERVICE_MUSIC_NONE)}
+        >
+          No music
+        </button>
+        <button
+          type="button"
+          data-chapel-music="playlist"
+          aria-pressed={choice === SERVICE_MUSIC_PLAYLIST}
+          onPointerDown={() => onPick(SERVICE_MUSIC_PLAYLIST)}
+          className={chip(choice === SERVICE_MUSIC_PLAYLIST)}
+        >
+          Playlist
+        </button>
+        {serviceMusicOptions().map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            data-chapel-music={t.id}
+            data-tutorial-target={requiredId === t.id ? 'chapel-music' : undefined}
+            aria-pressed={choice === t.id}
+            onPointerDown={() => onPick(t.id)}
+            className={chip(choice === t.id)}
+          >
+            {t.label}
+            {requiredId === t.id ? ' · required' : ''}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export const ShowroomAndChapelModal: React.FC = () => {
   const {
@@ -88,6 +158,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
   const [dragOverrides, setDragOverrides] = React.useState<
     Record<string, { x: number; y: number }>
   >({});
+  const [visitMusic, setVisitMusic] = React.useState<string>(SERVICE_MUSIC_NONE);
 
   const scoredPieces = useMemo(() => {
     if (!layout) return [];
@@ -164,34 +235,44 @@ export const ShowroomAndChapelModal: React.FC = () => {
 
   if (!currentCase) {
     return (
-      <div className="fixed inset-0 z-50 bg-violet-950/95 text-violet-50 flex flex-col items-center justify-center gap-4 p-6">
-        <p className="text-center max-w-md">
-          The chapel is empty. In the cooler, tap the bay, then Chapel. Décor
-          is in the Emporium.
-        </p>
-        <div className="flex flex-wrap justify-center gap-2">
-          <button
-            type="button"
-            onPointerDown={() => setActiveStation('EMPORIUM')}
-            className="px-4 py-2 bg-amber-600 text-stone-950 rounded font-semibold"
-          >
-            Open Emporium
-          </button>
-          <button
-            type="button"
-            onPointerDown={() => setActiveStation('COOLER')}
-            className="px-4 py-2 bg-cyan-700 rounded font-semibold"
-          >
-            Open Cooler
-          </button>
+      <div
+        data-chapel-empty
+        className="safe-screen fixed inset-0 z-50 bg-violet-950/95 text-violet-50 flex flex-col select-none overflow-auto"
+      >
+        <div className="flex justify-between items-start border-b border-violet-800 pb-3 gap-3">
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-violet-300">Chapel</h2>
+            <p className="text-[10px] text-violet-300/70 leading-snug">
+              No service is set.
+            </p>
+          </div>
           <button
             type="button"
             data-tutorial-target="back"
             onPointerDown={() => setActiveStation('OVERVIEW')}
-            className="px-4 py-2 bg-slate-800 rounded font-semibold"
+            className="px-3 py-2 bg-violet-900 rounded text-xs"
           >
-            Back to hub
+            Back
           </button>
+        </div>
+        <div className="flex-1 flex flex-col gap-3 mt-3 pb-4">
+          <div
+            className="relative w-full rounded-xl border-2 border-violet-700 overflow-hidden bg-[#c4a574] touch-none"
+            style={{ aspectRatio: String(CHAPEL_ART_ASPECT) }}
+            data-chapel-floor
+          >
+            <ChapelNave
+              floor="#1a1024"
+              drape="rgba(80,40,100,0.35)"
+              light="rgba(255,200,120,0.12)"
+              pew="#2a1830"
+              withMourners={false}
+            />
+          </div>
+          <ChapelMusicPicker
+            choice={chapelMusicChoice(visitMusic, false)}
+            onPick={setVisitMusic}
+          />
         </div>
       </div>
     );
@@ -447,54 +528,11 @@ export const ShowroomAndChapelModal: React.FC = () => {
           />
         )}
 
-        <div className="space-y-1">
-          <div className="text-[10px] uppercase tracking-wider text-amber-200">
-            Required music ·{' '}
-            {serviceMusicLabel(currentCase.familyChapelPrefs.musicTrackId)}
-            <span className="ml-1 rounded bg-amber-400 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-950">
-              Non-negotiable
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              onPointerDown={() =>
-                setChapelServiceMusic(currentCase.id, null)
-              }
-              className={`px-2 py-1 rounded text-[11px] border ${
-                !(layout?.serviceMusicId)
-                  ? 'border-amber-400 bg-amber-900/50 text-amber-100'
-                  : 'border-violet-700 bg-violet-950/60'
-              }`}
-            >
-              Playlist
-            </button>
-            {serviceMusicOptions().map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                data-tutorial-target={
-                  currentCase.familyChapelPrefs.musicTrackId === t.id
-                    ? 'chapel-music'
-                    : undefined
-                }
-                onPointerDown={() =>
-                  setChapelServiceMusic(currentCase.id, t.id)
-                }
-                className={`px-2 py-1 rounded text-[11px] border ${
-                  layout?.serviceMusicId === t.id
-                    ? 'border-amber-400 bg-amber-900/50 text-amber-100'
-                    : 'border-violet-700 bg-violet-950/60'
-                }`}
-              >
-                {t.label}
-                {currentCase.familyChapelPrefs.musicTrackId === t.id
-                  ? ' · required'
-                  : ''}
-              </button>
-            ))}
-          </div>
-        </div>
+        <ChapelMusicPicker
+          choice={chapelMusicChoice(layout?.serviceMusicId, serviceLive)}
+          requiredId={currentCase.familyChapelPrefs.musicTrackId}
+          onPick={(id) => setChapelServiceMusic(currentCase.id, id)}
+        />
 
         {chapelOwnedDecor.length === 0 && (
           <button

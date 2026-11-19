@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useGameStore } from '../store/useGameStore';
 import {
   caseStatusLabel,
@@ -14,6 +15,7 @@ import {
   permitStatusLabel,
 } from '../data/decedentVitals';
 import {
+  formatClock12,
   formatDateTime12,
   formatTimeOf,
   hour12Parts,
@@ -72,6 +74,22 @@ function addDays(ms: number, days: number): number {
   return ms + days * 86_400_000;
 }
 
+function slotAt(dayMs: number, hour24: number): number {
+  const d = new Date(dayMs);
+  d.setHours(hour24, 0, 0, 0);
+  return d.getTime();
+}
+
+function formatDateSet(ms: number): string {
+  const d = new Date(ms);
+  const day = d.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+  return `Date set: ${day}, ${formatClock12(d.getHours(), d.getMinutes())}`;
+}
+
 export const CaseInboxWidget: React.FC = () => {
   const {
     inboxFiles,
@@ -103,7 +121,13 @@ export const CaseInboxWidget: React.FC = () => {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [pickupOpen, setPickupOpen] = useState(false);
   const [pickHour, setPickHour] = useState(14);
-  const [scheduleNote, setScheduleNote] = useState<string | null>(null);
+  const [pickedDay, setPickedDay] = useState<number | null>(null);
+  const [dateToast, setDateToast] = useState<string | null>(null);
+  useEffect(() => {
+    if (!dateToast) return;
+    const id = window.setTimeout(() => setDateToast(null), 8000);
+    return () => window.clearTimeout(id);
+  }, [dateToast]);
   const activeStation = useGameStore((s) => s.activeStation);
   const stationRef = useRef(activeStation);
   useEffect(() => {
@@ -114,7 +138,8 @@ export const CaseInboxWidget: React.FC = () => {
     setArchivesOpen(false);
     setPickupOpen(false);
     setCalendarOpen(false);
-    setScheduleNote(null);
+    setPickedDay(null);
+    setDateToast(null);
   }, [activeStation]);
 
   useEffect(() => {
@@ -130,6 +155,8 @@ export const CaseInboxWidget: React.FC = () => {
       setIsOpen(false);
       setPickupOpen(false);
       setCalendarOpen(false);
+      setPickedDay(null);
+      setDateToast(null);
     };
     window.__ossuarianCloseFiles = close;
     return () => {
@@ -157,7 +184,8 @@ export const CaseInboxWidget: React.FC = () => {
     setArchivesOpen(false);
     setPickupOpen(false);
     setCalendarOpen(false);
-    setScheduleNote(null);
+    setPickedDay(null);
+    setDateToast(null);
   };
 
   const unreadCount = inboxFiles.filter((f) => !f.isRead).length;
@@ -176,6 +204,7 @@ export const CaseInboxWidget: React.FC = () => {
       return;
     }
     setPickupOpen(false);
+    setPickedDay(null);
     setCalendarOpen(true);
   };
 
@@ -194,19 +223,19 @@ export const CaseInboxWidget: React.FC = () => {
     return Array.from({ length: 14 }, (_, i) => addDays(today, i));
   }, [isOpen, calendarOpen]);
 
-  const confirmServiceDate = (dayMs: number) => {
-    if (!activeFile) return;
-    const d = new Date(dayMs);
-    d.setHours(pickHour, 0, 0, 0);
-    if (d.getTime() <= gameNow()) {
-      setScheduleNote(
-        'That hour has already passed. Pick a later time. Nothing was booked.'
-      );
-      return;
-    }
-    setScheduleNote(null);
-    setServiceDate(activeFile.id, d.getTime());
+  const pickedAt = pickedDay == null ? null : slotAt(pickedDay, pickHour);
+  const canSetDate = pickedAt != null && pickedAt > gameNow();
+
+  const selectServiceDay = (dayMs: number) => {
+    setPickedDay(dayMs);
+  };
+
+  const commitServiceDate = () => {
+    if (!activeFile || pickedAt == null || pickedAt <= gameNow()) return;
+    setServiceDate(activeFile.id, pickedAt);
+    setPickedDay(null);
     setCalendarOpen(false);
+    setDateToast(formatDateSet(pickedAt));
   };
 
   return (
@@ -623,7 +652,10 @@ export const CaseInboxWidget: React.FC = () => {
                       )}
                       <button
                         type="button"
-                        onClick={() => setCalendarOpen(true)}
+                        onClick={() => {
+                          setPickedDay(null);
+                          setCalendarOpen(true);
+                        }}
                         style={{ touchAction: 'manipulation' }}
                         className="w-full py-2 rounded bg-sky-800 active:bg-sky-700 font-semibold text-xs"
                       >
@@ -644,7 +676,6 @@ export const CaseInboxWidget: React.FC = () => {
                             aria-label="Service hour"
                             value={hour12Parts(pickHour).hour}
                             onChange={(e) => {
-                              setScheduleNote(null);
                               setPickHour(
                                 hour24From12(
                                   Number(e.target.value),
@@ -666,7 +697,6 @@ export const CaseInboxWidget: React.FC = () => {
                             aria-label="AM or PM"
                             value={hour12Parts(pickHour).meridiem}
                             onChange={(e) => {
-                              setScheduleNote(null);
                               setPickHour(
                                 hour24From12(
                                   hour12Parts(pickHour).hour,
@@ -681,12 +711,12 @@ export const CaseInboxWidget: React.FC = () => {
                           </select>
                         </label>
                       </div>
-                      {scheduleNote ? (
+                      {pickedAt != null && pickedAt <= gameNow() ? (
                         <p
                           data-schedule-note
                           className="mb-2 text-[11px] font-semibold leading-snug text-amber-200"
                         >
-                          {scheduleNote}
+                          That hour has already passed. Pick a later time.
                         </p>
                       ) : null}
                       <div className="grid grid-cols-4 gap-1.5">
@@ -695,15 +725,17 @@ export const CaseInboxWidget: React.FC = () => {
                             undefined,
                             { weekday: 'short', month: 'numeric', day: 'numeric' }
                           );
-                          const isToday = day === startOfDay(gameNow());
+                          const selected = day === pickedDay;
                           return (
                             <button
                               key={day}
                               type="button"
-                              onClick={() => confirmServiceDate(day)}
+                              data-schedule-day={day}
+                              aria-pressed={selected}
+                              onClick={() => selectServiceDay(day)}
                               style={{ touchAction: 'manipulation' }}
                               className={`py-2 rounded text-[10px] font-semibold ${
-                                isToday
+                                selected
                                   ? 'bg-amber-500 text-slate-950'
                                   : 'bg-slate-800 active:bg-slate-700'
                               }`}
@@ -715,7 +747,24 @@ export const CaseInboxWidget: React.FC = () => {
                       </div>
                       <button
                         type="button"
-                        onClick={() => setCalendarOpen(false)}
+                        data-set-date
+                        disabled={!canSetDate}
+                        onClick={commitServiceDate}
+                        style={{ touchAction: 'manipulation' }}
+                        className={`mt-2 w-full rounded py-2.5 text-sm font-bold ${
+                          canSetDate
+                            ? 'bg-sky-600 text-white active:bg-sky-500'
+                            : 'bg-slate-800 text-slate-500'
+                        }`}
+                      >
+                        Set date
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCalendarOpen(false);
+                          setPickedDay(null);
+                        }}
                         style={{ touchAction: 'manipulation' }}
                         className="mt-2 text-[10px] text-slate-500 underline"
                       >
@@ -747,6 +796,21 @@ export const CaseInboxWidget: React.FC = () => {
           onClose={() => setArchivesOpen(false)}
         />
       )}
+      {dateToast
+        ? createPortal(
+            <div
+              data-schedule-toast
+              role="status"
+              className="pointer-events-none fixed inset-x-0 z-[80] flex justify-center px-3"
+              style={{ bottom: 'calc(var(--safe-bottom, 0px) + 5.5rem)' }}
+            >
+              <p className="w-full max-w-md rounded-xl border border-amber-300 bg-[#1c140c]/95 px-3 py-3 text-center text-[13px] font-semibold leading-snug text-amber-50 shadow-xl">
+                {dateToast}
+              </p>
+            </div>,
+            document.body
+          )
+        : null}
     </>
   );
 };
