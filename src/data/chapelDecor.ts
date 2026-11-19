@@ -360,7 +360,7 @@ export function defaultChapelLayout(
         id: 'focal',
         kind: isCremationDisplay ? 'URN' : 'COFFIN',
         x: 0.5,
-        y: 0.42,
+        y: 0.66,
       },
     ],
     serviceMusicId: null,

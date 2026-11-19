@@ -31,7 +31,7 @@ import { directiveLabel, friendlyToken } from '../types/game';
 import { ChapelMourners } from './ChapelMourners';
 import { UrnVessel } from './urns/UrnVessel';
 import { CasketVessel } from './caskets/CasketVessel';
-import { ChapelNave } from './chapel/ChapelNave';
+import { ChapelNave, CHAPEL_ART_ASPECT } from './chapel/ChapelNave';
 
 const FLOWER_TYPES = ['LILIES', 'ROSES', 'WREATH'] as const;
 
@@ -73,6 +73,15 @@ export const ShowroomAndChapelModal: React.FC = () => {
   }, [currentCase, ensureChapelLayout]);
 
   const layout = currentCase ? chapelLayouts[currentCase.id] : undefined;
+
+  useEffect(() => {
+    if (!currentCase || !layout) return;
+    const focal = layout.pieces.find((piece) => piece.id === 'focal' && piece.kind === 'COFFIN');
+    // The stopgap room parked the casket on the altar (y around 0.42).
+    if (focal && focal.y < 0.5) {
+      moveChapelPiece(currentCase.id, focal.id, 0.5, 0.66);
+    }
+  }, [currentCase, layout, moveChapelPiece]);
   /** Live drag overrides — score uses these; store persists only on release. */
   const [dragOverrides, setDragOverrides] = React.useState<
     Record<string, { x: number; y: number }>
@@ -203,7 +212,6 @@ export const ShowroomAndChapelModal: React.FC = () => {
     offeredCasket != null &&
     offeredCasket.material === currentCase.preferredCasketMaterial;
 
-  const wall = getChapelDecorById(layout?.theme.wallId ?? '');
   const floor = getChapelDecorById(layout?.theme.floorId ?? '');
   const drapery = getChapelDecorById(layout?.theme.draperyId ?? '');
   const lighting = getChapelDecorById(layout?.theme.lightingId ?? '');
@@ -212,8 +220,6 @@ export const ShowroomAndChapelModal: React.FC = () => {
     layout?.theme.urnPedestalId ?? ''
   );
 
-  const wallGrad =
-    wall?.style?.wall ?? 'from-violet-900 via-violet-950 to-[#12081a]';
   const floorColor = floor?.style?.floor ?? '#1a1024';
   const drapeColor = drapery?.style?.drapery ?? 'rgba(80,40,100,0.35)';
   const lightColor = lighting?.style?.lighting ?? 'rgba(255,200,120,0.12)';
@@ -278,7 +284,8 @@ export const ShowroomAndChapelModal: React.FC = () => {
         <FamilyPreferenceCard prefs={currentCase.familyChapelPrefs} />
         {/* Floor */}
         <div
-          className={`relative h-72 rounded-xl border-2 border-violet-700 overflow-hidden bg-gradient-to-b ${wallGrad} touch-none shadow-[inset_0_18px_40px_rgba(0,0,0,0.45)]`}
+          className="relative w-full rounded-xl border-2 border-violet-700 overflow-hidden bg-[#c4a574] touch-none"
+          style={{ aspectRatio: String(CHAPEL_ART_ASPECT) }}
           data-chapel-floor
           data-chapel-service={serviceLive ? '1' : undefined}
         >
@@ -295,7 +302,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
             pew={pewColor}
           />
 
-          <ChapelMourners active={viewingService} />
+          <ChapelMourners active={viewingService} aisleViewer={!serviceLive} />
 
           {layout?.pieces.map((piece) => {
             const override = dragOverrides[piece.id];
@@ -871,7 +878,11 @@ function DraggablePiece({
       onPointerUp={finishDrag}
       onPointerCancel={finishDrag}
       className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing touch-none z-10"
-      style={{ left: `${piece.x * 100}%`, top: `${piece.y * 100}%` }}
+      style={{
+        left: `${piece.x * 100}%`,
+        top: `${piece.y * 100}%`,
+        width: piece.kind === 'COFFIN' ? '20%' : undefined,
+      }}
     >
       {piece.kind === 'COFFIN' && (
         <div className="relative">
@@ -881,12 +892,12 @@ function DraggablePiece({
               size="md"
               showPlaque={false}
               chapel
-              className="w-[18rem]"
+              className="w-full"
             />
           ) : (
             <CasketVessel
               chapel
-              className="w-[18rem]"
+              className="w-full"
               casket={{
                 id: 'bier',
                 name: 'Bier',

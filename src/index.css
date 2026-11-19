@@ -246,13 +246,13 @@ canvas {
 }
 
 @keyframes chapel-mourner-breathe {
-  /* Faint cream, still readable in the pews. */
+  /* Dark enough to read on the wood. They still settle. */
   0%,
   100% {
-    opacity: 0.34;
+    opacity: 0.88;
   }
   50% {
-    opacity: 0.5;
+    opacity: 1;
   }
 }
 
@@ -275,7 +275,7 @@ canvas {
 }
 
 .chapel-mourner-core svg {
-  filter: url(#chapel-mourner-ghost) blur(0.7px);
+  filter: none;
 }
 
 .chapel-mourner-head {
@@ -1240,7 +1240,7 @@ canvas {
   .hub-spirit[data-placed='1'] { opacity: var(--a, 0.55); }
   .hub-spirit:not([data-placed='1']) { opacity: 0; }
   .hub-atmo-debt { opacity: 0.7; }
-  .chapel-mourner { opacity: 0.4; }
+  .chapel-mourner { opacity: 0.92; }
   .chapel-mourner-head { animation: none; }
   .chapel-service-glow,
   .hub-chapel-live-glow { opacity: 0.85; }

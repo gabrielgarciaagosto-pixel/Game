@@ -7,9 +7,14 @@ interface MournerSpec {
   pose: Pose;
   /** Normalized x within the chapel floor */
   x: number;
-  /** Feet line. Keep them in the pews, clear of the bier. */
+  /**
+   * Bottom of the figure. Seated busts rest on the pew-back rail.
+   * The standing viewer’s feet are in the aisle.
+   */
   y: number;
-  scale: number;
+  /** Width as a percent of the floor width. Height as a percent of the floor height. */
+  w: number;
+  h: number;
   /** Own clocks so the room does not breathe as one. */
   breathe: number;
   breatheDelay: number;
@@ -23,16 +28,19 @@ interface MournerSpec {
   headDelay: number;
 }
 
+/**
+ * Seated mourners are head and shoulders only, bottomed on the pew-back
+ * rail, so the body does not paint over the pew. Sizes grow with the row
+ * the way the pews do. The viewer stands in the aisle and leaves for the service.
+ */
 const PEW_MOURNERS: MournerSpec[] = [
-  { id: 'bow-l', pose: 'seat-bow', x: 0.15, y: 0.7, scale: 0.94, breathe: 5.4, breatheDelay: 0.2, settle: 7.2, settleDelay: 0.5, drift: 1.1, lean: 1.2, turn: 4, head: 8.8, headDelay: 1.2 },
-  { id: 'talk-l', pose: 'seat-talk', x: 0.27, y: 0.73, scale: 1, breathe: 6.3, breatheDelay: 1.8, settle: 8.6, settleDelay: 1.1, drift: -1.3, lean: 1.5, turn: 6, head: 7.1, headDelay: 0.4 },
-  { id: 'talk-l2', pose: 'seat-talk', x: 0.37, y: 0.69, scale: 0.88, breathe: 4.9, breatheDelay: 0.7, settle: 9.4, settleDelay: 2.4, drift: 1.4, lean: -1.3, turn: -5, head: 8.2, headDelay: 1.7 },
-  { id: 'pair', pose: 'pair', x: 0.22, y: 0.86, scale: 1.02, breathe: 6.8, breatheDelay: 2.6, settle: 10.2, settleDelay: 0.3, drift: 0.8, lean: 1.1, turn: -6, head: 9.6, headDelay: 2.2 },
-  { id: 'veil', pose: 'veil', x: 0.34, y: 0.84, scale: 0.9, breathe: 5.7, breatheDelay: 1.3, settle: 7.8, settleDelay: 1.9, drift: -1, lean: 1.6, turn: 3, head: 6.6, headDelay: 0.8 },
-  { id: 'aisle', pose: 'stand', x: 0.5, y: 0.78, scale: 0.98, breathe: 7.1, breatheDelay: 0.4, settle: 8.1, settleDelay: 2.8, drift: 1.2, lean: 1.8, turn: 4, head: 7.8, headDelay: 1.5 },
-  { id: 'bow-r', pose: 'seat-bow', x: 0.64, y: 0.71, scale: 0.92, breathe: 5.1, breatheDelay: 2.2, settle: 6.7, settleDelay: 0.8, drift: -1.2, lean: -1.4, turn: -4, head: 9.1, headDelay: 0.2 },
-  { id: 'talk-r', pose: 'seat-talk', x: 0.76, y: 0.74, scale: 0.9, breathe: 6.6, breatheDelay: 0.9, settle: 9.1, settleDelay: 1.6, drift: 1, lean: 1.3, turn: -6, head: 7.5, headDelay: 2.6 },
-  { id: 'stand-r', pose: 'stand', x: 0.86, y: 0.67, scale: 0.84, breathe: 4.6, breatheDelay: 1.5, settle: 8.4, settleDelay: 0.2, drift: -0.9, lean: -1.7, turn: 5, head: 6.9, headDelay: 1.1 },
+  { id: 'back-l', pose: 'seat-bow', x: 0.30, y: 0.602, w: 2.5, h: 4.2, breathe: 5.4, breatheDelay: 0.2, settle: 7.2, settleDelay: 0.5, drift: 0.4, lean: 0.6, turn: 3, head: 8.8, headDelay: 1.2 },
+  { id: 'mid-l', pose: 'seat-talk', x: 0.15, y: 0.608, w: 3.1, h: 5.5, breathe: 6.3, breatheDelay: 1.8, settle: 8.6, settleDelay: 1.1, drift: -0.5, lean: 0.8, turn: 4, head: 7.1, headDelay: 0.4 },
+  { id: 'front-l', pose: 'veil', x: 0.09, y: 0.70, w: 3.7, h: 6.6, breathe: 5.7, breatheDelay: 1.3, settle: 7.8, settleDelay: 1.9, drift: 0.4, lean: 0.7, turn: 3, head: 6.6, headDelay: 0.8 },
+  { id: 'viewer', pose: 'stand', x: 0.375, y: 0.86, w: 4.2, h: 28, breathe: 7.1, breatheDelay: 0.4, settle: 8.1, settleDelay: 2.8, drift: 0.6, lean: 0.8, turn: 2, head: 7.8, headDelay: 1.5 },
+  { id: 'back-r', pose: 'seat-bow', x: 0.70, y: 0.602, w: 2.5, h: 4.2, breathe: 5.1, breatheDelay: 2.2, settle: 6.7, settleDelay: 0.8, drift: -0.4, lean: -0.6, turn: -3, head: 9.1, headDelay: 0.2 },
+  { id: 'mid-r', pose: 'seat-talk', x: 0.85, y: 0.608, w: 3.1, h: 5.5, breathe: 6.6, breatheDelay: 0.9, settle: 9.1, settleDelay: 1.6, drift: 0.5, lean: 0.7, turn: -4, head: 7.5, headDelay: 2.6 },
+  { id: 'front-r', pose: 'veil', x: 0.91, y: 0.70, w: 3.7, h: 6.6, breathe: 4.6, breatheDelay: 1.5, settle: 8.4, settleDelay: 0.2, drift: -0.4, lean: -0.7, turn: 3, head: 6.9, headDelay: 1.1 },
 ];
 
 function Head({ cx, cy, rx, ry }: { cx: number; cy: number; rx: number; ry: number }) {
@@ -43,43 +51,23 @@ function Head({ cx, cy, rx, ry }: { cx: number; cy: number; rx: number; ry: numb
   );
 }
 
+function Bust({ lean }: { lean?: number }) {
+  return (
+    <svg viewBox="0 0 40 34" className="h-full w-full" aria-hidden>
+      <path fill="currentColor" d="M4 34c1-9 7-15 16-15s15 6 16 15z" />
+      <ellipse cx={20 + (lean ?? 0)} cy={13} rx={7.4} ry={8.2} fill="currentColor" />
+    </svg>
+  );
+}
+
 function MournerPose({ pose }: { pose: Pose }) {
-  if (pose === 'seat-bow') {
-    return (
-      <svg viewBox="0 0 48 62" className="h-full w-full" aria-hidden>
-        <Head cx={24} cy={14} rx={6.6} ry={7.4} />
-        <path
-          fill="currentColor"
-          d="M15 26c1-4 6-6 10-5 5 1 8 4 9 8 2 7 3 15 1 23-8 5-20 5-28 0 0-9 2-19 8-26z"
-        />
-        <path fill="currentColor" d="M16 32c-7 2-10 8-8 13 3-2 7-3 9-2z" />
-      </svg>
-    );
-  }
-  if (pose === 'seat-talk') {
-    return (
-      <svg viewBox="0 0 48 62" className="h-full w-full" aria-hidden>
-        <path
-          fill="currentColor"
-          d="M13 29c2-5 8-7 13-5 4 2 7 6 8 11 2 8 1 16-1 21-8 5-19 4-26-1 1-8 2-19 6-26z"
-        />
-        <path fill="currentColor" d="M15 35c-6 3-8 9-5 13 3-2 6-3 8-2z" />
-        <Head cx={28} cy={15} rx={6.5} ry={7.5} />
-      </svg>
-    );
-  }
+  if (pose === 'seat-bow') return <Bust lean={-1} />;
+  if (pose === 'seat-talk') return <Bust lean={2} />;
   if (pose === 'veil') {
     return (
-      <svg viewBox="0 0 46 64" className="h-full w-full" aria-hidden>
-        <path
-          fill="currentColor"
-          d="M14 18c2-8 16-9 20-2 2 4 2 10 0 16-1 2-8 1-10 0-2 1-9 2-10 0 0-5 0-10 0-14z"
-        />
-        <Head cx={23} cy={16} rx={6.2} ry={7} />
-        <path
-          fill="currentColor"
-          d="M12 32c2-4 8-6 12-5s9 3 11 7c2 8 3 16 1 22-8 4-18 4-26 0 1-8 1-16 2-24z"
-        />
+      <svg viewBox="0 0 40 34" className="h-full w-full" aria-hidden>
+        <path fill="currentColor" d="M5 34c1-8 7-14 15-14s14 6 15 14z" />
+        <path fill="currentColor" d="M10 16c1-8 18-9 21-1 1 3 0 8-2 11-6 1-12 1-17 0-1-3-2-7-2-10z" />
       </svg>
     );
   }
@@ -113,20 +101,15 @@ function MournerPose({ pose }: { pose: Pose }) {
   );
 }
 
-function sizeFor(pose: Pose, scale: number): { w: number; h: number } {
-  if (pose === 'stand') return { w: 26 * scale, h: 56 * scale };
-  if (pose === 'pair') return { w: 46 * scale, h: 40 * scale };
-  if (pose === 'veil') return { w: 28 * scale, h: 46 * scale };
-  return { w: 30 * scale, h: 44 * scale };
-}
-
 /**
  * Ghostly mourners during a viewing.
  * Pointers pass through. They are not chapel layout pieces.
  */
 export const ChapelMourners: React.FC<{
   active: boolean;
-}> = ({ active }) => {
+  /** A viewing may keep one person standing in the aisle. A service does not. */
+  aisleViewer?: boolean;
+}> = ({ active, aisleViewer = false }) => {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -141,7 +124,7 @@ export const ChapelMourners: React.FC<{
 
   return (
     <div
-      className="chapel-mourners absolute inset-0 pointer-events-none z-[1] overflow-hidden"
+      className="chapel-mourners absolute inset-0 pointer-events-none overflow-hidden"
       aria-hidden
       data-chapel-mourners
       style={{
@@ -149,24 +132,16 @@ export const ChapelMourners: React.FC<{
         transition: 'opacity 1.1s ease',
       }}
     >
-      <svg width="0" height="0" className="absolute" aria-hidden>
-        <filter id="chapel-mourner-ghost" x="-40%" y="-40%" width="180%" height="180%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" seed="3" result="noise" />
-          <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.4" xChannelSelector="R" yChannelSelector="G" result="warp" />
-          <feGaussianBlur in="warp" stdDeviation="0.55" />
-        </filter>
-      </svg>
-      {PEW_MOURNERS.map((m) => {
-        const size = sizeFor(m.pose, m.scale);
+      {PEW_MOURNERS.filter((m) => m.id !== 'viewer' || aisleViewer).map((m) => {
         return (
           <div
             key={m.id}
-            className="chapel-mourner absolute text-[#f3e6c8]"
+            className="chapel-mourner absolute text-[#2a1c14]"
             style={{
               left: `${m.x * 100}%`,
               top: `${m.y * 100}%`,
-              width: `${size.w}px`,
-              height: `${size.h}px`,
+              width: `${m.w}%`,
+              height: `${m.h}%`,
               ['--breathe-dur' as string]: `${m.breathe}s`,
               ['--breathe-delay' as string]: `${m.breatheDelay}s`,
               ['--settle-dur' as string]: `${m.settle}s`,
@@ -176,6 +151,7 @@ export const ChapelMourners: React.FC<{
               ['--drift' as string]: `${m.drift}px`,
               ['--lean' as string]: `${m.lean}deg`,
               ['--turn' as string]: `${m.turn}deg`,
+              zIndex: m.id === 'viewer' ? 20 : 1,
             }}
           >
             <div className="chapel-mourner-settle">
