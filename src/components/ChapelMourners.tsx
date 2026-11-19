@@ -49,12 +49,12 @@ const PEW_MOURNERS: MournerSpec[] = [
   { id: 'near-l2', x: 0.15, y: 0.722, h: 9.8, hair: 'silver', coat: '#221812', skin: '#efd0b0', breathe: 6.8, breatheDelay: 0.2, settle: 8.6, settleDelay: 1.1, drift: -0.3, lean: -0.4, turn: -2, head: 7.0, headDelay: 0.8 },
   { id: 'near-r1', x: 0.85, y: 0.722, h: 9.4, hair: 'bun', coat: '#16120e', skin: '#e2be9c', breathe: 5.9, breatheDelay: 2.4, settle: 7.5, settleDelay: 0.6, drift: 0.3, lean: 0.5, turn: 3, head: 9.2, headDelay: 1.8 },
   { id: 'near-r2', x: 0.925, y: 0.730, h: 8.4, hair: 'wave', coat: '#1a1620', skin: '#c47d58', breathe: 6.3, breatheDelay: 1.0, settle: 8.8, settleDelay: 1.7, drift: -0.4, lean: -0.6, turn: -2, head: 7.3, headDelay: 0.5 },
-  // Beside the casket, viewing only. Tall enough that the casket box meets the waist.
-  { id: 'viewer', x: 0.385, y: 0.615, h: 20, hair: 'crop', coat: '#14110e', skin: '#e6c4a4', stand: true, breathe: 7.0, breatheDelay: 0.3, settle: 8.2, settleDelay: 1.4, drift: 0.4, lean: 0.4, turn: 1.5, head: 8.0, headDelay: 0.9 },
+  // Left end of the casket, shoes on the bier-wheel line, belt at the casket top. Faces the casket.
+  { id: 'viewer', x: 0.422, y: 0.64, h: 26.6, hair: 'crop', coat: '#14110e', skin: '#e6c4a4', stand: true, breathe: 7.0, breatheDelay: 0.3, settle: 8.2, settleDelay: 1.4, drift: 0.2, lean: 0.2, turn: 0, head: 8.0, headDelay: 0.9 },
 ];
 
 function widthFor(h: number, stand: boolean): number {
-  const pixelAspect = stand ? 0.46 : 1.12;
+  const pixelAspect = stand ? 64 / 160 : 1.12;
   return (h * pixelAspect) / FLOOR_ASPECT;
 }
 
@@ -112,27 +112,31 @@ function Bust({ m }: { m: MournerSpec }) {
 
 function Standing({ m }: { m: MournerSpec }) {
   return (
-    <svg viewBox="0 0 80 188" className="h-full w-full overflow-visible" aria-hidden>
-      <ellipse cx="40" cy="182" rx="18" ry="3.4" fill="#1a120c" opacity="0.3" />
-      <path d="M28 118h9l-1 50h-11z" fill="#1c1814" stroke="#1a120c" strokeWidth="1.5" />
-      <path d="M43 118h9l3 50h-11z" fill="#161310" stroke="#1a120c" strokeWidth="1.5" />
-      <path d="M25 164h14l-1 12H22z" fill="#12100e" />
-      <path d="M43 164h14l4 12H44z" fill="#12100e" />
+    <svg viewBox="0 0 64 160" className="h-full w-full overflow-visible" aria-hidden>
+      <ellipse cx="32" cy="157" rx="12" ry="2.2" fill="#1a120c" opacity="0.32" />
+      <path d="M24 84h7l1 62H22z" fill="#1c1814" stroke="#1a120c" strokeWidth="1.3" />
+      <path d="M34 84h7l1 62H33z" fill="#161310" stroke="#1a120c" strokeWidth="1.3" />
+      <path d="M20 142h12l1 18H18z" fill="#12100e" />
+      <path d="M33 142h12l3 18H31z" fill="#12100e" />
       <path
-        d="M20 62c-2 14-1 34 2 50 2 8 7 12 14 13h8c7-1 12-5 14-13 3-16 4-36 2-50-5 5-12 7-20 7s-15-2-20-7z"
+        d="M14 40c0 14 3 28 8 42h20c5-14 8-28 8-42-4 5-10 7-18 7s-14-2-18-7z"
         fill={m.coat}
         stroke="#1a120c"
-        strokeWidth="1.6"
+        strokeWidth="1.4"
         strokeLinejoin="round"
       />
-      <path d="M34 70c2 10 3 16 6 20 3-4 4-10 6-20-3 2-9 2-12 0z" fill="#f4efe4" />
-      <path d="M16 78c-7 4-9 18-6 30 5-3 9-10 10-16 1-7-1-12-4-14z" fill={m.coat} stroke="#1a120c" strokeWidth="1.3" />
-      <path d="M64 78c7 4 9 18 6 30-5-3-9-10-10-16-1-7 1-12 4-14z" fill={m.coat} stroke="#1a120c" strokeWidth="1.3" />
-      <rect x="35" y="52" width="10" height="14" rx="2" fill={m.skin} />
-      <g transform="translate(8 10)">
-        <HairBack hair={m.hair} />
-        <Face skin={m.skin} />
-      </g>
+      <rect x="16" y="76" width="32" height="6" rx="1" fill="#3a2e24" stroke="#1a120c" strokeWidth="1" />
+      <path d="M27 42c2 8 3 12 5 15 2-3 3-7 5-15-2.5 2-7.5 2-10 0z" fill="#f4efe4" />
+      <path d="M12 48c-2 3-3 14-1 28 3-2 4-10 4-16 0-6-1-10-3-12z" fill={m.coat} stroke="#1a120c" strokeWidth="1.1" />
+      <path d="M52 48c2 3 3 14 1 28-3-2-4-10-4-16 0-6 1-10 3-12z" fill={m.coat} stroke="#1a120c" strokeWidth="1.1" />
+      <rect x="28" y="32" width="8" height="12" rx="2" fill={m.skin} />
+      <path d="M14 22c1-12 8-16 16-16 6 0 12 3 14 10-8 2-16 1-22-1-3 2-6 5-8 7z" fill="#1a120e" />
+      <ellipse cx="34" cy="22" rx="10" ry="11" fill={m.skin} stroke="#3a2418" strokeWidth="1" />
+      <path d="M22 14c2-8 8-12 16-10 5 1 8 4 9 8-8 1-16 0-22 1-1 0-2 1-3 1z" fill="#1a120e" />
+      <circle cx="32" cy="21" r="1.15" fill="#2a1c14" />
+      <circle cx="39" cy="20.5" r="1.15" fill="#2a1c14" />
+      <path d="M38 24l4.5 2-4.5 1.2" fill={m.skin} stroke="#7a4a3a" strokeWidth="0.8" strokeLinejoin="round" />
+      <path d="M33 28.5c1.8 1 3.4 1 5.2 0" stroke="#7a4a3a" strokeWidth="0.9" fill="none" strokeLinecap="round" />
     </svg>
   );
 }
