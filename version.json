@@ -1,6 +1,6 @@
 {
-  "versionName": "0.9.77-demo",
-  "versionCode": 95,
-  "apkUrl": "https://github.com/gabrielgarciaagosto-pixel/Game/raw/52127b3298f9a8c3dde3ad96f4326c3611e2c443/demo/Ossuarian-FirstUrn-v0.9.77-demo.apk",
-  "notes": "Gatherings use Gabriel's seated chapel painting."
+  "versionName": "0.9.78-demo",
+  "versionCode": 96,
+  "apkUrl": "https://github.com/gabrielgarciaagosto-pixel/Game/raw/57328c310751d0fdcf0dbb18b6b6b49f6745a2ac/demo/Ossuarian-FirstUrn-v0.9.78-demo.apk",
+  "notes": "Shop purchases leave a note, and the phone asks before it notifies you."
 }
