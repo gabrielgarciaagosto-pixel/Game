@@ -32,6 +32,7 @@ import { ChapelMourners } from './ChapelMourners';
 import { UrnVessel } from './urns/UrnVessel';
 import { CasketVessel } from './caskets/CasketVessel';
 import { ChapelNave, CHAPEL_ART_ASPECT } from './chapel/ChapelNave';
+import { ChapelPewEnds } from './chapel/ChapelPewEnds';
 
 const FLOWER_TYPES = ['LILIES', 'ROSES', 'WREATH'] as const;
 
@@ -306,6 +307,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
           />
 
           <ChapelMourners active={viewingService} />
+          <ChapelPewEnds />
 
           {layout?.pieces.map((piece) => {
             const override = dragOverrides[piece.id];
