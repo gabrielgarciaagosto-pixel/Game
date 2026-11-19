@@ -28,7 +28,6 @@ import {
 import { caseUsesUrnStand } from '../data/familyUrnPick';
 import { FamilyPreferenceCard } from './FamilyPreferenceCard';
 import { directiveLabel, friendlyToken } from '../types/game';
-import { ChapelMourners } from './ChapelMourners';
 import { UrnVessel } from './urns/UrnVessel';
 import { CasketVessel } from './caskets/CasketVessel';
 import { ChapelNave, CHAPEL_ART_ASPECT } from './chapel/ChapelNave';
@@ -303,9 +302,8 @@ export const ShowroomAndChapelModal: React.FC = () => {
             drape={drapeColor}
             light={lightColor}
             pew={pewColor}
+            withMourners={viewingService}
           />
-
-          <ChapelMourners active={viewingService} />
 
           {layout?.pieces.map((piece) => {
             const override = dragOverrides[piece.id];
