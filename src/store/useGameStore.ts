@@ -22,10 +22,15 @@ export type LastCaseNote = {
   at: number;
 };
 import {
+  BURN_TICK_MS,
   IDLE_RETORT,
   type RetortMachine,
 } from '../retort/retortTypes';
-import { stepRetortBurn, stepRetortDoor } from '../retort/tickRetort';
+import {
+  advanceRetortBy,
+  steadyBurnRate,
+  stepRetortDoor,
+} from '../retort/tickRetort';
 import {
   alignBays,
   alignMachines,
@@ -252,7 +257,7 @@ export const INTAKE_MAX_MS = 8 * 3_600_000;
 export const SLOW_INTAKE_MIN_MS = 8 * 3_600_000;
 export const SLOW_INTAKE_MAX_MS = 12 * 3_600_000;
 /** Decay points per second outside cooler when not embalmed/cremated */
-const DECAY_PER_SEC = 0.35;
+export const DECAY_PER_SEC = 0.35;
 
 interface GameState {
   hasStartedGame: boolean;
@@ -314,6 +319,16 @@ interface GameState {
   intakeToast: string | null;
   /** System notices for arrivals and family vessel choices. Off until the player allows them. */
   notificationsEnabled: boolean;
+  /**
+   * True after the phone-notices sheet has been answered.
+   * Older saves omit it, so a finished tutorial is asked on the next launch.
+   */
+  notificationPromptSeen: boolean;
+  /**
+   * gameNow() of the last decay step.
+   * Null on an older save, so the first tick does not invent decay for an unknown gap.
+   */
+  decaySimulatedAt: number | null;
   showroomInventory: ShowroomItem[];
   /** Owned counts keyed by urn catalog id */
   urnInventory: Record<string, number>;
@@ -370,11 +385,10 @@ interface GameState {
   financeLedger: FinanceLedgerEntry[];
   /**
    * gameNow() when cash first went negative; null when cash >= 0.
-   * The foreclosure race itself is overdraftAccruedMs, which only grows
-   * while the parlor is open.
+   * Foreclosure counts wall time from this stamp, including while the house is closed.
    */
   negativeCashSinceMs: number | null;
-  /** Open-parlor milliseconds spent overdrawn this stretch. */
+  /** Wall milliseconds spent overdrawn this stretch. Mirrors now - negativeCashSinceMs. */
   overdraftAccruedMs: number;
   /** True after the day-scale bank warning toast for this debt stretch */
   bankWarningIssued: boolean;
@@ -606,6 +620,7 @@ interface GameState {
   clearLegalAlert: () => void;
   clearServiceFeedback: () => void;
   setNotificationsEnabled: (enabled: boolean) => void;
+  markNotificationPromptSeen: () => void;
   damageCremulator: () => void;
   buyReplacementCremulator: () => boolean;
   coolerCapacity: () => number;
@@ -969,9 +984,13 @@ function normalizeCase(c: DecedentCase): DecedentCase {
     offeredCasketId: c.offeredCasketId ?? null,
     familyRequestedUrnId: c.familyRequestedUrnId ?? null,
     familyRequestedCasketId: c.familyRequestedCasketId ?? null,
-    familyUrnDueAt:
-      c.familyUrnDueAt ??
-      (vesselPending ? rollFamilyUrnDueAt(arrivedAt) : null),
+    familyUrnDueAt: !vesselPending
+      ? null
+      : typeof c.familyUrnDueAt === 'number'
+        ? c.familyUrnDueAt
+        : typeof c.familyUrnRemainingMs === 'number'
+          ? gameNow() + Math.max(0, c.familyUrnRemainingMs)
+          : rollFamilyUrnDueAt(arrivedAt),
     familyUrnRemainingMs: !vesselPending
       ? null
       : typeof c.familyUrnRemainingMs === 'number'
@@ -1206,6 +1225,8 @@ export function freshPersistedGameFields() {
     fleetAssignment: { ...EMPTY_FLEET_ASSIGNMENT },
     intermentScore: 0,
     notificationsEnabled: false,
+    notificationPromptSeen: false,
+    decaySimulatedAt: null as number | null,
     lastCase: null as LastCaseNote | null,
     newsWire: [] as NewsWireItem[],
     newsNextLiveAt: 0,
@@ -1536,13 +1557,18 @@ function admitQueuedCase(
 function stepOneRetort(
   machine: RetortMachine,
   cases: DecedentCase[],
-  speed: number
+  speed: number,
+  now: number
 ): RetortMachine {
+  const stamp = (next: RetortMachine): RetortMachine =>
+    next.burnSimulatedAt === now ? next : { ...next, burnSimulatedAt: now };
   const cremationCase = cases.find(
     (c) => c.id === machine.caseId && c.location === 'CREMATION'
   );
-  if (!cremationCase && machine.phase !== 'IDLE') return { ...IDLE_RETORT };
-  if (machine.phase === 'IDLE' || machine.phase === 'DONE') return machine;
+  if (!cremationCase && machine.phase !== 'IDLE') {
+    return { ...IDLE_RETORT, burnSimulatedAt: now };
+  }
+  if (machine.phase === 'IDLE' || machine.phase === 'DONE') return stamp(machine);
   if (
     !machine.blowerOn &&
     !machine.secondaryOn &&
@@ -1550,22 +1576,30 @@ function stepOneRetort(
     !machine.purging &&
     machine.phase !== 'BURN'
   ) {
-    return machine;
+    return stamp(machine);
   }
-  if (!cremationCase) return machine;
+  if (!cremationCase) return stamp(machine);
   const targets = getCremationTargets(cremationCase.weightLbs);
+  const since = machine.burnSimulatedAt;
+  const dt = since == null ? BURN_TICK_MS : Math.max(0, now - since);
   const progress = Math.min(1, machine.elapsedSec / targets.targetDurationSec);
-  let next = stepRetortBurn(machine, targets.getMaxSafeTempF(progress));
+  const before = machine.elapsedSec;
+  let next = advanceRetortBy(
+    machine,
+    dt,
+    targets.getMaxSafeTempF(progress),
+    now
+  );
   if (
     speed > 1 &&
     next.phase === 'BURN' &&
     next.primaryOn &&
-    next.elapsedSec > machine.elapsedSec
+    next.elapsedSec > before
   ) {
-    const delta = next.elapsedSec - machine.elapsedSec;
-    next = { ...next, elapsedSec: machine.elapsedSec + delta * speed };
+    const delta = next.elapsedSec - before;
+    next = { ...next, elapsedSec: before + delta * speed };
   }
-  return next;
+  return { ...next, burnSimulatedAt: now };
 }
 
 function tutorialGateOf(state: GameState) {
@@ -1794,29 +1828,8 @@ export const useGameStore = create<GameState>()(
     }),
   noteParlorHidden: () => set({ parlorHiddenAt: gameNow() }),
   noteParlorShown: () => {
-    const state = get();
-    const hidden = state.parlorHiddenAt;
-    if (hidden == null) return;
-    const gap = Math.max(0, gameNow() - hidden);
+    if (get().parlorHiddenAt == null) return;
     set({ parlorHiddenAt: null });
-    if (gap < 2000) return;
-    // Family choices and permits live on the real clock. The toe tag,
-    // decay, and the retort do not: those stay foreground races.
-    set({
-      cases: state.cases.map((c) => {
-        if (c.familyUrnRemainingMs == null) return c;
-        return {
-          ...c,
-          familyUrnRemainingMs: Math.max(0, c.familyUrnRemainingMs - gap),
-        };
-      }),
-      permitSubmissions: state.permitSubmissions.map((sub) => {
-        if (sub.status !== 'PENDING' || typeof sub.remainingMs !== 'number') {
-          return sub;
-        }
-        return { ...sub, remainingMs: Math.max(0, sub.remainingMs - gap) };
-      }),
-    });
   },
   keepLegendarySpirit: () => {
     const offer = get().legendaryOffer;
@@ -2098,7 +2111,7 @@ export const useGameStore = create<GameState>()(
       flow,
       coolerEmpty: coolerCount === 0,
       coolerFull: coolerCount >= cap,
-      catchUpLimit: opts?.catchUpLimit ?? 1,
+      catchUpLimit: opts?.catchUpLimit ?? 64,
     });
     let spawned = advanced.schedule.spawned;
     let made = 0;
@@ -2330,6 +2343,7 @@ export const useGameStore = create<GameState>()(
       const holdTutorial =
         state.tutorial === 'active' && state.tutorialStep < TUTORIAL_TAG_STEP;
       let changed = false;
+      let toast: string | null = null;
       const cases = state.cases.map((c) => {
         if (
           holdTutorial &&
@@ -2346,23 +2360,30 @@ export const useGameStore = create<GameState>()(
           };
         }
         if (c.isTagged || c.nameExpired) return c;
-        const left = c.tagRemainingMs - 1000;
-        changed = true;
-        if (left <= 0) {
+        const expires =
+          typeof c.tagExpiresAt === 'number'
+            ? c.tagExpiresAt
+            : now + Math.max(0, c.tagRemainingMs);
+        if (now >= expires) {
+          changed = true;
+          toast = `${displayCaseName(c)} went untagged. The name is gone.`;
           return {
             ...c,
             tagRemainingMs: 0,
-            tagExpiresAt: now,
+            tagExpiresAt: expires,
             nameExpired: true,
           };
         }
-        return {
-          ...c,
-          tagRemainingMs: left,
-          tagExpiresAt: now + left,
-        };
+        const left = Math.max(0, expires - now);
+        if (c.tagExpiresAt !== expires || c.tagRemainingMs !== left) {
+          changed = true;
+          return { ...c, tagExpiresAt: expires, tagRemainingMs: left };
+        }
+        return c;
       });
-      return changed ? { cases } : state;
+      if (!changed) return state;
+      if (toast) notifyHouse('The toe tag', toast);
+      return { cases, ...(toast ? { intakeToast: toast } : {}) };
     }),
 
   syncCremationDecayState: ({ active, progress, heatNormalized }) =>
@@ -2652,6 +2673,7 @@ export const useGameStore = create<GameState>()(
 
   tickRetortDoor: () =>
     set((state) => {
+      const now = gameNow();
       const count = retortCount(state.facilityLevels);
       const aligned = alignMachines(
         state.retortMachines,
@@ -2659,10 +2681,40 @@ export const useGameStore = create<GameState>()(
         state.activeRetortIndex ?? 0,
         count
       );
-      if (!aligned.machines.some((m) => m.doorMoving)) return state;
-      const machines = aligned.machines.map((m) =>
-        m.doorMoving ? stepRetortDoor(m) : m
-      );
+      if (
+        !aligned.machines.some(
+          (m) => m.doorMoving || m.doorSimulatedAt != null
+        )
+      ) {
+        return state;
+      }
+      const machines = aligned.machines.map((m) => {
+        if (!m.doorMoving) {
+          return m.doorSimulatedAt == null
+            ? m
+            : { ...m, doorSimulatedAt: null };
+        }
+        const since = m.doorSimulatedAt;
+        if (since == null) {
+          return { ...stepRetortDoor(m), doorSimulatedAt: now };
+        }
+        const dt = now - since;
+        if (dt >= 1200) {
+          return {
+            ...m,
+            doorOpen: m.doorMoving === 'UP' ? 1 : 0,
+            doorMoving: null,
+            doorSimulatedAt: null,
+          };
+        }
+        let next = m;
+        const steps = Math.max(1, Math.min(40, Math.round(dt / 40)));
+        for (let i = 0; i < steps; i += 1) {
+          if (!next.doorMoving) break;
+          next = stepRetortDoor(next);
+        }
+        return { ...next, doorSimulatedAt: now };
+      });
       return {
         retortMachines: machines,
         retort: machines[aligned.index]!,
@@ -2672,6 +2724,7 @@ export const useGameStore = create<GameState>()(
 
   tickRetortBurn: () =>
     set((state) => {
+      const now = gameNow();
       const count = retortCount(state.facilityLevels);
       const aligned = alignMachines(
         state.retortMachines,
@@ -2681,9 +2734,26 @@ export const useGameStore = create<GameState>()(
       );
       const bays = alignBays(state.retortBays, count);
       const house = state.facilityLevels.crematory || 0;
-      const machines = aligned.machines.map((m, i) =>
-        stepOneRetort(m, state.cases, retortSpeedFactor(house, bays[i]?.speedTier ?? 0))
-      );
+      let finishedName: string | null = null;
+      const machines = aligned.machines.map((m, i) => {
+        const before = m.elapsedSec;
+        const since = m.burnSimulatedAt;
+        const dt = since == null ? 0 : Math.max(0, now - since);
+        const next = stepOneRetort(
+          m,
+          state.cases,
+          retortSpeedFactor(house, bays[i]?.speedTier ?? 0),
+          now
+        );
+        const held = state.cases.find((c) => c.id === m.caseId);
+        if (held && dt > 2000 && m.phase === 'BURN' && m.primaryOn) {
+          const target = getCremationTargets(held.weightLbs).targetDurationSec;
+          if (before < target && next.elapsedSec >= target) {
+            finishedName = displayCaseName(held);
+          }
+        }
+        return next;
+      });
       const active = machines[aligned.index] ?? { ...IDLE_RETORT };
       let burnActive = false;
       let bestProgress = 0;
@@ -2710,11 +2780,30 @@ export const useGameStore = create<GameState>()(
         cremationHeatNormalized: heatNormalized,
         cremationDecayArrested:
           state.cremationDecayArrested || bestProgress >= 0.15,
+        ...(finishedName
+          ? {
+              intakeToast: `The retort finished while the house was closed. ${finishedName} was left in the fire.`,
+            }
+          : {}),
       };
     }),
 
   tickDecay: () =>
     set((state) => {
+      const now = gameNow();
+      const gapSec =
+        state.decaySimulatedAt == null
+          ? 0
+          : Math.max(0, (now - state.decaySimulatedAt) / 1000);
+      const count = retortCount(state.facilityLevels);
+      const aligned = alignMachines(
+        state.retortMachines,
+        state.retort,
+        state.activeRetortIndex ?? 0,
+        count
+      );
+      const bays = alignBays(state.retortBays, count);
+      const house = state.facilityLevels.crematory || 0;
       let changed = false;
       const cases = state.cases.map((c) => {
         const refrigerated = c.location === 'COOLER';
@@ -2722,45 +2811,55 @@ export const useGameStore = create<GameState>()(
         if (refrigerated || preserved || c.location === 'URN_VAULT') {
           return c;
         }
+        if (gapSec <= 0) return c;
 
-        const count = retortCount(state.facilityLevels);
-        const machines = alignMachines(
-          state.retortMachines,
-          state.retort,
-          state.activeRetortIndex ?? 0,
-          count
-        ).machines;
-        const holder = machines.find(
+        const holderIndex = aligned.machines.findIndex(
           (m) => m.caseId === c.id && m.phase !== 'IDLE' && m.phase !== 'DONE'
         );
+        const holder = holderIndex >= 0 ? aligned.machines[holderIndex] : undefined;
+        const target = getCremationTargets(c.weightLbs).targetDurationSec;
         const heldProgress = holder
-          ? Math.min(
-              1,
-              holder.elapsedSec /
-                getCremationTargets(c.weightLbs).targetDurationSec
-            )
+          ? Math.min(1, holder.elapsedSec / target)
           : 0;
 
-        if (holder && heldProgress >= 0.15) {
-          return c;
-        }
-
+        let seconds = gapSec;
         let rate = DECAY_PER_SEC;
-        if (holder && holder.phase === 'BURN' && (holder.primaryOn || holder.secondaryOn)) {
+        if (holder && heldProgress >= 0.15) {
+          const speed = Math.max(
+            1,
+            retortSpeedFactor(house, bays[holderIndex]?.speedTier ?? 0)
+          );
+          const burnPerSec = steadyBurnRate(holder) * speed;
+          const added = burnPerSec * gapSec;
+          const before = holder.elapsedSec - added;
+          const arrest = target * 0.15;
+          if (before >= arrest || burnPerSec <= 0) seconds = 0;
+          else seconds = Math.min(gapSec, (arrest - before) / burnPerSec);
+        } else if (
+          holder &&
+          holder.phase === 'BURN' &&
+          (holder.primaryOn || holder.secondaryOn)
+        ) {
           const heat = Math.min(1, Math.max(0, (holder.primaryTemp - 200) / 1200));
           rate = DECAY_PER_SEC * Math.max(0.08, 1 - heat * 0.92);
         }
 
-        const nextDecay = Math.min(100, c.decayLevel + rate);
+        if (seconds <= 0) return c;
+        const nextDecay = Math.min(100, c.decayLevel + rate * seconds);
         if (nextDecay === c.decayLevel) return c;
         changed = true;
         return { ...c, decayLevel: nextDecay };
       });
-      return changed ? { cases } : state;
+      if (!changed && state.decaySimulatedAt === now) return state;
+      return {
+        ...(changed ? { cases } : {}),
+        decaySimulatedAt: now,
+      };
     }),
 
   tickFamilyUrnChoices: () =>
     set((state) => {
+      const now = gameNow();
       let toast: string | null = null;
       let notice: string | null = null;
       let any = false;
@@ -2771,14 +2870,25 @@ export const useGameStore = create<GameState>()(
         const needCasket =
           directiveNeedsCasket(c.directive) && !c.familyRequestedCasketId;
         if (!needUrn && !needCasket) return c;
-        const left = c.familyUrnRemainingMs;
-        if (left == null) {
+        let due = c.familyUrnDueAt;
+        if (due == null) {
+          const wait =
+            typeof c.familyUrnRemainingMs === 'number'
+              ? Math.max(0, c.familyUrnRemainingMs)
+              : rollFamilyUrnWaitMs();
+          due = now + wait;
           any = true;
-          return { ...c, familyUrnRemainingMs: rollFamilyUrnWaitMs() };
+          return {
+            ...c,
+            familyUrnDueAt: due,
+            familyUrnRemainingMs: wait,
+          };
         }
-        if (left > 0) {
+        if (now < due) {
+          const remain = Math.max(0, due - now);
+          if (c.familyUrnRemainingMs === remain) return c;
           any = true;
-          return { ...c, familyUrnRemainingMs: left - 1000 };
+          return { ...c, familyUrnDueAt: due, familyUrnRemainingMs: remain };
         }
         any = true;
         const next = { ...c };
@@ -2821,7 +2931,12 @@ export const useGameStore = create<GameState>()(
         }
         const who = c.isTagged ? c.name : 'their loved one';
         if (waiting.length > 0) {
-          next.familyUrnRemainingMs = rollFamilyUrnWaitMs();
+          const step = Math.max(1, rollFamilyUrnWaitMs());
+          const passed = Math.max(0, now - due);
+          const hops = Math.floor(passed / step) + 1;
+          const cursor = due + hops * step;
+          next.familyUrnDueAt = cursor;
+          next.familyUrnRemainingMs = Math.max(0, cursor - now);
         } else {
           next.familyUrnDueAt = null;
           next.familyUrnRemainingMs = null;
@@ -2876,13 +2991,13 @@ export const useGameStore = create<GameState>()(
       let reputation = state.reputation;
       let financeLedger = state.financeLedger;
       let any = false;
+      let permitPush: string | null = null;
 
       const submissions = state.permitSubmissions.map((sub) => {
         if (sub.status !== 'PENDING') return sub;
-        const budget = Math.max(1000, sub.evaluatesAt - sub.submittedAt);
-        const left =
-          (typeof sub.remainingMs === 'number' ? sub.remainingMs : budget) - 1000;
+        const left = sub.evaluatesAt - now;
         if (left > 0) {
+          if (sub.remainingMs === left) return sub;
           any = true;
           return { ...sub, remainingMs: left };
         }
@@ -2892,6 +3007,7 @@ export const useGameStore = create<GameState>()(
         if (approved) {
           wrongStreak = 0;
           toast = `Cremation permit APPROVED, ${resolvePlayerName(state.playerName)}.`;
+          permitPush = 'The cremation permit was approved.';
           return {
             ...sub,
             status: 'APPROVED' as const,
@@ -2900,6 +3016,7 @@ export const useGameStore = create<GameState>()(
         }
         wrongStreak += 1;
         toast = `Cremation permit REJECTED, ${resolvePlayerName(state.playerName)} — vital records could not be verified.`;
+        permitPush = 'The cremation permit was rejected. Vital records could not be verified.';
         if (wrongStreak >= PERMIT_ERROR_STREAK_LIMIT) {
           cash = cash - PERMIT_ERROR_STREAK_FINE;
           reputation = Math.max(0, reputation - PERMIT_ERROR_STREAK_REP_HIT);
@@ -2924,6 +3041,7 @@ export const useGameStore = create<GameState>()(
       });
 
       if (!any) return state;
+      if (permitPush) notifyHouse('The permit', permitPush);
 
       let inboxFiles = state.inboxFiles;
       const cases = state.cases.map((c) => {
@@ -3067,9 +3185,11 @@ export const useGameStore = create<GameState>()(
       }
 
       const now = gameNow();
-      const negativeCashSinceMs = state.negativeCashSinceMs ?? now;
-      const accrued = state.overdraftAccruedMs + 1000;
+      const negativeCashSinceMs =
+        state.negativeCashSinceMs ?? now - state.overdraftAccruedMs;
+      const accrued = Math.max(0, now - negativeCashSinceMs);
       if (accrued >= BANK_FORECLOSURE_AFTER_MS) {
+        notifyHouse('The bank', 'The bank has taken the parlor.');
         return {
           negativeCashSinceMs,
           overdraftAccruedMs: accrued,
@@ -3080,6 +3200,10 @@ export const useGameStore = create<GameState>()(
       }
 
       if (accrued >= BANK_WARNING_AFTER_MS && !state.bankWarningIssued) {
+        notifyHouse(
+          'The bank',
+          'The house has been overdrawn for a day. The clock keeps running while the doors are shut.'
+        );
         return {
           negativeCashSinceMs,
           overdraftAccruedMs: accrued,
@@ -3913,45 +4037,50 @@ export const useGameStore = create<GameState>()(
     const activeLoans = state.activeLoans
       .map((loan) => {
         const next = { ...loan };
-        if (now < next.nextPaymentDueAt || next.principalRemaining <= 0) {
-          return next;
-        }
-        const pay = Math.min(next.paymentAmount, next.principalRemaining);
-        const remindKey = `${next.id}:${next.nextPaymentDueAt}`;
-        if (cash >= pay) {
-          changed = true;
-          cash -= pay;
-          next.principalRemaining = Math.max(0, next.principalRemaining - pay);
-          next.missedPayments = 0;
+        let guard = 0;
+        while (
+          now >= next.nextPaymentDueAt &&
+          next.principalRemaining > 0 &&
+          guard < 400
+        ) {
+          guard += 1;
+          const dueAt = next.nextPaymentDueAt;
+          const pay = Math.min(next.paymentAmount, next.principalRemaining);
           const every = Math.max(next.paymentEveryMs, LOAN_INSTALLMENT_MS);
           next.paymentEveryMs = every;
-          next.nextPaymentDueAt = now + every;
-          ledger.unshift({
-            id: `led_auto_${next.id}_${next.nextPaymentDueAt}`,
-            at: now,
-            label: `Bank draft — ${next.label}`,
-            amount: -pay,
-            kind: 'OTHER' as const,
-          });
-          if (!bankReminded.has(remindKey)) {
-            bankReminded.add(remindKey);
-            toast = BANK_PAYMENT_DRAFTED;
-            push = BANK_PAYMENT_DUE;
+          const remindKey = `${next.id}:${dueAt}`;
+          if (cash >= pay) {
+            changed = true;
+            cash -= pay;
+            next.principalRemaining = Math.max(0, next.principalRemaining - pay);
+            next.missedPayments = 0;
+            next.nextPaymentDueAt = dueAt + every;
+            ledger.unshift({
+              id: `led_auto_${next.id}_${dueAt}`,
+              at: dueAt,
+              label: `Bank draft — ${next.label}`,
+              amount: -pay,
+              kind: 'OTHER' as const,
+            });
+            if (!bankReminded.has(remindKey)) {
+              bankReminded.add(remindKey);
+              toast = BANK_PAYMENT_DRAFTED;
+              push = BANK_PAYMENT_DUE;
+            }
+            continue;
           }
-          return next;
-        }
-        next.missedPayments = Math.max(1, next.missedPayments);
-        if (now >= next.nextPaymentDueAt + BANK_LOAN_GRACE_MS) {
-          foreclose = true;
-          changed = true;
-          return next;
-        }
-        if (!bankReminded.has(remindKey)) {
-          bankReminded.add(remindKey);
-          changed = true;
-          const overdue = now > next.nextPaymentDueAt + 60_000;
-          toast = overdue ? BANK_PAYMENT_OVERDUE : BANK_PAYMENT_DUE;
-          push = toast;
+          next.missedPayments = Math.max(1, next.missedPayments);
+          if (now >= dueAt + BANK_LOAN_GRACE_MS) {
+            foreclose = true;
+            changed = true;
+          } else if (!bankReminded.has(remindKey)) {
+            bankReminded.add(remindKey);
+            changed = true;
+            const overdue = now > dueAt + 60_000;
+            toast = overdue ? BANK_PAYMENT_OVERDUE : BANK_PAYMENT_DUE;
+            push = toast;
+          }
+          break;
         }
         return next;
       })
@@ -4736,6 +4865,7 @@ export const useGameStore = create<GameState>()(
   clearServiceFeedback: () => set({ serviceFeedback: null }),
 
   setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
+  markNotificationPromptSeen: () => set({ notificationPromptSeen: true }),
 
   damageCremulator: () =>
     set({
@@ -4918,6 +5048,8 @@ export const useGameStore = create<GameState>()(
         rankFanfare: state.rankFanfare,
         playerName: state.playerName,
         notificationsEnabled: state.notificationsEnabled,
+        notificationPromptSeen: state.notificationPromptSeen,
+        decaySimulatedAt: state.decaySimulatedAt,
         tutorial: state.tutorial,
         tutorialStep: state.tutorialStep,
         tutorialCaseId: state.tutorialCaseId,
@@ -5014,6 +5146,9 @@ export const useGameStore = create<GameState>()(
             : current.computerOpenApp ?? null,
           urnInventory: p.urnInventory ?? current.urnInventory,
           notificationsEnabled: p.notificationsEnabled ?? false,
+          notificationPromptSeen: p.notificationPromptSeen === true,
+          decaySimulatedAt:
+            typeof p.decaySimulatedAt === 'number' ? p.decaySimulatedAt : null,
           casketInventory: p.casketInventory ?? current.casketInventory,
           chapelOwnedDecor: p.chapelOwnedDecor ?? current.chapelOwnedDecor,
           facilityLevels: {

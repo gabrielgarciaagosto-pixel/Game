@@ -417,7 +417,7 @@ export const MainHubMenu: React.FC = () => {
       body: 'House operating balance. Service payouts, vessel sales, fines, and loan drafts all post here. A negative balance starts the bank’s foreclosure clock.',
       detail: `$${cash.toLocaleString()} on hand · ${ownedProperty.label}, ${ownedProperty.city} ${ownedProperty.stateCode} · loans $${debt.toLocaleString()} outstanding${
         cash < 0 && negativeCashSinceMs != null && !bankForeclosed
-          ? ` · foreclosure in ${formatRealCountdown(foreclosureMsRemaining(overdraftAccruedMs))} of open parlor time`
+          ? ` · foreclosure in ${formatRealCountdown(foreclosureMsRemaining(overdraftAccruedMs))}`
           : ''
       }`,
     },

@@ -34,6 +34,10 @@ export interface RetortMachine {
   fuelCharged: boolean;
   /** Dollars billed for this firing. The service card repeats this figure. */
   fuelChargedCost: number | null;
+  /** Wall clock of the last burn step. Missing on older saves, so the first tick does not invent a gap. */
+  burnSimulatedAt?: number | null;
+  /** Wall clock of the last door step. Null when the door is still. */
+  doorSimulatedAt?: number | null;
 }
 
 export const SECONDARY_SP = 1700;

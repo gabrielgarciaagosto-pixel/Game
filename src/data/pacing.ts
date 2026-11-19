@@ -122,7 +122,7 @@ export function advanceIntakeSchedule(input: {
 
   // A due call is not held for a bay. If the cooler is full, that call is
   // lost and the next one is scheduled. It still counts toward today's cap,
-  // so a long absence does not dump every missed day at once.
+  // so a long absence applies today's calls and does not dump every missed day.
   let guard = 0;
   while (
     nextAt <= input.now &&

@@ -1,28 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
-import { requestHouseNotificationPermission } from '../utils/houseNotifications';
+import {
+  openHouseNotificationSettings,
+  requestHouseNotificationPermission,
+} from '../utils/houseNotifications';
 import { useSheetOpen } from './useSheetOpen';
 
-const ASKED_KEY = 'ossuarian-notify-asked';
-
-function alreadyAsked(): boolean {
-  try {
-    return localStorage.getItem(ASKED_KEY) === '1';
-  } catch {
-    return true;
-  }
-}
-
-function markAsked() {
-  try {
-    localStorage.setItem(ASKED_KEY, '1');
-  } catch {
-    // A private window can refuse the flag. The sheet still closes.
-  }
-}
-
 /**
- * One ask after the tutorial, before any system dialog.
+ * One ask for any parlor that has finished the tutorial and has not
+ * answered yet, including a save made before this sheet existed.
  * Not now, or a declined phone prompt, leaves notices off.
  * Settings can ask again later.
  */
@@ -31,6 +17,7 @@ export const NotificationAsk: React.FC = () => {
   const titleGate = useGameStore((s) => s.titleGate);
   const tutorial = useGameStore((s) => s.tutorial);
   const notificationsEnabled = useGameStore((s) => s.notificationsEnabled);
+  const notificationPromptSeen = useGameStore((s) => s.notificationPromptSeen);
   const settingsOpen = useGameStore((s) => s.settingsOpen);
   const bankForeclosed = useGameStore((s) => s.bankForeclosed);
   const legalAlert = useGameStore((s) => s.legalAlert);
@@ -38,15 +25,20 @@ export const NotificationAsk: React.FC = () => {
   const rankFanfare = useGameStore((s) => s.rankFanfare);
   const legendaryOffer = useGameStore((s) => s.legendaryOffer);
   const setNotificationsEnabled = useGameStore((s) => s.setNotificationsEnabled);
+  const markNotificationPromptSeen = useGameStore(
+    (s) => s.markNotificationPromptSeen
+  );
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [declined, setDeclined] = useState(false);
+  const [settingsNote, setSettingsNote] = useState<string | null>(null);
 
   const blocked =
     !hasStartedGame ||
     titleGate ||
     tutorial !== 'done' ||
     notificationsEnabled ||
+    notificationPromptSeen ||
     settingsOpen ||
     bankForeclosed ||
     legalAlert != null ||
@@ -55,7 +47,7 @@ export const NotificationAsk: React.FC = () => {
     legendaryOffer != null;
 
   useEffect(() => {
-    if (blocked || alreadyAsked()) {
+    if (blocked) {
       setOpen(false);
       return;
     }
@@ -65,7 +57,7 @@ export const NotificationAsk: React.FC = () => {
   useEffect(() => {
     if (!open) return;
     const close = () => {
-      markAsked();
+      markNotificationPromptSeen();
       setOpen(false);
     };
     window.__ossuarianCloseNotifyAsk = close;
@@ -74,14 +66,14 @@ export const NotificationAsk: React.FC = () => {
         delete window.__ossuarianCloseNotifyAsk;
       }
     };
-  }, [open]);
+  }, [open, markNotificationPromptSeen]);
 
   useSheetOpen(open);
 
   if (!open) return null;
 
   const later = () => {
-    markAsked();
+    markNotificationPromptSeen();
     setOpen(false);
   };
 
@@ -90,15 +82,28 @@ export const NotificationAsk: React.FC = () => {
     setBusy(true);
     void requestHouseNotificationPermission().then((result) => {
       setBusy(false);
-      if (result === 'granted' || result === 'unsupported') {
-        if (result === 'granted') setNotificationsEnabled(true);
-        markAsked();
+      markNotificationPromptSeen();
+      if (result === 'granted') {
+        setNotificationsEnabled(true);
+        setOpen(false);
+        return;
+      }
+      if (result === 'unsupported') {
         setOpen(false);
         return;
       }
       setNotificationsEnabled(false);
-      markAsked();
       setDeclined(true);
+    });
+  };
+
+  const openSettings = () => {
+    void openHouseNotificationSettings().then((opened) => {
+      setSettingsNote(
+        opened
+          ? 'Notification settings are open. Allow notices for this house, then turn Phone notices on in Settings.'
+          : 'On this screen the phone settings cannot be opened. On the installed house, this opens Android notification settings.'
+      );
     });
   };
 
@@ -119,28 +124,43 @@ export const NotificationAsk: React.FC = () => {
         </h2>
         {declined ? (
           <p className="mt-3 text-sm leading-relaxed text-[#d9cbb8]">
-            The phone declined. Notices stay on this screen. You can allow them
-            later in Settings.
+            The phone declined, and it will not ask again. Open notification
+            settings for this house and allow notices. Until then, notes stay
+            on this screen.
           </p>
         ) : (
           <p className="mt-3 text-sm leading-relaxed text-[#d9cbb8]">
-            The house can tell this phone when a body is due, when a family
-            chooses from your stock, or when the bank expects a payment. While
-            you are here, those notes still appear on screen.
+            The house can tell this phone when a body is due, when a retort
+            finishes, when a service is about to begin, when a family chooses
+            from your stock, or when the bank expects a payment. While you are
+            here, those notes still appear on screen.
           </p>
         )}
-        <div className="mt-4 flex gap-2">
+        {settingsNote ? (
+          <p className="mt-2 text-sm leading-relaxed text-[#d9cbb8]">{settingsNote}</p>
+        ) : null}
+        <div className="mt-4 flex flex-col gap-2">
           {declined ? (
-            <button
-              type="button"
-              data-notify-close
-              onClick={later}
-              className="flex-1 rounded-xl bg-[#c4a574] py-3 text-sm font-bold text-[#1a140e]"
-            >
-              Close
-            </button>
-          ) : (
             <>
+              <button
+                type="button"
+                data-notify-settings
+                onClick={openSettings}
+                className="w-full rounded-xl bg-[#c4a574] py-3 text-sm font-bold text-[#1a140e]"
+              >
+                Open notification settings
+              </button>
+              <button
+                type="button"
+                data-notify-close
+                onClick={later}
+                className="w-full rounded-xl border border-[#3a3228] py-3 text-sm font-bold text-[#d9cbb8]"
+              >
+                Close
+              </button>
+            </>
+          ) : (
+            <div className="flex gap-2">
               <button
                 type="button"
                 data-notify-later
@@ -158,7 +178,7 @@ export const NotificationAsk: React.FC = () => {
               >
                 {busy ? 'Asking…' : 'Allow'}
               </button>
-            </>
+            </div>
           )}
         </div>
       </div>

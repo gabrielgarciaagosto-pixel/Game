@@ -21,14 +21,29 @@ export function stepRetortDoor(r: RetortMachine): RetortMachine {
   return next;
 }
 
-/** Advance chamber heat / calcination by one burn tick (~250ms). */
+/** Burn seconds added per wall second while the primary is firing. */
+export function steadyBurnRate(r: RetortMachine): number {
+  if (r.phase !== 'BURN' || !r.primaryOn) return 0;
+  const heatFactor = Math.min(1.15, Math.max(0.15, r.primaryTemp / 1400));
+  const doorEfficiency = Math.max(0.2, 1 - r.doorOpen * 0.7);
+  return (
+    heatFactor *
+    doorEfficiency *
+    (r.secondaryTemp >= 850 ? 1 : 0.65) *
+    (r.earlyPrimaryStarts > 0 ? 0.85 : 1)
+  );
+}
+
+/** Advance chamber heat / calcination by one burn slice. */
 export function stepRetortBurn(
   r: RetortMachine,
-  maxSafeTemp: number
+  maxSafeTemp: number,
+  tickMs: number = BURN_TICK_MS,
+  now: number = Date.now()
 ): RetortMachine {
   let next: RetortMachine = { ...r };
 
-  if (next.purging && next.purgeEndsAt != null && Date.now() >= next.purgeEndsAt) {
+  if (next.purging && next.purgeEndsAt != null && now >= next.purgeEndsAt) {
     next.purging = false;
     next.heated = true;
     next.purgeEndsAt = null;
@@ -85,17 +100,8 @@ export function stepRetortBurn(
   }
 
   if (next.phase === 'BURN' && next.primaryOn) {
-    const heatFactor = Math.min(
-      1.15,
-      Math.max(0.15, next.primaryTemp / 1400)
-    );
-    const doorEfficiency = Math.max(0.2, 1 - next.doorOpen * 0.7);
-    const burnRate =
-      heatFactor *
-      doorEfficiency *
-      (next.secondaryTemp >= 850 ? 1 : 0.65) *
-      (next.earlyPrimaryStarts > 0 ? 0.85 : 1);
-    next.elapsedSec += (BURN_TICK_MS / 1000) * burnRate;
+    const burnRate = steadyBurnRate(next);
+    next.elapsedSec += (tickMs / 1000) * burnRate;
     if (next.primaryTemp > maxSafeTemp) {
       next.thermalWarnings += 1;
     }
@@ -112,5 +118,72 @@ export function stepRetortBurn(
     next.audioMode = 'OFF';
   }
 
+  return next;
+}
+
+/**
+ * Catch a closed gap. Short gaps replay the live slices.
+ * A long gap settles the burners where they were left and applies
+ * that rate for the whole absence, including time past the target.
+ */
+export function advanceRetortBy(
+  r: RetortMachine,
+  dtMs: number,
+  maxSafeTemp: number,
+  now: number = Date.now()
+): RetortMachine {
+  if (dtMs <= 0) return r;
+  if (dtMs <= 3000) {
+    let next = r;
+    let left = dtMs;
+    while (left > 0) {
+      const slice = Math.min(BURN_TICK_MS, left);
+      next = stepRetortBurn(next, maxSafeTemp, slice, now);
+      left -= slice;
+    }
+    return next;
+  }
+
+  let next: RetortMachine = { ...r };
+  if (next.purging && next.purgeEndsAt != null && now >= next.purgeEndsAt) {
+    next.purging = false;
+    next.heated = true;
+    next.purgeEndsAt = null;
+  }
+
+  if (next.secondaryOn) {
+    next.secondaryTemp = (next.secondarySetPoint || SECONDARY_SP) + 15;
+  } else if (next.blowerOn && next.heated) {
+    next.secondaryTemp = 820;
+  } else if (next.blowerOn) {
+    next.secondaryTemp = 200;
+  } else {
+    next.secondaryTemp = 72;
+  }
+
+  if (next.primaryOn) {
+    next.primaryTemp = (next.primarySetPoint || PRIMARY_SP) + 20;
+  } else if (next.secondaryOn) {
+    next.primaryTemp = Math.min(400, Math.max(72, next.primaryTemp));
+  } else {
+    next.primaryTemp = 72;
+  }
+
+  if (next.phase === 'BURN' && next.primaryOn) {
+    next.elapsedSec += (dtMs / 1000) * steadyBurnRate(next);
+    if (next.primaryTemp > maxSafeTemp) {
+      next.thermalWarnings += Math.min(120, Math.max(1, Math.floor(dtMs / BURN_TICK_MS)));
+    }
+  }
+
+  if (next.phase === 'BURN' && next.primaryOn && next.audioMode === 'OFF') {
+    next.audioMode = 'START';
+  }
+  if (
+    (next.phase === 'SWEEP' || next.phase === 'DONE') &&
+    next.audioMode !== 'OFF'
+  ) {
+    next.audioMode = 'OFF';
+  }
   return next;
 }

@@ -3,14 +3,14 @@ import { DAY_MS, HOUR_MS } from './pacing';
 
 /**
  * Family hour stays on the old scale for anything that still speaks it.
- * The overdraft clock does not. It counts open parlor time only.
+ * The overdraft clock counts wall time, including while the house is closed.
  */
 export const FAMILY_HOUR_MS = 60 * FAMILY_MINUTE_MS;
 
-/** Open-parlor time overdrawn before the warning. Pauses while the app is closed. */
+/** Wall time overdrawn before the warning. It keeps running while the app is closed. */
 export const BANK_WARNING_AFTER_MS = 24 * HOUR_MS;
 
-/** Still negative after this much open-parlor time → foreclosure. */
+/** Still negative after this much wall time, and the bank forecloses. */
 export const BANK_FORECLOSURE_AFTER_MS = 72 * HOUR_MS;
 
 /** One real day between loan and mortgage drafts. */
@@ -29,7 +29,7 @@ export const BANK_PAYMENT_OVERDUE =
 export const BANK_PAYMENT_DRAFTED = 'The bank drafted your payment.';
 
 export const BANK_WARNING_MESSAGE =
-  'BANK NOTICE: Your accounts are overdrawn. This notice arrives after 24 hours of open parlor time. Restore a non-negative balance before 72 hours of open parlor time or the bank will foreclose. This clock pauses while Ossuarian is closed.';
+  'BANK NOTICE: Your accounts are overdrawn. The clock keeps running while the house is closed. Restore a non-negative balance before 72 hours or the bank will foreclose.';
 
 export const BANK_FORECLOSURE_TITLE = 'The parlor is closed';
 export const BANK_FORECLOSURE_BODY =
@@ -54,7 +54,7 @@ export function bankMsUntilForeclosure(
   );
 }
 
-/** Remaining open-parlor time before foreclosure. Ignores time the app was closed. */
+/** Remaining wall time before foreclosure. Closed time counts. */
 export function foreclosureMsRemaining(accruedMs: number): number {
   return Math.max(0, BANK_FORECLOSURE_AFTER_MS - Math.max(0, accruedMs));
 }

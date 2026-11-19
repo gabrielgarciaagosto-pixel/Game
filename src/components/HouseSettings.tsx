@@ -4,7 +4,11 @@ import { COMING_SOON_POINTS } from './ComingSoonNote';
 import { resetGame } from '../utils/resetGame';
 import { useGameStore } from '../store/useGameStore';
 import { audioManager } from '../utils/audioManager';
-import { requestHouseNotificationPermission } from '../utils/houseNotifications';
+import {
+  openHouseNotificationSettings,
+  requestHouseNotificationPermission,
+  scheduleHouseTestNotification,
+} from '../utils/houseNotifications';
 import { useSheetOpen } from './useSheetOpen';
 
 export const HouseSettings: React.FC = () => {
@@ -23,6 +27,7 @@ export const HouseSettings: React.FC = () => {
   const [interfaceMuted, setInterfaceMuted] = useState(false);
   const [confirmErase, setConfirmErase] = useState(false);
   const [notifyNote, setNotifyNote] = useState<string | null>(null);
+  const [notifyDenied, setNotifyDenied] = useState(false);
   useSheetOpen(open);
 
   useEffect(() => {
@@ -129,9 +134,10 @@ export const HouseSettings: React.FC = () => {
                 <div>
                   <p className="text-[11px] text-[#b7aa98]">Phone notices</p>
                   <p className="mt-1 text-[11px] leading-snug text-[#6e675c]">
-                    When a body is due, a family chooses from your stock, or the
-                    bank expects a payment, the phone can ping you. The on-screen
-                    notice still shows while the house is open.
+                    When a body is due, a retort finishes, a service is about to
+                    begin, a family chooses from your stock, or the bank expects
+                    a payment, the phone can ping you. The on-screen notice still
+                    shows while the house is open.
                   </p>
                 </div>
                 <button
@@ -145,11 +151,12 @@ export const HouseSettings: React.FC = () => {
                       return;
                     }
                     setNotifyNote('Asking the phone for permission…');
+                    setNotifyDenied(false);
                     void requestHouseNotificationPermission().then((result) => {
                       if (result === 'granted') {
                         setNotificationsEnabled(true);
                         setNotifyNote(
-                          'On. Arrivals, family choices, and bank payments will ping this phone.'
+                          'On. Arrivals, a finished retort, a service about to begin, family choices, and bank payments will ping this phone.'
                         );
                         return;
                       }
@@ -161,8 +168,9 @@ export const HouseSettings: React.FC = () => {
                         return;
                       }
                       setNotificationsEnabled(false);
+                      setNotifyDenied(true);
                       setNotifyNote(
-                        'Permission was declined. Notices stay on screen until the phone allows them.'
+                        'The phone declined, and it will not ask again. Open notification settings for this house and allow notices.'
                       );
                     });
                   }}
@@ -180,6 +188,56 @@ export const HouseSettings: React.FC = () => {
                   {notifyNote}
                 </p>
               ) : null}
+              <div className="mt-3 flex flex-col gap-2">
+                <button
+                  type="button"
+                  data-notify-test
+                  onClick={() => {
+                    setNotifyNote('Sending a notice in 5 seconds.');
+                    setNotifyDenied(false);
+                    void scheduleHouseTestNotification().then((result) => {
+                      if (result === 'scheduled') {
+                        setNotificationsEnabled(true);
+                        setNotifyNote(
+                          'A notice is set for 5 seconds from now. Leave the house and the phone should still show it.'
+                        );
+                        return;
+                      }
+                      if (result === 'unsupported') {
+                        setNotifyNote(
+                          'This screen cannot post a system notice.'
+                        );
+                        return;
+                      }
+                      setNotifyDenied(true);
+                      setNotifyNote(
+                        'The phone declined, and it will not ask again. Open notification settings for this house and allow notices.'
+                      );
+                    });
+                  }}
+                  className="w-full rounded-xl border border-[#3a3228] py-2.5 text-[11px] font-bold text-[#d9cbb8]"
+                >
+                  Test notification (5s)
+                </button>
+                {notifyDenied ? (
+                  <button
+                    type="button"
+                    data-notify-settings
+                    onClick={() => {
+                      void openHouseNotificationSettings().then((opened) => {
+                        setNotifyNote(
+                          opened
+                            ? 'Notification settings are open. Allow notices for this house, then turn Phone notices on.'
+                            : 'On this screen the phone settings cannot be opened. On the installed house, this opens Android notification settings.'
+                        );
+                      });
+                    }}
+                    className="w-full rounded-xl bg-[#c4a574] py-2.5 text-[11px] font-bold text-[#1a140e]"
+                  >
+                    Open notification settings
+                  </button>
+                ) : null}
+              </div>
             </div>
 
             <div className="mt-4 border-t border-[#3a3228] pt-4">
