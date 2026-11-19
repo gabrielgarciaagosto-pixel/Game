@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import {
+  NOTIFICATION_STALL_MESSAGE,
   openHouseNotificationSettings,
   requestHouseNotificationPermission,
 } from '../utils/houseNotifications';
@@ -31,7 +32,9 @@ export const NotificationAsk: React.FC = () => {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [declined, setDeclined] = useState(false);
+  const [fault, setFault] = useState<string | null>(null);
   const [settingsNote, setSettingsNote] = useState<string | null>(null);
+  const askGen = useRef(0);
 
   const blocked =
     !hasStartedGame ||
@@ -79,9 +82,26 @@ export const NotificationAsk: React.FC = () => {
 
   const allow = () => {
     if (busy) return;
+    const gen = askGen.current + 1;
+    askGen.current = gen;
     setBusy(true);
-    void requestHouseNotificationPermission().then((result) => {
+    setDeclined(false);
+    setFault(null);
+    void requestHouseNotificationPermission(() => {
+      if (askGen.current !== gen) return;
       setBusy(false);
+      setFault(NOTIFICATION_STALL_MESSAGE);
+    }).then((result) => {
+      if (askGen.current !== gen) {
+        if (result === 'granted') {
+          setNotificationsEnabled(true);
+          markNotificationPromptSeen();
+          setOpen(false);
+        }
+        return;
+      }
+      setBusy(false);
+      setFault(null);
       markNotificationPromptSeen();
       if (result === 'granted') {
         setNotificationsEnabled(true);
@@ -122,7 +142,9 @@ export const NotificationAsk: React.FC = () => {
         >
           Phone notices
         </h2>
-        {declined ? (
+        {fault ? (
+          <p className="mt-3 text-sm leading-relaxed text-[#d9cbb8]">{fault}</p>
+        ) : declined ? (
           <p className="mt-3 text-sm leading-relaxed text-[#d9cbb8]">
             The phone declined, and it will not ask again. Open notification
             settings for this house and allow notices. Until then, notes stay
@@ -140,8 +162,19 @@ export const NotificationAsk: React.FC = () => {
           <p className="mt-2 text-sm leading-relaxed text-[#d9cbb8]">{settingsNote}</p>
         ) : null}
         <div className="mt-4 flex flex-col gap-2">
-          {declined ? (
+          {fault || declined ? (
             <>
+              {fault ? (
+                <button
+                  type="button"
+                  data-notify-allow
+                  disabled={busy}
+                  onClick={allow}
+                  className="w-full rounded-xl border border-[#3a3228] py-3 text-sm font-bold text-[#d9cbb8] disabled:opacity-60"
+                >
+                  {busy ? 'Asking…' : 'Try again'}
+                </button>
+              ) : null}
               <button
                 type="button"
                 data-notify-settings
@@ -156,7 +189,7 @@ export const NotificationAsk: React.FC = () => {
                 onClick={later}
                 className="w-full rounded-xl border border-[#3a3228] py-3 text-sm font-bold text-[#d9cbb8]"
               >
-                Close
+                {declined ? 'Close' : 'Not now'}
               </button>
             </>
           ) : (

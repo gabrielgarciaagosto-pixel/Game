@@ -6,11 +6,22 @@ const RETIRED_CHANNEL_ID = 'house';
 let gate = () => false;
 let nextId = 1;
 
+interface HouseNoticeResult {
+  display?: string;
+}
+
 interface HouseNoticesPlugin {
   openNotificationSettings(): Promise<void>;
+  requestNotificationPermission(): Promise<HouseNoticeResult>;
 }
 
 const HouseNotices = registerPlugin<HouseNoticesPlugin>('HouseNotices');
+
+/** How long Allow may say Asking before the sheet admits the phone stayed silent. */
+export const NOTIFICATION_WAIT_MS = 10000;
+
+export const NOTIFICATION_STALL_MESSAGE =
+  'The phone did not show a permission dialog. Open notification settings for this house and allow notices.';
 
 /** The store registers this so notices follow the Settings toggle. */
 export function setNotificationGate(read: () => boolean) {
@@ -64,24 +75,56 @@ async function ensureChannel(
 /**
  * Ask the phone. A declined or thrown native call stays denied
  * so the toggle is not turned on without a real grant.
+ *
+ * On Android this does not call LocalNotifications.requestPermissions.
+ * That call runs on Capacitor's background thread, Activity.requestPermissions
+ * throws before the dialog, and the bridge never answers. The button would
+ * stay on Asking. HouseNotices asks on the main thread instead.
+ *
+ * onStall runs if the phone is still silent after NOTIFICATION_WAIT_MS.
+ * The returned promise still settles when the phone finally answers, so a
+ * late grant is not thrown away.
  */
-export async function requestHouseNotificationPermission(): Promise<NotifyPermission> {
-  try {
-    if (Capacitor.isNativePlatform()) {
-      const local = await localPlugin();
-      const perm = await local.requestPermissions();
-      if (perm.display === 'granted') {
-        await ensureChannel(local);
-        return 'granted';
-      }
-      return 'denied';
+export function requestHouseNotificationPermission(
+  onStall?: () => void,
+): Promise<NotifyPermission> {
+  let settled = false;
+  const timer = window.setTimeout(() => {
+    if (!settled) onStall?.();
+  }, NOTIFICATION_WAIT_MS);
+  return requestHouseNotificationPermissionInner()
+    .then((result) => {
+      settled = true;
+      return result;
+    })
+    .catch(() => {
+      settled = true;
+      return (Capacitor.isNativePlatform() ? 'denied' : 'unsupported') as NotifyPermission;
+    })
+    .finally(() => window.clearTimeout(timer));
+}
+
+async function requestHouseNotificationPermissionInner(): Promise<NotifyPermission> {
+  if (Capacitor.getPlatform() === 'android') {
+    const perm = await HouseNotices.requestNotificationPermission();
+    if (perm?.display === 'granted') {
+      await ensureChannel(await localPlugin());
+      return 'granted';
     }
-    if (typeof Notification === 'undefined') return 'unsupported';
-    const result = await Notification.requestPermission();
-    return result === 'granted' ? 'granted' : 'denied';
-  } catch {
-    return Capacitor.isNativePlatform() ? 'denied' : 'unsupported';
+    return 'denied';
   }
+  if (Capacitor.isNativePlatform()) {
+    const local = await localPlugin();
+    const perm = await local.requestPermissions();
+    if (perm.display === 'granted') {
+      await ensureChannel(local);
+      return 'granted';
+    }
+    return 'denied';
+  }
+  if (typeof Notification === 'undefined') return 'unsupported';
+  const result = await Notification.requestPermission();
+  return result === 'granted' ? 'granted' : 'denied';
 }
 
 /** Android notification settings for this house. False on a browser. */
@@ -167,8 +210,10 @@ export type HouseTestResult = NotifyPermission | 'scheduled';
  * One notice five seconds out, so the phone can be closed before it arrives.
  * Does not require the gameplay toggle. It does require the system grant.
  */
-export async function scheduleHouseTestNotification(): Promise<HouseTestResult> {
-  const perm = await requestHouseNotificationPermission();
+export async function scheduleHouseTestNotification(
+  onStall?: () => void,
+): Promise<HouseTestResult> {
+  const perm = await requestHouseNotificationPermission(onStall);
   if (perm !== 'granted') return perm;
   try {
     if (Capacitor.isNativePlatform()) {

@@ -5,6 +5,7 @@ import { resetGame } from '../utils/resetGame';
 import { useGameStore } from '../store/useGameStore';
 import { audioManager } from '../utils/audioManager';
 import {
+  NOTIFICATION_STALL_MESSAGE,
   openHouseNotificationSettings,
   requestHouseNotificationPermission,
   scheduleHouseTestNotification,
@@ -152,7 +153,10 @@ export const HouseSettings: React.FC = () => {
                     }
                     setNotifyNote('Asking the phone for permission…');
                     setNotifyDenied(false);
-                    void requestHouseNotificationPermission().then((result) => {
+                    void requestHouseNotificationPermission(() => {
+                      setNotifyDenied(true);
+                      setNotifyNote(NOTIFICATION_STALL_MESSAGE);
+                    }).then((result) => {
                       if (result === 'granted') {
                         setNotificationsEnabled(true);
                         setNotifyNote(
@@ -195,7 +199,10 @@ export const HouseSettings: React.FC = () => {
                   onClick={() => {
                     setNotifyNote('Sending a notice in 5 seconds.');
                     setNotifyDenied(false);
-                    void scheduleHouseTestNotification().then((result) => {
+                    void scheduleHouseTestNotification(() => {
+                      setNotifyDenied(true);
+                      setNotifyNote(NOTIFICATION_STALL_MESSAGE);
+                    }).then((result) => {
                       if (result === 'scheduled') {
                         setNotificationsEnabled(true);
                         setNotifyNote(
