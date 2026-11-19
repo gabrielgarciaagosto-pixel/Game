@@ -117,10 +117,15 @@ function pack(row: RowSpec): Seat[] {
 const SEATS: Seat[] = ROWS.flatMap(pack);
 
 /**
- * Front-row figures whose bodies sat on the pew end panels.
- * Dropped in place. The other seats keep the 44e9ff6 positions.
+ * Figures whose bodies sat on a pew end panel. Dropped in place.
+ * The other seats keep the 44e9ff6 positions.
  */
-const ON_END_PANEL = new Set(['L1-30', 'L2-32', 'L3-36', 'R0-34', 'R1-31', 'R2-37']);
+const ON_END_PANEL = new Set([
+  // Nearest row.
+  'L1-30', 'L2-32', 'L3-36', 'R0-34', 'R1-31', 'R2-37',
+  // Second row. L4 is the woman behind the arch, L5 the grey-haired man on the aisle end, R0 the hat on the aisle end.
+  'L4-40', 'L5-21', 'R0-24',
+]);
 
 function spriteSrc(m: Seat): string {
   const n = String(m.sprite).padStart(2, '0');
