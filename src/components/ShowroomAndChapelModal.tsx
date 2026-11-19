@@ -305,7 +305,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
             pew={pewColor}
           />
 
-          <ChapelMourners active={viewingService} aisleViewer={!serviceLive} />
+          <ChapelMourners active={viewingService} />
 
           {layout?.pieces.map((piece) => {
             const override = dragOverrides[piece.id];
