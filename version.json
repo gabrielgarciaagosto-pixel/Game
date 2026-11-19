@@ -1,6 +1,6 @@
 {
-  "versionName": "0.9.80-demo",
-  "versionCode": 98,
-  "apkUrl": "https://github.com/gabrielgarciaagosto-pixel/Game/raw/a15f1313b15f775fe9dfe309811588ea53a08bcc/demo/Ossuarian-FirstUrn-v0.9.80-demo.apk",
-  "notes": "Allow asks this phone for notices, and it does not stay on Asking."
+  "versionName": "0.9.81-demo",
+  "versionCode": 99,
+  "apkUrl": "https://github.com/gabrielgarciaagosto-pixel/Game/raw/829e5657a4652ea1e096fb9f4a954be060f29bab/demo/Ossuarian-FirstUrn-v0.9.81-demo.apk",
+  "notes": "A granted notice is detected, and coming back from settings turns phone notices on."
 }
