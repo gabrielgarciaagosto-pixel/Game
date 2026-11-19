@@ -1,7 +1,8 @@
-import { Capacitor, registerPlugin } from '@capacitor/core';
+import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 
 const CHANNEL_ID = 'house-notices';
 const RETIRED_CHANNEL_ID = 'house';
+const NOTICES_ON_EVENT = 'ossuarian-notices-on';
 
 let gate = () => false;
 let nextId = 1;
@@ -13,9 +14,16 @@ interface HouseNoticeResult {
 interface HouseNoticesPlugin {
   openNotificationSettings(): Promise<void>;
   requestNotificationPermission(): Promise<HouseNoticeResult>;
+  checkNotificationPermission(): Promise<HouseNoticeResult>;
+  addListener(
+    eventName: 'resume',
+    listenerFunc: () => void,
+  ): Promise<PluginListenerHandle>;
 }
 
 const HouseNotices = registerPlugin<HouseNoticesPlugin>('HouseNotices');
+
+export const PHONE_NOTICES_ENABLED_TOAST = 'Phone notices enabled';
 
 /** How long Allow may say Asking before the sheet admits the phone stayed silent. */
 export const NOTIFICATION_WAIT_MS = 10000;
@@ -72,14 +80,115 @@ async function ensureChannel(
   });
 }
 
+async function ensureChannelSafe() {
+  try {
+    await ensureChannel(await localPlugin());
+  } catch {
+    // The grant still stands. The next alarm sync creates the channel.
+  }
+}
+
+/**
+ * Read the phone's notice grant. On Android this is HouseNotices only.
+ * It does not call LocalNotifications.requestPermissions, which runs on
+ * Capacitor's background thread and can leave the promise pending.
+ */
+export async function checkHouseNotificationPermission(): Promise<NotifyPermission> {
+  if (Capacitor.getPlatform() === 'android') {
+    try {
+      const perm = await HouseNotices.checkNotificationPermission();
+      return perm?.display === 'granted' ? 'granted' : 'denied';
+    } catch {
+      return 'denied';
+    }
+  }
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const local = await localPlugin();
+      const perm = await local.checkPermissions();
+      return perm.display === 'granted' ? 'granted' : 'denied';
+    } catch {
+      return 'denied';
+    }
+  }
+  if (typeof Notification === 'undefined') return 'unsupported';
+  return Notification.permission === 'granted' ? 'granted' : 'denied';
+}
+
+const resumeWatchers = new Set<() => void>();
+let resumeBridgeReady = false;
+let resumeFanoutTimer = 0;
+
+function fanoutHouseNoticeResume() {
+  window.clearTimeout(resumeFanoutTimer);
+  resumeFanoutTimer = window.setTimeout(() => {
+    resumeWatchers.forEach((listener) => listener());
+  }, 50);
+}
+
+function ensureHouseNoticeResumeBridge() {
+  if (resumeBridgeReady || typeof window === 'undefined') return;
+  resumeBridgeReady = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') fanoutHouseNoticeResume();
+  });
+  window.addEventListener('focus', fanoutHouseNoticeResume);
+  void HouseNotices.addListener('resume', fanoutHouseNoticeResume).catch(() => {
+    // The web preview has no native resume. Visibility and focus still run.
+  });
+}
+
+/** Fires when the page is visible again, focused, or the activity resumes. */
+export function onHouseNoticeResume(listener: () => void): () => void {
+  ensureHouseNoticeResumeBridge();
+  resumeWatchers.add(listener);
+  return () => {
+    resumeWatchers.delete(listener);
+  };
+}
+
+let acceptLock: Promise<boolean> | null = null;
+
+/**
+ * If the phone already allows notices, turn Phone notices on, schedule, and
+ * toast. Returns false when the grant is not there. Does not ask.
+ */
+export function acceptPhoneNoticesIfGranted(): Promise<boolean> {
+  if (acceptLock) return acceptLock;
+  const run = acceptPhoneNoticesIfGrantedInner();
+  acceptLock = run;
+  void run.finally(() => {
+    if (acceptLock === run) acceptLock = null;
+  });
+  return run;
+}
+
+async function acceptPhoneNoticesIfGrantedInner(): Promise<boolean> {
+  const perm = await checkHouseNotificationPermission();
+  if (perm !== 'granted') return false;
+  if (Capacitor.isNativePlatform()) await ensureChannelSafe();
+  const { useGameStore } = await import('../store/useGameStore');
+  const store = useGameStore.getState();
+  const wasOn = store.notificationsEnabled;
+  store.setNotificationsEnabled(true);
+  store.markNotificationPromptSeen();
+  if (!wasOn) {
+    useGameStore.setState({ intakeToast: PHONE_NOTICES_ENABLED_TOAST });
+  }
+  window.dispatchEvent(new Event(NOTICES_ON_EVENT));
+  return true;
+}
+
 /**
  * Ask the phone. A declined or thrown native call stays denied
  * so the toggle is not turned on without a real grant.
  *
  * On Android this does not call LocalNotifications.requestPermissions.
  * That call runs on Capacitor's background thread, Activity.requestPermissions
- * throws before the dialog, and the bridge never answers. The button would
- * stay on Asking. HouseNotices asks on the main thread instead.
+ * throws before the dialog, and the bridge never answers. HouseNotices asks
+ * on the main thread. A grant that is already on the phone returns
+ * immediately, and a grant that lands while the dialog is closing is read
+ * again before this reports denied.
  *
  * onStall runs if the phone is still silent after NOTIFICATION_WAIT_MS.
  * The returned promise still settles when the phone finally answers, so a
@@ -105,10 +214,23 @@ export function requestHouseNotificationPermission(
 }
 
 async function requestHouseNotificationPermissionInner(): Promise<NotifyPermission> {
+  const already = await checkHouseNotificationPermission();
+  if (already === 'granted') {
+    if (Capacitor.isNativePlatform()) await ensureChannelSafe();
+    return 'granted';
+  }
   if (Capacitor.getPlatform() === 'android') {
-    const perm = await HouseNotices.requestNotificationPermission();
-    if (perm?.display === 'granted') {
-      await ensureChannel(await localPlugin());
+    let perm: HouseNoticeResult | undefined;
+    try {
+      perm = await HouseNotices.requestNotificationPermission();
+    } catch {
+      perm = undefined;
+    }
+    if (
+      perm?.display === 'granted' ||
+      (await checkHouseNotificationPermission()) === 'granted'
+    ) {
+      await ensureChannelSafe();
       return 'granted';
     }
     return 'denied';
@@ -177,8 +299,8 @@ async function deliver(title: string, body: string) {
   try {
     if (Capacitor.isNativePlatform()) {
       const local = await localPlugin();
-      const perm = await local.checkPermissions();
-      if (perm.display !== 'granted') return;
+      const perm = await checkHouseNotificationPermission();
+      if (perm !== 'granted') return;
       await ensureChannel(local);
       const id = nextId;
       nextId = (nextId % 2000000000) + 1;
@@ -318,8 +440,8 @@ export async function syncHouseAlarms(plan: HouseAlarmPlan) {
     ];
     await local.cancel({ notifications: ids });
     if (!plan.enabled || !gate()) return;
-    const perm = await local.checkPermissions();
-    if (perm.display !== 'granted') return;
+    const perm = await checkHouseNotificationPermission();
+    if (perm !== 'granted') return;
     await ensureChannel(local);
     const now = Date.now();
     const queued: QueuedNotice[] = [];

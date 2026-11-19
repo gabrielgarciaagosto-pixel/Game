@@ -9,6 +9,7 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.PluginHandle;
 import com.getcapacitor.WebViewListener;
 
 public class MainActivity extends BridgeActivity {
@@ -69,6 +70,22 @@ public class MainActivity extends BridgeActivity {
     public void onResume() {
         super.onResume();
         ViewCompat.requestApplyInsets(getWindow().getDecorView());
+    }
+
+    /**
+     * BridgeActivity skips the AndroidX registry when a legacy or Cordova
+     * plugin claims the request code. The house notice call is also settled
+     * here, from the live grant, so a missed launcher callback cannot leave
+     * the JavaScript promise pending.
+     */
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (getBridge() == null) return;
+        PluginHandle handle = getBridge().getPlugin("HouseNotices");
+        if (handle != null && handle.getInstance() instanceof HouseNoticesPlugin) {
+            ((HouseNoticesPlugin) handle.getInstance()).onHostPermissionResult();
+        }
     }
 
     private void publishSafeArea(Insets bars) {

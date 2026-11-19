@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import {
   NOTIFICATION_STALL_MESSAGE,
+  acceptPhoneNoticesIfGranted,
+  onHouseNoticeResume,
   openHouseNotificationSettings,
   requestHouseNotificationPermission,
 } from '../utils/houseNotifications';
@@ -73,6 +75,40 @@ export const NotificationAsk: React.FC = () => {
 
   useSheetOpen(open);
 
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const timers: number[] = [];
+    const clearTimers = () => {
+      timers.forEach((id) => window.clearTimeout(id));
+      timers.length = 0;
+    };
+    const look = () => {
+      clearTimers();
+      [0, 350, 900].forEach((delay) => {
+        const id = window.setTimeout(() => {
+          if (cancelled) return;
+          void acceptPhoneNoticesIfGranted().then((ok) => {
+            if (!ok || cancelled) return;
+            askGen.current += 1;
+            setBusy(false);
+            setFault(null);
+            setDeclined(false);
+            setOpen(false);
+          });
+        }, delay);
+        timers.push(id);
+      });
+    };
+    look();
+    const stop = onHouseNoticeResume(look);
+    return () => {
+      cancelled = true;
+      clearTimers();
+      stop();
+    };
+  }, [open]);
+
   if (!open) return null;
 
   const later = () => {
@@ -91,23 +127,31 @@ export const NotificationAsk: React.FC = () => {
       if (askGen.current !== gen) return;
       setBusy(false);
       setFault(NOTIFICATION_STALL_MESSAGE);
-    }).then((result) => {
-      if (askGen.current !== gen) {
-        if (result === 'granted') {
+    }).then(async (result) => {
+      if (result === 'granted') {
+        const on = await acceptPhoneNoticesIfGranted();
+        if (!on) {
           setNotificationsEnabled(true);
           markNotificationPromptSeen();
-          setOpen(false);
         }
-        return;
       }
-      setBusy(false);
-      setFault(null);
-      markNotificationPromptSeen();
+      if (askGen.current !== gen) return;
       if (result === 'granted') {
-        setNotificationsEnabled(true);
+        setBusy(false);
+        setFault(null);
         setOpen(false);
         return;
       }
+      const recovered = await acceptPhoneNoticesIfGranted();
+      if (askGen.current !== gen) return;
+      setBusy(false);
+      if (recovered) {
+        setFault(null);
+        setOpen(false);
+        return;
+      }
+      setFault(null);
+      markNotificationPromptSeen();
       if (result === 'unsupported') {
         setOpen(false);
         return;
@@ -121,7 +165,7 @@ export const NotificationAsk: React.FC = () => {
     void openHouseNotificationSettings().then((opened) => {
       setSettingsNote(
         opened
-          ? 'Notification settings are open. Allow notices for this house, then turn Phone notices on in Settings.'
+          ? 'Notification settings are open. Allow notices for this house, then come back.'
           : 'On this screen the phone settings cannot be opened. On the installed house, this opens Android notification settings.'
       );
     });

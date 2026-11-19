@@ -276,13 +276,19 @@ export function useIntakeSpawner() {
       runChain();
     };
 
+    const onNotices = () => {
+      alarmKey.current = '';
+      pushAlarms();
+    };
     runChain();
     const id = window.setInterval(runChain, 1000);
     document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('ossuarian-notices-on', onNotices);
     return () => {
       cancelled = true;
       window.clearInterval(id);
       document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('ossuarian-notices-on', onNotices);
     };
   }, [
     hasStartedGame,

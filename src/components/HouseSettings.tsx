@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { DEFAULT_PLAYER_NAME } from '../data/playerName';
 import { COMING_SOON_POINTS } from './ComingSoonNote';
 import { resetGame } from '../utils/resetGame';
@@ -6,6 +6,8 @@ import { useGameStore } from '../store/useGameStore';
 import { audioManager } from '../utils/audioManager';
 import {
   NOTIFICATION_STALL_MESSAGE,
+  acceptPhoneNoticesIfGranted,
+  onHouseNoticeResume,
   openHouseNotificationSettings,
   requestHouseNotificationPermission,
   scheduleHouseTestNotification,
@@ -29,7 +31,27 @@ export const HouseSettings: React.FC = () => {
   const [confirmErase, setConfirmErase] = useState(false);
   const [notifyNote, setNotifyNote] = useState<string | null>(null);
   const [notifyDenied, setNotifyDenied] = useState(false);
+  const watchSettings = useRef(false);
+  const noticesOnNote =
+    'On. Arrivals, a finished retort, a service about to begin, family choices, and bank payments will ping this phone.';
   useSheetOpen(open);
+
+  useEffect(() => {
+    if (!open) {
+      watchSettings.current = false;
+      return;
+    }
+    const stop = onHouseNoticeResume(() => {
+      if (!watchSettings.current) return;
+      void acceptPhoneNoticesIfGranted().then((ok) => {
+        if (!ok) return;
+        watchSettings.current = false;
+        setNotifyDenied(false);
+        setNotifyNote(noticesOnNote);
+      });
+    });
+    return () => stop();
+  }, [open]);
 
   useEffect(() => {
     if (!open) {
@@ -156,12 +178,17 @@ export const HouseSettings: React.FC = () => {
                     void requestHouseNotificationPermission(() => {
                       setNotifyDenied(true);
                       setNotifyNote(NOTIFICATION_STALL_MESSAGE);
-                    }).then((result) => {
+                    }).then(async (result) => {
                       if (result === 'granted') {
-                        setNotificationsEnabled(true);
-                        setNotifyNote(
-                          'On. Arrivals, a finished retort, a service about to begin, family choices, and bank payments will ping this phone.'
-                        );
+                        const on = await acceptPhoneNoticesIfGranted();
+                        if (!on) setNotificationsEnabled(true);
+                        setNotifyDenied(false);
+                        setNotifyNote(noticesOnNote);
+                        return;
+                      }
+                      if (await acceptPhoneNoticesIfGranted()) {
+                        setNotifyDenied(false);
+                        setNotifyNote(noticesOnNote);
                         return;
                       }
                       if (result === 'unsupported') {
@@ -202,9 +229,11 @@ export const HouseSettings: React.FC = () => {
                     void scheduleHouseTestNotification(() => {
                       setNotifyDenied(true);
                       setNotifyNote(NOTIFICATION_STALL_MESSAGE);
-                    }).then((result) => {
+                    }).then(async (result) => {
                       if (result === 'scheduled') {
+                        await acceptPhoneNoticesIfGranted();
                         setNotificationsEnabled(true);
+                        setNotifyDenied(false);
                         setNotifyNote(
                           'A notice is set for 5 seconds from now. Leave the house and the phone should still show it.'
                         );
@@ -214,6 +243,11 @@ export const HouseSettings: React.FC = () => {
                         setNotifyNote(
                           'This screen cannot post a system notice.'
                         );
+                        return;
+                      }
+                      if (await acceptPhoneNoticesIfGranted()) {
+                        setNotifyDenied(false);
+                        setNotifyNote(noticesOnNote);
                         return;
                       }
                       setNotifyDenied(true);
@@ -232,9 +266,10 @@ export const HouseSettings: React.FC = () => {
                     data-notify-settings
                     onClick={() => {
                       void openHouseNotificationSettings().then((opened) => {
+                        watchSettings.current = opened;
                         setNotifyNote(
                           opened
-                            ? 'Notification settings are open. Allow notices for this house, then turn Phone notices on.'
+                            ? 'Notification settings are open. Allow notices for this house, then come back.'
                             : 'On this screen the phone settings cannot be opened. On the installed house, this opens Android notification settings.'
                         );
                       });
