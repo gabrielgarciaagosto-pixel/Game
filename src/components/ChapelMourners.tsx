@@ -116,6 +116,12 @@ function pack(row: RowSpec): Seat[] {
 
 const SEATS: Seat[] = ROWS.flatMap(pack);
 
+/**
+ * Front-row figures whose bodies sat on the pew end panels.
+ * Dropped in place. The other seats keep the 44e9ff6 positions.
+ */
+const ON_END_PANEL = new Set(['L1-30', 'L2-32', 'L3-36', 'R0-34', 'R1-31', 'R2-37']);
+
 function spriteSrc(m: Seat): string {
   const n = String(m.sprite).padStart(2, '0');
   return m.side === 'L' ? `/chapel/mourners-left/l${n}.png` : `/chapel/mourners/m${n}.png`;
@@ -150,7 +156,7 @@ export const ChapelMourners: React.FC<{
         transition: 'opacity 1.1s ease',
       }}
     >
-      {SEATS.map((m) => (
+      {SEATS.filter((m) => !ON_END_PANEL.has(m.id)).map((m) => (
         <div
           key={m.id}
           className="chapel-mourner chapel-mourner-sprite absolute overflow-hidden"
