@@ -129,8 +129,8 @@ export const HouseSettings: React.FC = () => {
                 <div>
                   <p className="text-[11px] text-[#b7aa98]">Phone notices</p>
                   <p className="mt-1 text-[11px] leading-snug text-[#6e675c]">
-                    When a body arrives, or a family chooses an urn or a casket
-                    from your stock, the phone can ping you. The on-screen
+                    When a body is due, a family chooses from your stock, or the
+                    bank expects a payment, the phone can ping you. The on-screen
                     notice still shows while the house is open.
                   </p>
                 </div>
@@ -149,7 +149,7 @@ export const HouseSettings: React.FC = () => {
                       if (result === 'granted') {
                         setNotificationsEnabled(true);
                         setNotifyNote(
-                          'On. Arrivals and family choices will ping this phone.'
+                          'On. Arrivals, family choices, and bank payments will ping this phone.'
                         );
                         return;
                       }

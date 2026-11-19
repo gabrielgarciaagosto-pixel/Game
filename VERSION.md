@@ -23,7 +23,7 @@ Public APKs are signed with the house demo key. The keystore and its password st
 
 The house key changed for v0.9.67. Current certificate SHA-256: `61b3c07d3e81f3c5408816f43fc54b060fcb05677f0ea7918f6a0460b0511e4e`. The retired certificate is `3fbb9b330afbb0b82e92f3b8d84352c88f122551ae7467b0d85f0d8a7422515f`. Do not sign a new public build with the retired key.
 
-Latest public demo on this branch: v0.9.77-demo, versionCode 95. Same certificate as v0.9.76, so it installs on top of that build.
+Latest public demo on this branch: v0.9.78-demo, versionCode 96. Same certificate as v0.9.77, so it installs on top of that build.
 
 A phone that already has this package signed by a different certificate cannot install the new APK on top. Android rejects the update. The player uninstalls the old app first, then installs. When the key changes, the `version.json` note should say so.
 

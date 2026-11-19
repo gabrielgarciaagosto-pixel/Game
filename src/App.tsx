@@ -7,6 +7,7 @@ declare global {
     __ossuarianClosePhone?: () => void;
     __ossuarianCloseCalendar?: () => void;
     __ossuarianCloseSettingsConfirm?: () => void;
+    __ossuarianCloseNotifyAsk?: () => void;
     __ossuarianCloseUpdate?: () => void;
   }
 }
@@ -27,6 +28,7 @@ import { ServiceMusicAudio } from './components/ServiceMusicAudio';
 import { ShowroomAndChapelModal } from './components/ShowroomAndChapelModal';
 import { UrnFillingMiniGame } from './components/UrnFillingMiniGame';
 import { HouseSettings } from './components/HouseSettings';
+import { NotificationAsk } from './components/NotificationAsk';
 import { LegendarySpiritModal } from './components/LegendarySpiritModal';
 import { TutorialLayer } from './components/TutorialLayer';
 import { UpdateNotice } from './components/UpdateNotice';
@@ -68,6 +70,10 @@ function App() {
       }
       if (window.__ossuarianCloseSettingsConfirm) {
         window.__ossuarianCloseSettingsConfirm();
+        return 'handled';
+      }
+      if (window.__ossuarianCloseNotifyAsk) {
+        window.__ossuarianCloseNotifyAsk();
         return 'handled';
       }
       if (state.settingsOpen) {
@@ -195,6 +201,7 @@ function App() {
       <MenuThemeAudio />
       <TutorialLayer />
       <HouseSettings />
+      <NotificationAsk />
       <CrematoryAudio />
       <ServiceMusicAudio />
       <NotificationPing />
