@@ -1,6 +1,6 @@
 {
-  "versionName": "0.9.78-demo",
-  "versionCode": 96,
-  "apkUrl": "https://github.com/gabrielgarciaagosto-pixel/Game/raw/57328c310751d0fdcf0dbb18b6b6b49f6745a2ac/demo/Ossuarian-FirstUrn-v0.9.78-demo.apk",
-  "notes": "Shop purchases leave a note, and the phone asks before it notifies you."
+  "versionName": "0.9.79-demo",
+  "versionCode": 97,
+  "apkUrl": "https://github.com/gabrielgarciaagosto-pixel/Game/raw/1a11262bb818abe9f96b2cb285a24d11f053205c/demo/Ossuarian-FirstUrn-v0.9.79-demo.apk",
+  "notes": "The house keeps time while it is closed, and the phone warns you before a service."
 }
