@@ -77,9 +77,12 @@ export const ShowroomAndChapelModal: React.FC = () => {
   useEffect(() => {
     if (!currentCase || !layout) return;
     const focal = layout.pieces.find((piece) => piece.id === 'focal' && piece.kind === 'COFFIN');
-    // The stopgap room parked the casket on the altar (y around 0.42).
-    if (focal && focal.y < 0.5) {
-      moveChapelPiece(currentCase.id, focal.id, 0.5, 0.66);
+    if (!focal) return;
+    // Older rooms left the casket on the altar or down in the aisle.
+    const parkedHigh = focal.y < 0.535;
+    const parkedInAisle = focal.y > 0.59 && focal.y < 0.74;
+    if (parkedHigh || parkedInAisle) {
+      moveChapelPiece(currentCase.id, focal.id, 0.5, 0.555);
     }
   }, [currentCase, layout, moveChapelPiece]);
   /** Live drag overrides — score uses these; store persists only on release. */
@@ -881,11 +884,26 @@ function DraggablePiece({
       style={{
         left: `${piece.x * 100}%`,
         top: `${piece.y * 100}%`,
-        width: piece.kind === 'COFFIN' ? '20%' : undefined,
+        width: piece.kind === 'COFFIN' ? '12.5%' : undefined,
       }}
     >
       {piece.kind === 'COFFIN' && (
         <div className="relative">
+          <div
+            className="pointer-events-none absolute left-1/2 w-[108%] -translate-x-1/2"
+            style={{ top: '97%' }}
+            aria-hidden
+          >
+            <svg viewBox="0 0 240 32" className="block h-auto w-full overflow-visible">
+              <ellipse cx="120" cy="27" rx="92" ry="4.5" fill="#2a1a0c" opacity="0.4" />
+              <path d="M34 8h172l8 10H26z" fill="#3a2a20" stroke="#1c120c" strokeWidth="2.4" strokeLinejoin="round" />
+              <rect x="30" y="2" width="180" height="8" rx="1.5" fill="#5c4030" stroke="#1c120c" strokeWidth="2.4" />
+              <circle cx="58" cy="22" r="5.5" fill="#1a120c" stroke="#3a2c20" strokeWidth="1.6" />
+              <circle cx="182" cy="22" r="5.5" fill="#1a120c" stroke="#3a2c20" strokeWidth="1.6" />
+              <circle cx="58" cy="22" r="1.6" fill="#8a7058" />
+              <circle cx="182" cy="22" r="1.6" fill="#8a7058" />
+            </svg>
+          </div>
           {offeredCasket ? (
             <CasketVessel
               casket={offeredCasket}
