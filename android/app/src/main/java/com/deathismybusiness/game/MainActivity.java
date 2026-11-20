@@ -18,6 +18,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(HouseNoticesPlugin.class);
+        registerPlugin(HouseExitPlugin.class);
         super.onCreate(savedInstanceState);
         // Draw under the system bars. Insets are published as CSS variables
         // (--safe-area-inset-*) so the hub and computer chrome pad themselves.

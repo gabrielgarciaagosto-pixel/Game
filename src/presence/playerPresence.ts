@@ -1,14 +1,18 @@
+import { cleanHouseText, rememberHouseLines, type StoredHouseLine } from '../news/houseLines';
 import { VERSION_CODE, VERSION_NAME } from '../version';
 import { firebaseReady, readFirebaseConfig, type FirebasePublicConfig } from './config';
+import { asDocuments, bearer, documentId, fsFetch, projectDocuments, readInt, readString, type FsFields } from './fsRest';
+import { applyGift, giftAlreadySeen, markGiftSeen } from './gifts';
 import { getInstallId } from './installId';
+import { primeHouseWire } from './houseNotices';
 import { playPlatform } from './platform';
+import { collectPlayerStats } from './playerStats';
 import { noteForeground, pauseSession, type SessionSnapshot } from './session';
 import { SHARE_PLAY_COUNT_EVENT, sharePlayCount } from './sharePref';
 
 /** Inside the 60 to 120 second range. The first ping is sooner so a live count is not a minute late. */
 const INTERVAL_MS = 90_000;
 const FIRST_MS = 2_000;
-const REQUEST_MS = 8_000;
 
 interface SavedAuth {
   idToken: string;
@@ -20,8 +24,8 @@ interface SavedAuth {
 const AUTH_KEY = 'ossuarian-anon-auth';
 
 /**
- * Public player build only. One ping at a time. Failures are ignored.
- * The Dungeon Master build does not import this module.
+ * Public player build. One beat at a time. A failed ping, gift check, or wire
+ * read is ignored. The next try waits for the regular beat. Nothing is shown.
  */
 export function startPlayerPresence(): () => void {
   if (!firebaseReady()) return () => {};
@@ -58,10 +62,9 @@ export function startPlayerPresence(): () => void {
     if (controller) return;
     const ac = new AbortController();
     controller = ac;
-    const timeout = window.setTimeout(() => ac.abort(), REQUEST_MS);
     try {
       const config = readFirebaseConfig();
-      if (!firebaseReady(config)) return;
+      if (!firebaseReady(config) || !canRun()) return;
       const session = noteForeground(Date.now());
       let auth = await anonymousToken(config, ac.signal);
       if (!auth || !canRun()) return;
@@ -69,12 +72,18 @@ export function startPlayerPresence(): () => void {
       const saved = readAuth();
       if (status === 401 && saved?.refreshToken && canRun()) {
         const refreshed = await refreshAnon(config, saved.refreshToken, ac.signal);
-        if (refreshed && canRun()) await writePresence(config, refreshed, session, ac.signal);
+        if (refreshed && canRun()) {
+          auth = refreshed;
+          await writePresence(config, refreshed, session, ac.signal);
+        }
       }
+      if (!canRun()) return;
+      await pullNews(config, auth, ac.signal);
+      if (!canRun()) return;
+      await pullGifts(config, auth, ac.signal);
     } catch {
       /* offline, a bad clock, or a missing project stays quiet */
     } finally {
-      window.clearTimeout(timeout);
       if (controller === ac) controller = null;
       if (canRun()) schedule(INTERVAL_MS);
     }
@@ -112,6 +121,146 @@ export function startPlayerPresence(): () => void {
   };
 }
 
+async function pullNews(
+  config: FirebasePublicConfig,
+  auth: { idToken: string },
+  signal: AbortSignal
+): Promise<void> {
+  const url = `${projectDocuments(config.projectId)}:runQuery`;
+  const response = await fsFetch(
+    url,
+    {
+      method: 'POST',
+      headers: bearer(auth.idToken),
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId: 'houseNews' }],
+          orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
+          limit: 5,
+        },
+      }),
+    },
+    signal
+  );
+  if (!response.ok) return;
+  const lines: StoredHouseLine[] = [];
+  for (const document of asDocuments(await response.json())) {
+    const text = cleanHouseText(readString(document.fields, 'text'));
+    const createdAt = readInt(document.fields, 'createdAt');
+    const rawId = documentId(document.name).replace(/[^A-Za-z0-9]/g, '');
+    if (!text || !rawId || createdAt <= 0) continue;
+    lines.push({ id: `house${rawId}`, text, createdAt });
+  }
+  if (lines.length === 0) return;
+  rememberHouseLines(lines);
+  primeHouseWire();
+}
+
+async function pullGifts(
+  config: FirebasePublicConfig,
+  auth: { idToken: string; localId: string },
+  signal: AbortSignal
+): Promise<void> {
+  const installId = getInstallId();
+  const base = projectDocuments(config.projectId);
+  const broadcasts = await queryGifts(
+    `${base}:runQuery`,
+    {
+      structuredQuery: {
+        from: [{ collectionId: 'commands' }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: 'target' },
+            op: 'EQUAL',
+            value: { stringValue: 'all' },
+          },
+        },
+        orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
+        limit: 10,
+      },
+    },
+    auth.idToken,
+    signal
+  );
+  const directResponse = await fsFetch(
+    `${base}/direct/${encodeURIComponent(installId)}:runQuery`,
+    {
+      method: 'POST',
+      headers: bearer(auth.idToken),
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId: 'commands' }],
+          orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
+          limit: 10,
+        },
+      }),
+    },
+    signal
+  );
+  const direct = directResponse.ok ? asDocuments(await directResponse.json()) : [];
+  const gifts = [...broadcasts, ...direct];
+  gifts.sort((a, b) => giftRank(a.fields) - giftRank(b.fields));
+  for (const gift of gifts) {
+    if (!sharePlayCount() || signal.aborted || document.visibilityState === 'hidden') return;
+    await consumeGift(gift, installId, auth, signal);
+  }
+}
+
+function giftRank(fields: FsFields): number {
+  return readString(fields, 'kind') === 'money' ? 0 : 1;
+}
+
+async function queryGifts(
+  url: string,
+  body: unknown,
+  idToken: string,
+  signal: AbortSignal
+): Promise<Array<{ name: string; fields: FsFields }>> {
+  const response = await fsFetch(
+    url,
+    { method: 'POST', headers: bearer(idToken), body: JSON.stringify(body) },
+    signal
+  );
+  if (!response.ok) return [];
+  return asDocuments(await response.json());
+}
+
+async function consumeGift(
+  gift: { name: string; fields: FsFields },
+  installId: string,
+  auth: { idToken: string; localId: string },
+  signal: AbortSignal
+): Promise<void> {
+  const kind = readString(gift.fields, 'kind');
+  if (kind !== 'remains' && kind !== 'money') return;
+  if (giftAlreadySeen(gift.name)) return;
+  const receiptUrl = `https://firestore.googleapis.com/v1/${gift.name}/receipts/${encodeURIComponent(installId)}`;
+  const existing = await fsFetch(receiptUrl, { headers: bearer(auth.idToken) }, signal);
+  if (existing.ok) {
+    markGiftSeen(gift.name);
+    return;
+  }
+  if (existing.status !== 404) return;
+  const amount = readInt(gift.fields, 'amount');
+  const landed = applyGift(kind, kind === 'remains' ? 1 : amount);
+  if (!landed) return;
+  markGiftSeen(gift.name);
+  await fsFetch(
+    `https://firestore.googleapis.com/v1/${gift.name}/receipts?documentId=${encodeURIComponent(installId)}`,
+    {
+      method: 'POST',
+      headers: bearer(auth.idToken),
+      body: JSON.stringify({
+        fields: {
+          owner: { stringValue: auth.localId },
+          consumedAt: { integerValue: String(Date.now()) },
+        },
+      }),
+    },
+    signal
+  );
+}
+
 async function anonymousToken(
   config: FirebasePublicConfig,
   signal: AbortSignal
@@ -133,14 +282,14 @@ async function signUpAnon(
   config: FirebasePublicConfig,
   signal: AbortSignal
 ): Promise<{ idToken: string; localId: string } | null> {
-  const response = await fetch(
+  const response = await fsFetch(
     `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${encodeURIComponent(config.apiKey)}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ returnSecureToken: true }),
-      signal,
-    }
+    },
+    signal
   );
   if (!response.ok) return null;
   const body = (await response.json()) as {
@@ -159,7 +308,7 @@ async function refreshAnon(
   refreshToken: string,
   signal: AbortSignal
 ): Promise<{ idToken: string; localId: string } | null> {
-  const response = await fetch(
+  const response = await fsFetch(
     `https://securetoken.googleapis.com/v1/token?key=${encodeURIComponent(config.apiKey)}`,
     {
       method: 'POST',
@@ -168,8 +317,8 @@ async function refreshAnon(
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
       }),
-      signal,
-    }
+    },
+    signal
   );
   if (!response.ok) return null;
   const body = (await response.json()) as {
@@ -190,49 +339,63 @@ async function writePresence(
   signal: AbortSignal
 ): Promise<number> {
   const installId = getInstallId();
-  const fields = {
+  const now = Date.now();
+  const stats = collectPlayerStats(now);
+  const recent = session.recentSessionMs
+    .filter((ms) => Number.isFinite(ms) && ms > 0 && ms < 48 * 60 * 60 * 1000)
+    .slice(-8);
+  const fields: FsFields = {
     owner: { stringValue: auth.localId },
     installId: { stringValue: installId },
     versionName: { stringValue: VERSION_NAME },
     versionCode: { integerValue: String(VERSION_CODE) },
     platform: { stringValue: playPlatform() },
-    lastSeen: { integerValue: String(Date.now()) },
+    firstSeen: { integerValue: String(stats.firstSeen) },
+    lastSeen: { integerValue: String(now) },
     sessionStartedAt: { integerValue: String(session.sessionStartedAt) },
-    sessionMs: { integerValue: String(session.sessionMs) },
+    sessionMs: { integerValue: String(Math.min(session.sessionMs, 48 * 60 * 60 * 1000 - 1)) },
     recentSessionMs: {
       arrayValue: {
-        values: session.recentSessionMs.map((ms) => ({ integerValue: String(Math.round(ms)) })),
+        values: recent.map((ms) => ({ integerValue: String(Math.round(ms)) })),
       },
     },
+    playerName: { stringValue: stats.playerName },
+    cash: { integerValue: String(stats.cash) },
+    reputation: { integerValue: String(stats.reputation) },
+    intermentScore: { integerValue: String(stats.intermentScore) },
+    ossilegiumGrams: { integerValue: String(stats.ossilegiumGrams) },
+    urnsCount: { integerValue: String(stats.urnsCount) },
+    casesHandled: { integerValue: String(stats.casesHandled) },
+    careerXp: { integerValue: String(stats.careerXp) },
+    rankTitle: { stringValue: stats.rankTitle },
+    homesKept: { integerValue: String(stats.homesKept) },
+    activeStation: { stringValue: stats.activeStation },
+    ownedPropertyLabel: { stringValue: stats.ownedPropertyLabel },
+    ownedPropertyCity: { stringValue: stats.ownedPropertyCity },
   };
   const mask = Object.keys(fields)
     .map((name) => `updateMask.fieldPaths=${encodeURIComponent(name)}`)
     .join('&');
-  const url =
-    `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}` +
-    `/databases/(default)/documents/presence/${encodeURIComponent(installId)}?${mask}`;
-  const patch = await fetch(url, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${auth.idToken}`,
+  const url = `${projectDocuments(config.projectId)}/presence/${encodeURIComponent(installId)}?${mask}`;
+  const patch = await fsFetch(
+    url,
+    {
+      method: 'PATCH',
+      headers: bearer(auth.idToken),
+      body: JSON.stringify({ fields }),
     },
-    body: JSON.stringify({ fields }),
-    signal,
-  });
+    signal
+  );
   if (patch.ok || patch.status !== 404) return patch.status;
-  const createUrl =
-    `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}` +
-    `/databases/(default)/documents/presence?documentId=${encodeURIComponent(installId)}`;
-  const created = await fetch(createUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${auth.idToken}`,
+  const created = await fsFetch(
+    `${projectDocuments(config.projectId)}/presence?documentId=${encodeURIComponent(installId)}`,
+    {
+      method: 'POST',
+      headers: bearer(auth.idToken),
+      body: JSON.stringify({ fields }),
     },
-    body: JSON.stringify({ fields }),
-    signal,
-  });
+    signal
+  );
   return created.status;
 }
 

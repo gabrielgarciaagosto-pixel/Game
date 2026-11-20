@@ -32,6 +32,7 @@ type TickerLine = {
   trend: NewsTrend;
   misc: boolean;
   spawn: boolean;
+  house: boolean;
 };
 
 /**
@@ -50,6 +51,7 @@ export const NewsTicker: React.FC = () => {
         trend: trendFor(item.headlineId),
         misc: headline?.group === 'MISCELLANEOUS',
         spawn: headline?.category === 'CELEBRITY' && headline.spawnsCase === true,
+        house: item.headlineId.startsWith('house'),
       };
     })
     .filter((line) => line.text);
@@ -69,6 +71,13 @@ export const NewsTicker: React.FC = () => {
     }, reduced ? 8000 : 6500);
     return () => window.clearInterval(id);
   }, [count]);
+
+  const houseKey = lines.find((line) => line.house)?.id ?? '';
+  useEffect(() => {
+    if (!houseKey) return;
+    const at = linesRef.current.findIndex((line) => line.house);
+    if (at >= 0) setIndex(at);
+  }, [houseKey]);
 
   const safeIndex = count === 0 ? 0 : index % count;
   const line = lines[safeIndex];
@@ -94,7 +103,9 @@ export const NewsTicker: React.FC = () => {
           <p
             key={line?.id ?? 'quiet'}
             data-news-text={line?.text ?? ''}
-            data-news-kind={line?.misc ? 'misc' : line?.spawn ? 'case' : 'effect'}
+            data-news-kind={
+              line?.house ? 'house' : line?.misc ? 'misc' : line?.spawn ? 'case' : 'effect'
+            }
             title={line?.text}
             className="news-swap h-[2.3rem] text-[12px] leading-[1.15rem] text-slate-100 line-clamp-2"
           >

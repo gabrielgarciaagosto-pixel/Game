@@ -1,3 +1,4 @@
+import { FICTION_AGREED_KEY, FICTION_REFUSED_KEY } from '../presence/fictionGate';
 import { useGameStore, pauseGamePersistWrites, resumeGamePersistWrites } from '../store/useGameStore';
 import { AUDIO_PREFS_KEY } from './audioManager';
 import { clearClockOffsetStorage } from './gameNow';
@@ -34,6 +35,7 @@ function wipeBrowserStorage() {
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (k === AUDIO_PREFS_KEY) continue;
+      if (k === FICTION_AGREED_KEY || k === FICTION_REFUSED_KEY) continue;
       if (k && (k.startsWith('ossuarian') || k.startsWith('ofu-'))) {
         toRemove.push(k);
       }

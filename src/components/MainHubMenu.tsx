@@ -19,7 +19,6 @@ import { TAG_WINDOW_MS, useGameStore, type LastCaseNote } from '../store/useGame
 import { HubAtmosphere } from './hub/HubAtmosphere';
 import { titleProgress } from '../data/rankProgression';
 import { noteUrnsTap } from '../dev/devSummon';
-import { MasterSlot } from '../presence/MasterSlot';
 import { DeskCalendar } from './hub/DeskCalendar';
 import { NewsTicker } from './hub/NewsTicker';
 import type { DecedentCase } from '../types/game';
@@ -254,9 +253,7 @@ function StatChip({
       {...tap}
       aria-expanded={active}
       data-stat-chip={id}
-      className={`inline-flex min-h-11 items-center bg-slate-950/80 rounded-lg border font-mono text-[12px] ${
-        __OSSUARIAN_ROLE__ === 'master' ? 'px-1.5' : 'px-2.5'
-      } ${className} ${
+      className={`inline-flex min-h-11 items-center bg-slate-950/80 rounded-lg border font-mono text-[12px] px-2.5 ${className} ${
         active ? 'ring-1 ring-amber-300/70' : ''
       }`}
     >
@@ -492,7 +489,7 @@ export const MainHubMenu: React.FC = () => {
         </p>
 
         <div
-          className={`flex flex-wrap ${__OSSUARIAN_ROLE__ === 'master' ? 'gap-1' : 'gap-1.5'}`}
+          className="flex flex-wrap gap-1.5"
           data-hub-stats
         >
           <StatChip
@@ -541,7 +538,6 @@ export const MainHubMenu: React.FC = () => {
           >
             URNS <span className="text-amber-300 font-bold">{urnOwned}</span>
           </StatChip>
-          <MasterSlot />
         </div>
 
         {open && (

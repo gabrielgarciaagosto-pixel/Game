@@ -1,14 +1,8 @@
+import type { Player } from './types';
+
 const LIVE_MS = 3 * 60 * 1000;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_SESSION_MS = 48 * 60 * 60 * 1000;
-
-export interface PresenceRow {
-  versionName: string;
-  versionCode: number;
-  lastSeen: number;
-  sessionMs: number;
-  recentSessionMs: number[];
-}
 
 export interface VersionCount {
   versionName: string;
@@ -24,8 +18,7 @@ export interface CountReport {
   versions: VersionCount[];
 }
 
-/** Totals only. Callers must not pass this function raw ids to render. */
-export function aggregatePresence(rows: readonly PresenceRow[], now: number): CountReport {
+export function aggregatePlayers(players: readonly Player[], now: number): CountReport {
   const today = new Date(now).toISOString().slice(0, 10);
   let live = 0;
   let todayCount = 0;
@@ -33,19 +26,19 @@ export function aggregatePresence(rows: readonly PresenceRow[], now: number): Co
   const samples: number[] = [];
   const versions = new Map<string, VersionCount>();
 
-  for (const row of rows) {
-    if (!Number.isFinite(row.lastSeen)) continue;
-    const age = now - row.lastSeen;
+  for (const player of players) {
+    if (!Number.isFinite(player.lastSeen)) continue;
+    const age = now - player.lastSeen;
     if (age <= LIVE_MS && age >= -60_000) live += 1;
-    if (new Date(row.lastSeen).toISOString().slice(0, 10) === today) todayCount += 1;
+    if (new Date(player.lastSeen).toISOString().slice(0, 10) === today) todayCount += 1;
     if (age > WEEK_MS || age < -60_000) continue;
     week += 1;
-    if (saneSession(row.sessionMs)) samples.push(row.sessionMs);
-    for (const sample of row.recentSessionMs) {
-      if (saneSession(sample)) samples.push(sample);
+    if (sane(player.sessionMs)) samples.push(player.sessionMs);
+    for (const sample of player.recentSessionMs) {
+      if (sane(sample)) samples.push(sample);
     }
-    const versionName = row.versionName || 'Unknown';
-    const versionCode = Number.isFinite(row.versionCode) ? row.versionCode : 0;
+    const versionName = player.versionName || 'Unknown';
+    const versionCode = Number.isFinite(player.versionCode) ? player.versionCode : 0;
     const key = `${versionName}\n${versionCode}`;
     const current = versions.get(key) ?? { versionName, versionCode, players: 0 };
     current.players += 1;
@@ -75,6 +68,17 @@ export function formatSessionLength(ms: number | null): string {
   return `${hourLabel} ${minuteLabel}`;
 }
 
-function saneSession(ms: number): boolean {
+export function ago(then: number, now: number): string {
+  const minutes = Math.round(Math.max(0, now - then) / 60000);
+  if (minutes < 1) return 'Just now';
+  if (minutes === 1) return '1 minute ago';
+  if (minutes < 60) return `${minutes} minutes ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 36) return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
+  const days = Math.round(hours / 24);
+  return days === 1 ? '1 day ago' : `${days} days ago`;
+}
+
+function sane(ms: number): boolean {
   return Number.isFinite(ms) && ms > 0 && ms < MAX_SESSION_MS;
 }

@@ -33,6 +33,8 @@ import { LegendarySpiritModal } from './components/LegendarySpiritModal';
 import { TutorialLayer } from './components/TutorialLayer';
 import { UpdateNotice } from './components/UpdateNotice';
 import { UrnStartScreen } from './components/UrnStartScreen';
+import { FirstLaunchAgreement } from './components/FirstLaunchAgreement';
+import { readFictionChoice } from './presence/fictionGate';
 import { UrnVaultRoom } from './components/UrnVaultRoom';
 import { useIntakeSpawner } from './hooks/useIntakeSpawner';
 import { useRetortEngine } from './hooks/useRetortEngine';
@@ -48,7 +50,7 @@ const DevToolsOverlay =
         }))
       );
 
-function App() {
+function PlayApp() {
   const [hydrated, setHydrated] = useState(() =>
     useGameStore.persist.hasHydrated()
   );
@@ -166,7 +168,7 @@ function App() {
   }, [intakeToast]);
 
   useEffect(() => {
-    if (__OSSUARIAN_ROLE__ === 'master') return;
+    if (!hydrated) return;
     let stop = () => {};
     let cancelled = false;
     void import('./presence/playerPresence').then((mod) => {
@@ -177,7 +179,7 @@ function App() {
       cancelled = true;
       stop();
     };
-  }, []);
+  }, [hydrated]);
 
   const onTitle = titleGate || !hasStartedGame;
   const onHub = hasStartedGame && !titleGate && activeStation === 'OVERVIEW';
@@ -391,4 +393,15 @@ function App() {
   );
 }
 
-export default App;
+export default function App() {
+  const [fiction, setFiction] = useState(readFictionChoice);
+  if (fiction !== 'agreed') {
+    return (
+      <FirstLaunchAgreement
+        refused={fiction === 'refused'}
+        onAgreed={() => setFiction('agreed')}
+      />
+    );
+  }
+  return <PlayApp />;
+}

@@ -12,6 +12,7 @@ import {
   requestHouseNotificationPermission,
   scheduleHouseTestNotification,
 } from '../utils/houseNotifications';
+import { SHARE_COUNT_LINE, SHARE_STATS_LINE } from '../presence/fictionGate';
 import { setSharePlayCount, sharePlayCount } from '../presence/sharePref';
 import { useSheetOpen } from './useSheetOpen';
 
@@ -289,7 +290,7 @@ export const HouseSettings: React.FC = () => {
               </div>
             </div>
 
-            {__OSSUARIAN_ROLE__ === 'master' ? null : <PlayCountRow />}
+            <PlayCountRow />
 
             <div className="mt-4 border-t border-[#3a3228] pt-4">
               <p className="text-[10px] uppercase tracking-[0.22em] text-[#c4a574]">
@@ -434,9 +435,8 @@ function PlayCountRow() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] text-[#b7aa98]">Share anonymous play count</p>
-          <p className="mt-1 text-[11px] leading-snug text-[#6e675c]">
-            Sends an anonymous ping while the game is open, so the parlor can count players. No name and no save.
-          </p>
+          <p className="mt-1 text-[11px] leading-snug text-[#6e675c]">{SHARE_COUNT_LINE}</p>
+          <p className="mt-1 text-[11px] leading-snug text-[#6e675c]">{SHARE_STATS_LINE}</p>
         </div>
         <button
           type="button"

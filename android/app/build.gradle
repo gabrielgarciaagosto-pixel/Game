@@ -16,17 +16,6 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
-    flavorDimensions "audience"
-    productFlavors {
-        player {
-            dimension "audience"
-            isDefault.set(true)
-        }
-        master {
-            dimension "audience"
-            applicationIdSuffix ".master"
-        }
-    }
     def demoSigningFile = rootProject.file("demo-signing.properties")
     if (!demoSigningFile.exists()) {
         throw new GradleException("Missing android/demo-signing.properties. Demo APKs use the house demo keystore, not the platform debug certificate. That file is gitignored.")
@@ -49,24 +38,6 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.demo
-        }
-    }
-    applicationVariants.configureEach { variant ->
-        def expected = variant.flavorName
-        if (expected != "player" && expected != "master") {
-            return
-        }
-        variant.preBuildProvider.configure { task ->
-            task.doFirst {
-                def roleFile = file("src/main/assets/public/ossuarian-role.json")
-                if (!roleFile.exists()) {
-                    throw new GradleException("Missing src/main/assets/public/ossuarian-role.json. From the repo root run npm run build:" + expected + " and then npx cap sync android.")
-                }
-                def parsed = new groovy.json.JsonSlurper().parseText(roleFile.getText("UTF-8"))
-                if (parsed.role != expected) {
-                    throw new GradleException("The " + expected + " flavor found web role \"" + parsed.role + "\". Run npm run build:" + expected + " and npx cap sync android before assembling.")
-                }
-            }
         }
     }
 }

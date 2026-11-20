@@ -19,6 +19,7 @@ import {
   toWall,
 } from '../utils/houseAlarmPlan';
 import { syncHouseAlarms, type HouseAlarmPlan } from '../utils/houseNotifications';
+import { primeHouseWire } from '../presence/houseNotices';
 import { getCremationTargets } from '../utils/mortuaryMath';
 
 /**
@@ -235,6 +236,7 @@ export function useIntakeSpawner() {
       if (cancelled || running) return;
       running = true;
       const steps: Array<() => void> = [
+        () => primeHouseWire(),
         () => tickRetortBurn(),
         () => tickRetortDoor(),
         () => tickIntake({ catchUpLimit: 64 }),

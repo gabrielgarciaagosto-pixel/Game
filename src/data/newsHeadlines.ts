@@ -1,3 +1,5 @@
+import { houseLineText } from '../news/houseLines';
+
 /**
  * County wire for the hub news feed.
  *
@@ -329,6 +331,16 @@ export const NEWS_HEADLINES: readonly NewsHeadline[] = [
 const BY_ID = new Map(NEWS_HEADLINES.map((h) => [h.id, h]));
 
 export function headlineById(id: string): NewsHeadline | undefined {
+  const posted = houseLineText(id);
+  if (posted) {
+    return {
+      id,
+      category: 'ODD',
+      group: 'MISCELLANEOUS',
+      text: posted,
+      days: 1,
+    };
+  }
   return BY_ID.get(id);
 }
 

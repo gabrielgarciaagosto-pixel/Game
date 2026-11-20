@@ -151,6 +151,10 @@ function isSpawnItem(item: NewsWireItem): boolean {
   return item.live && isSpawnHeadline(headlineById(item.headlineId));
 }
 
+function isHouseItem(item: NewsWireItem): boolean {
+  return item.headlineId.startsWith('house');
+}
+
 /** A celebrity file is on the wire and still has no body in the house. */
 export function waitingSpawn(
   wire: readonly NewsWireItem[]
@@ -163,7 +167,9 @@ export function waitingSpawn(
 }
 
 function miscCount(wire: readonly NewsWireItem[]): number {
-  return wire.filter((item) => !isEconomicId(item.headlineId) && !isSpawnItem(item)).length;
+  return wire.filter(
+    (item) => !isHouseItem(item) && !isEconomicId(item.headlineId) && !isSpawnItem(item)
+  ).length;
 }
 
 function pickFrom(pool: readonly NewsHeadline[], rng: () => number): NewsHeadline | null {
@@ -186,10 +192,12 @@ function pickSpawn(blocked: Set<string>, rng: () => number): NewsHeadline | null
 }
 
 function settleWire(wire: readonly NewsWireItem[]): NewsWireItem[] {
-  const economic = wire.filter((item) => item.live && isEconomicId(item.headlineId)).slice(-1);
-  const spawn = wire.filter((item) => isSpawnItem(item)).slice(-1);
-  const misc = wire.filter((item) => !isEconomicId(item.headlineId) && !isSpawnItem(item));
-  return [...economic, ...spawn, ...misc.slice(-MISC_SLOTS)];
+  const house = wire.filter((item) => isHouseItem(item)).slice(-1);
+  const rest = wire.filter((item) => !isHouseItem(item));
+  const economic = rest.filter((item) => item.live && isEconomicId(item.headlineId)).slice(-1);
+  const spawn = rest.filter((item) => isSpawnItem(item)).slice(-1);
+  const misc = rest.filter((item) => !isEconomicId(item.headlineId) && !isSpawnItem(item));
+  return [...house, ...economic, ...spawn, ...misc.slice(-MISC_SLOTS)];
 }
 
 function remember(recent: string[], id: string): string[] {
