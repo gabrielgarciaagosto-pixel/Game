@@ -6,7 +6,7 @@ export const AGREEMENT_BODY =
   'Everything in this game is fiction. No real names of the deceased are used and no real locations are used. Any name or detail that resembles a real person or place is purely coincidence. All information in the game is made up. The game will not ask for personal information, personal data, or location. Just have fun.';
 
 export const AGREEMENT_ONLINE =
-  'An internet connection is recommended to enhance the game, but it is not required. It works fully offline. Stats sync and Dungeon Master gifts wait until the game is online.';
+  'An internet connection is recommended to enhance the game, but it is not required. It works fully offline. Stats sync and Head Mortician gifts wait until the game is online.';
 
 export const AGREEMENT_SURE = "We're sorry you couldn't agree. Are you sure?";
 

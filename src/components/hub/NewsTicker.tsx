@@ -26,6 +26,14 @@ function MiscTag() {
   );
 }
 
+function HouseTag() {
+  return (
+    <span className="shrink-0 rounded bg-[#3a3228] px-1 py-0.5 text-[8px] font-black tracking-[0.08em] text-[#e7d3b0]">
+      Head Mortician
+    </span>
+  );
+}
+
 type TickerLine = {
   id: string;
   text: string;
@@ -38,7 +46,8 @@ type TickerLine = {
 /**
  * Replaces the hub title. One headline is on screen, then the next slides in.
  * Price and volume lines carry an arrow. Miscellaneous lines carry a MISC tag.
- * A celebrity case keeps its own mark. The crawl prefers miscellaneous lines.
+ * A Head Mortician line carries that name instead. A celebrity case keeps its own mark.
+ * The crawl prefers miscellaneous lines.
  */
 export const NewsTicker: React.FC = () => {
   const wire = useGameStore((s) => s.newsWire);
@@ -92,7 +101,7 @@ export const NewsTicker: React.FC = () => {
         <span className="shrink-0 pt-0.5 text-[9px] font-black tracking-[0.16em] text-amber-200/90">
           NEWS
         </span>
-        {line?.misc ? <MiscTag /> : null}
+        {line?.house ? <HouseTag /> : line?.misc ? <MiscTag /> : null}
         {showArrow && line ? <TrendMark trend={line.trend} /> : null}
         {line?.spawn ? (
           <span aria-hidden className="shrink-0 pt-0.5 text-[9px] text-amber-200/70">

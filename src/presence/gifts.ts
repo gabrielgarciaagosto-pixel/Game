@@ -7,14 +7,14 @@ const MONEY_CAP = 1_000_000;
 export function applyGift(kind: 'remains' | 'money', amount: number): boolean {
   if (kind === 'remains') {
     return useGameStore.getState().receiveNewIntake({
-      toast: 'The Dungeon Master has sent you a remains',
+      toast: 'The Head Mortician has sent you a remains',
     });
   }
   const dollars = Math.round(amount);
   if (!Number.isFinite(dollars) || dollars < 1 || dollars > MONEY_CAP) return false;
   useGameStore.setState((state) => ({
     cash: state.cash + dollars,
-    intakeToast: `The Dungeon Master has given you $${dollars}`,
+    intakeToast: `The Head Mortician has given you $${dollars}`,
   }));
   return true;
 }
