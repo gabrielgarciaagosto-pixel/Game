@@ -1,5 +1,6 @@
 import type { Player } from './types';
 import type { GiftKind } from './types';
+import { nativeVault, vaultGet, vaultRemove, vaultSet } from './vault';
 
 export interface FirebasePublicConfig {
   apiKey: string;
@@ -13,6 +14,14 @@ interface Session {
 }
 
 const SESSION_KEY = 'master-urn-session';
+const EMAIL_KEY = 'email';
+const PASSWORD_KEY = 'password';
+const ID_KEY = 'idToken';
+const REFRESH_KEY = 'refreshToken';
+const EXPIRES_KEY = 'expiresAt';
+
+/** Runtime copy. The Android copy lives in the vault, not in web storage. */
+let memory: Session | null = null;
 
 export function readConfig(): FirebasePublicConfig {
   return {
@@ -29,11 +38,39 @@ export function savedSession(): boolean {
   return readSession() != null;
 }
 
-export function clearSession(): void {
-  sessionStorage.removeItem(SESSION_KEY);
+/** Load the vault before the first paint. Web keeps the tab session only. */
+export async function restoreVault(): Promise<{ email: string; password: string; signedIn: boolean }> {
+  if (!nativeVault()) {
+    memory = readStoredSession();
+    return { email: '', password: '', signedIn: memory != null };
+  }
+  const [email, password, idToken, refreshToken, expiresRaw] = await Promise.all([
+    vaultGet(EMAIL_KEY),
+    vaultGet(PASSWORD_KEY),
+    vaultGet(ID_KEY),
+    vaultGet(REFRESH_KEY),
+    vaultGet(EXPIRES_KEY),
+  ]);
+  const expiresAt = Number(expiresRaw);
+  memory =
+    idToken && refreshToken && Number.isFinite(expiresAt)
+      ? { idToken, refreshToken, expiresAt }
+      : null;
+  return { email: email ?? '', password: password ?? '', signedIn: memory != null };
 }
 
-/** The password is used for this call only. It is not written to storage. */
+/** Leave. The saved email and password stay so the next open is one tap. */
+export async function clearSession(): Promise<void> {
+  memory = null;
+  try {
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* private mode */
+  }
+  if (!nativeVault()) return;
+  await Promise.all([vaultRemove(ID_KEY), vaultRemove(REFRESH_KEY), vaultRemove(EXPIRES_KEY)]);
+}
+
 export async function signIn(email: string, password: string): Promise<void> {
   const config = readConfig();
   if (!configReady(config)) throw new Error('unconfigured');
@@ -52,7 +89,11 @@ export async function signIn(email: string, password: string): Promise<void> {
     expiresIn?: string;
   };
   if (!body.idToken || !body.refreshToken) throw new Error('signin');
-  writeSession(body.idToken, body.refreshToken, body.expiresIn);
+  if (nativeVault()) {
+    await vaultSet(EMAIL_KEY, email.trim());
+    await vaultSet(PASSWORD_KEY, password);
+  }
+  await writeSession(body.idToken, body.refreshToken, body.expiresIn);
 }
 
 export async function loadPlayers(): Promise<Player[]> {
@@ -152,7 +193,7 @@ async function tokenOrThrow(): Promise<string> {
     }
   );
   if (!response.ok) {
-    clearSession();
+    await clearSession();
     throw new Error('signedout');
   }
   const body = (await response.json()) as {
@@ -161,10 +202,10 @@ async function tokenOrThrow(): Promise<string> {
     expires_in?: string;
   };
   if (!body.id_token || !body.refresh_token) {
-    clearSession();
+    await clearSession();
     throw new Error('signedout');
   }
-  writeSession(body.id_token, body.refresh_token, body.expires_in);
+  await writeSession(body.id_token, body.refresh_token, body.expires_in);
   return body.id_token;
 }
 
@@ -214,6 +255,11 @@ function clean(value: unknown): string {
 }
 
 function readSession(): Session | null {
+  return memory ?? readStoredSession();
+}
+
+function readStoredSession(): Session | null {
+  if (nativeVault()) return memory;
   try {
     const raw = sessionStorage.getItem(SESSION_KEY);
     if (!raw) return null;
@@ -225,9 +271,20 @@ function readSession(): Session | null {
   }
 }
 
-function writeSession(idToken: string, refreshToken: string, expiresIn: string | undefined): void {
+async function writeSession(idToken: string, refreshToken: string, expiresIn: string | undefined): Promise<void> {
   const seconds = Number(expiresIn);
   const expiresAt = Date.now() + (Number.isFinite(seconds) ? Math.max(0, seconds - 60) : 3000) * 1000;
   const saved: Session = { idToken, refreshToken, expiresAt };
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify(saved));
+  memory = saved;
+  if (nativeVault()) {
+    await vaultSet(ID_KEY, saved.idToken);
+    await vaultSet(REFRESH_KEY, saved.refreshToken);
+    await vaultSet(EXPIRES_KEY, String(saved.expiresAt));
+    return;
+  }
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(saved));
+  } catch {
+    /* the sitting still has the memory copy */
+  }
 }

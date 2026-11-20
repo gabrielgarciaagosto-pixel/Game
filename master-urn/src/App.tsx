@@ -5,7 +5,7 @@ import {
   configReady,
   loadPlayers,
   pushNews,
-  savedSession,
+  restoreVault,
   sendGift,
   signIn,
 } from './firebase';
@@ -27,7 +27,8 @@ const ROOMS: Record<string, string> = {
 };
 
 export function App() {
-  const [signedIn, setSignedIn] = useState(SAMPLE || savedSession());
+  const [ready, setReady] = useState(SAMPLE);
+  const [signedIn, setSignedIn] = useState(SAMPLE);
   const [players, setPlayers] = useState<Player[]>(() => (SAMPLE ? samplePlayers(Date.now()) : []));
   const [screen, setScreen] = useState<Screen>('players');
   const [selected, setSelected] = useState<string | null>(null);
@@ -40,6 +41,21 @@ export function App() {
   const report = useMemo(() => aggregatePlayers(players, now), [players, now]);
 
   useEffect(() => {
+    if (SAMPLE) return;
+    let stop = false;
+    void restoreVault().then((saved) => {
+      if (stop) return;
+      setEmail(saved.email);
+      setPassword(saved.password);
+      setSignedIn(saved.signedIn);
+      setReady(true);
+    });
+    return () => {
+      stop = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (SAMPLE || !signedIn) return;
     let stop = false;
     const pull = () => {
@@ -50,8 +66,13 @@ export function App() {
             setNote('');
           }
         })
-        .catch(() => {
-          if (!stop) setNote('The parlor could not be reached.');
+        .catch((error: unknown) => {
+          if (stop) return;
+          if (error instanceof Error && error.message === 'signedout') {
+            setSignedIn(false);
+            return;
+          }
+          setNote('The parlor could not be reached.');
         });
     };
     pull();
@@ -61,6 +82,10 @@ export function App() {
       window.clearInterval(id);
     };
   }, [signedIn]);
+
+  if (!ready) {
+    return <div className="urn-safe-x h-dvh bg-[#100e0c]" />;
+  }
 
   if (!signedIn) {
     return (
@@ -72,11 +97,9 @@ export function App() {
         onEmail={setEmail}
         onPassword={setPassword}
         onSubmit={() => {
-          const typed = password;
-          setPassword('');
           setBusy(true);
           setNote('');
-          void signIn(email, typed)
+          void signIn(email, password)
             .then(() => setSignedIn(true))
             .catch((error: unknown) => {
               setNote(
@@ -97,8 +120,8 @@ export function App() {
   };
 
   return (
-    <div className="mx-auto flex h-dvh max-w-md flex-col bg-[#100e0c] text-[#f3eadc]">
-      <header className="shrink-0 border-b border-[#3a3228] px-4 py-3">
+    <div className="urn-safe-x mx-auto flex h-dvh max-w-md flex-col bg-[#100e0c] text-[#f3eadc]">
+      <header className="urn-safe-top shrink-0 border-b border-[#3a3228] px-4 pb-3" data-urn-header>
         <div className="flex items-baseline justify-between gap-3">
           <h1 className="font-[Cinzel,Georgia,serif] text-[15px] tracking-[0.18em] text-[#c4a574]">
             MASTER URN
@@ -112,9 +135,10 @@ export function App() {
               type="button"
               className="text-[12px] text-[#b7aa98]"
               onClick={() => {
-                clearSession();
-                setSignedIn(false);
-                setPlayers([]);
+                void clearSession().then(() => {
+                  setSignedIn(false);
+                  setPlayers([]);
+                });
               }}
             >
               Leave
@@ -155,7 +179,7 @@ export function App() {
         ) : null}
         {screen === 'news' ? <NewsForm sample={SAMPLE} onNote={setNote} /> : null}
       </main>
-      <nav className="grid shrink-0 grid-cols-3 border-t border-[#3a3228]">
+      <nav className="urn-safe-bottom grid shrink-0 grid-cols-3 border-t border-[#3a3228]" data-urn-tabs>
         <NavButton current={screen === 'players' || screen === 'detail'} onClick={() => setScreen('players')}>
           Parlors
         </NavButton>
@@ -189,7 +213,7 @@ function SignIn({
 }) {
   return (
     <form
-      className="mx-auto flex min-h-dvh max-w-md flex-col justify-center bg-[#100e0c] px-5 text-[#f3eadc]"
+      className="urn-safe-x urn-safe-top urn-safe-bottom mx-auto flex min-h-dvh max-w-md flex-col justify-center bg-[#100e0c] px-5 text-[#f3eadc]"
       data-screen="signin"
       onSubmit={(event) => {
         event.preventDefault();
@@ -200,7 +224,7 @@ function SignIn({
         MASTER URN
       </h1>
       <p className="mt-3 text-center text-[13px] leading-relaxed text-[#b7aa98]">
-        The parlor book. The password stays in this box until you enter.
+        The parlor book. After one entry, this phone keeps the login.
       </p>
       {!configReady() ? (
         <p className="mt-4 text-[13px] text-[#d7b3a4]">The Firebase web keys are not in the environment.</p>
@@ -233,7 +257,7 @@ function SignIn({
         disabled={busy}
         className="mt-5 min-h-11 rounded-lg bg-[#c4a574] text-sm font-bold text-[#1a140e] disabled:opacity-50"
       >
-        Enter
+        Log in
       </button>
     </form>
   );
