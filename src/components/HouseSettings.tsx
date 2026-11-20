@@ -235,7 +235,13 @@ export const HouseSettings: React.FC = () => {
                         setNotificationsEnabled(true);
                         setNotifyDenied(false);
                         setNotifyNote(
-                          'A notice is set for 5 seconds from now. Leave the house and the phone should still show it.'
+                          'A notice is set for 5 seconds from now. It should appear even if you leave this screen.'
+                        );
+                        return;
+                      }
+                      if (result === 'unsent') {
+                        setNotifyNote(
+                          'The notice could not be posted. Allow notices for this house, then try the test again.'
                         );
                         return;
                       }

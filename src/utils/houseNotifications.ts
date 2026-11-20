@@ -11,10 +11,19 @@ interface HouseNoticeResult {
   display?: string;
 }
 
+interface HouseNoticePayload {
+  id: number;
+  title: string;
+  body: string;
+  at: number;
+}
+
 interface HouseNoticesPlugin {
   openNotificationSettings(): Promise<void>;
   requestNotificationPermission(): Promise<HouseNoticeResult>;
   checkNotificationPermission(): Promise<HouseNoticeResult>;
+  scheduleNotices(options: { notices: HouseNoticePayload[] }): Promise<void>;
+  cancelNotices(options: { ids: number[] }): Promise<void>;
   addListener(
     eventName: 'resume',
     listenerFunc: () => void,
@@ -295,8 +304,32 @@ function rangedIds(base: number, count: number): { id: number }[] {
   return ids;
 }
 
+async function scheduleAndroid(notices: HouseNoticePayload[]) {
+  if (notices.length === 0) return;
+  await HouseNotices.scheduleNotices({ notices });
+}
+
+async function cancelAndroid(ids: number[]) {
+  if (ids.length === 0) return;
+  await HouseNotices.cancelNotices({ ids });
+  try {
+    const local = await localPlugin();
+    await local.cancel({ notifications: ids.map((id) => ({ id })) });
+  } catch {
+    // v0.9.81 parked these ids on LocalNotifications. A miss is not fatal.
+  }
+}
+
 async function deliver(title: string, body: string) {
   try {
+    if (Capacitor.getPlatform() === 'android') {
+      const perm = await checkHouseNotificationPermission();
+      if (perm !== 'granted') return;
+      const id = nextId;
+      nextId = (nextId % 2000000000) + 1;
+      await scheduleAndroid([{ id, title, body, at: Date.now() }]);
+      return;
+    }
     if (Capacitor.isNativePlatform()) {
       const local = await localPlugin();
       const perm = await checkHouseNotificationPermission();
@@ -326,7 +359,7 @@ async function deliver(title: string, body: string) {
   }
 }
 
-export type HouseTestResult = NotifyPermission | 'scheduled';
+export type HouseTestResult = NotifyPermission | 'scheduled' | 'unsent';
 
 /**
  * One notice five seconds out, so the phone can be closed before it arrives.
@@ -338,6 +371,17 @@ export async function scheduleHouseTestNotification(
   const perm = await requestHouseNotificationPermission(onStall);
   if (perm !== 'granted') return perm;
   try {
+    if (Capacitor.getPlatform() === 'android') {
+      await scheduleAndroid([
+        {
+          id: TEST_ALARM,
+          title: 'The house',
+          body: 'This is a test notice. If you can read it, the phone will reach you while the house is closed.',
+          at: Date.now() + 5000,
+        },
+      ]);
+      return 'scheduled';
+    }
     if (Capacitor.isNativePlatform()) {
       const local = await localPlugin();
       await ensureChannel(local);
@@ -369,7 +413,7 @@ export async function scheduleHouseTestNotification(
     }, 5000);
     return 'scheduled';
   } catch {
-    return Capacitor.isNativePlatform() ? 'denied' : 'unsupported';
+    return Capacitor.isNativePlatform() ? 'unsent' : 'unsupported';
   }
 }
 
@@ -425,7 +469,8 @@ function pushFuture(
 export async function syncHouseAlarms(plan: HouseAlarmPlan) {
   if (!Capacitor.isNativePlatform()) return;
   try {
-    const local = await localPlugin();
+    const android = Capacitor.getPlatform() === 'android';
+    const local = android ? null : await localPlugin();
     const ids = [
       { id: INTAKE_ALARM },
       { id: BANK_WARNING_ALARM },
@@ -438,11 +483,14 @@ export async function syncHouseAlarms(plan: HouseAlarmPlan) {
       ...rangedIds(DECAY_ALARM_BASE, DECAY_ALARM_SLOTS),
       ...rangedIds(TAG_ALARM_BASE, TAG_ALARM_SLOTS),
     ];
-    await local.cancel({ notifications: ids });
+    if (android) {
+      await cancelAndroid(ids.map((item) => item.id));
+    } else if (local) {
+      await local.cancel({ notifications: ids });
+    }
     if (!plan.enabled || !gate()) return;
     const perm = await checkHouseNotificationPermission();
     if (perm !== 'granted') return;
-    await ensureChannel(local);
     const now = Date.now();
     const queued: QueuedNotice[] = [];
     if (plan.intakeAt != null) {
@@ -548,6 +596,12 @@ export async function syncHouseAlarms(plan: HouseAlarmPlan) {
       );
     }
     if (queued.length === 0) return;
+    if (android) {
+      await scheduleAndroid(queued);
+      return;
+    }
+    if (!local) return;
+    await ensureChannel(local);
     await local.schedule({
       notifications: queued.map((item) => ({
         id: item.id,

@@ -13,6 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -21,6 +22,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import java.util.HashSet;
 import java.util.Set;
+import org.json.JSONObject;
 
 /**
  * Notification settings, and the Android 13+ notice permission.
@@ -70,6 +72,64 @@ public class HouseNoticesPlugin extends Plugin {
     @PluginMethod
     public void checkNotificationPermission(PluginCall call) {
         call.resolve(result());
+    }
+
+    @PluginMethod
+    public void scheduleNotices(PluginCall call) {
+        Context context = getContext();
+        if (context == null) {
+            call.reject("No context");
+            return;
+        }
+        JSArray rows = call.getArray("notices");
+        if (rows == null) {
+            call.resolve();
+            return;
+        }
+        try {
+            for (int i = 0; i < rows.length(); i += 1) {
+                JSONObject row = rows.getJSONObject(i);
+                int id = row.optInt("id", 0);
+                if (id == 0) continue;
+                HouseNoticePoster.schedule(
+                    context,
+                    id,
+                    row.optString("title", "The house"),
+                    row.optString("body", ""),
+                    row.optLong("at", 0L)
+                );
+            }
+            call.resolve();
+        } catch (Exception ex) {
+            call.reject("Could not schedule the notice");
+        }
+    }
+
+    @PluginMethod
+    public void cancelNotices(PluginCall call) {
+        Context context = getContext();
+        if (context == null) {
+            call.reject("No context");
+            return;
+        }
+        JSArray ids = call.getArray("ids");
+        if (ids == null) {
+            call.resolve();
+            return;
+        }
+        try {
+            for (int i = 0; i < ids.length(); i += 1) {
+                Object raw = ids.get(i);
+                int id = raw instanceof Number
+                    ? ((Number) raw).intValue()
+                    : Integer.parseInt(String.valueOf(raw));
+                if (id == 0) continue;
+                HouseNoticePoster.cancel(context, id);
+            }
+            call.resolve();
+        } catch (Exception ex) {
+            call.reject("Could not cancel the notice");
+        }
     }
 
     @PluginMethod
@@ -135,6 +195,10 @@ public class HouseNoticesPlugin extends Plugin {
                 settle(call);
                 return;
             }
+            if (runtimeGranted()) {
+                settle(call);
+                return;
+            }
             if (permissionLauncher == null) {
                 settle(call);
                 return;
@@ -186,14 +250,24 @@ public class HouseNoticesPlugin extends Plugin {
         return result;
     }
 
+    /**
+     * The shade follows areNotificationsEnabled. On API 33 through 36 the
+     * runtime grant can still read denied after Allow, or while the settings
+     * switch is already on. A post is attempted when the system says notices
+     * are enabled. The runtime permission is still requested when it is missing.
+     */
     private boolean noticesGranted() {
         Context context = getContext();
         if (context == null) return false;
-        boolean enabled = NotificationManagerCompat.from(context).areNotificationsEnabled();
-        if (Build.VERSION.SDK_INT < POST_NOTIFICATIONS_API) return enabled;
-        boolean runtime =
+        return NotificationManagerCompat.from(context).areNotificationsEnabled();
+    }
+
+    private boolean runtimeGranted() {
+        Context context = getContext();
+        if (context == null || Build.VERSION.SDK_INT < POST_NOTIFICATIONS_API) return true;
+        return (
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED;
-        return runtime && enabled;
+            PackageManager.PERMISSION_GRANTED
+        );
     }
 }
