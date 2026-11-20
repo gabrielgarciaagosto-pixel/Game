@@ -90,8 +90,8 @@ export const HouseSettings: React.FC = () => {
 
   return (
     <>
-      <div className="sheet-safe fixed inset-0 z-[10020] bg-black/75 flex items-end sm:items-center justify-center">
-        <div className="flex max-h-full w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-[#3a3228] bg-[#12100e] text-[#ebe6dd] shadow-2xl">
+      <div className="house-sheet-overlay z-[10020] bg-black/75">
+        <div className="house-sheet flex flex-col overflow-hidden rounded-2xl border border-[#3a3228] bg-[#12100e] text-[#ebe6dd] shadow-2xl">
           <div className="min-h-0 overflow-y-auto p-5">
             <p className="text-[10px] uppercase tracking-[0.22em] text-[#6e675c]">
               Settings
@@ -335,7 +335,7 @@ export const HouseSettings: React.FC = () => {
           <button
             type="button"
             onClick={() => setSettingsOpen(false)}
-            className="shrink-0 border-t border-[#3a3228] py-3 text-xs text-[#6e675c]"
+            className="shrink-0 min-h-11 border-t border-[#3a3228] text-sm text-[#d9cbb8]"
           >
             Close
           </button>

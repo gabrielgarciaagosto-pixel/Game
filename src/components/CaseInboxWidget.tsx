@@ -380,7 +380,7 @@ export const CaseInboxWidget: React.FC = () => {
                     type="button"
                     onClick={() => setIsOpen(false)}
                     style={{ touchAction: 'manipulation' }}
-                    className="text-slate-400 active:text-white font-bold px-2"
+                    className="inline-flex min-h-11 min-w-11 items-center justify-center text-slate-200 active:text-white font-bold"
                   >
                     ✕
                   </button>
@@ -666,11 +666,11 @@ export const CaseInboxWidget: React.FC = () => {
 
                   {calendarOpen && (
                     <div className="mt-2 p-2 bg-slate-950 border border-slate-700 rounded-lg">
-                      <div className="flex justify-between items-center mb-2">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <span className="font-bold text-slate-300">
                           {directPickup ? 'Pick pickup day' : 'Pick service day'}
                         </span>
-                        <label className="text-[10px] text-slate-400 flex items-center gap-1">
+                        <label className="flex items-center gap-1 text-[12px] text-slate-300">
                           Time
                           <select
                             aria-label="Service hour"
@@ -683,7 +683,7 @@ export const CaseInboxWidget: React.FC = () => {
                                 )
                               );
                             }}
-                            className="bg-slate-800 rounded px-1 py-0.5"
+                            className="min-h-11 rounded bg-slate-800 px-2"
                           >
                             {Array.from({ length: 12 }, (_, i) => i + 1).map(
                               (h) => (
@@ -704,7 +704,7 @@ export const CaseInboxWidget: React.FC = () => {
                                 )
                               );
                             }}
-                            className="bg-slate-800 rounded px-1 py-0.5"
+                            className="min-h-11 rounded bg-slate-800 px-2"
                           >
                             <option value="AM">AM</option>
                             <option value="PM">PM</option>
@@ -864,7 +864,7 @@ function ArchivesPanel({
             type="button"
             onClick={onClose}
             style={{ touchAction: 'manipulation' }}
-            className="text-slate-400 active:text-white font-bold px-2"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center text-slate-200 active:text-white font-bold"
           >
             ✕
           </button>

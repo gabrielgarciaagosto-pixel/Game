@@ -253,7 +253,7 @@ function StatChip({
       {...tap}
       aria-expanded={active}
       data-stat-chip={id}
-      className={`bg-slate-950/80 px-2.5 py-1.5 rounded-lg border font-mono text-[11px] ${className} ${
+      className={`inline-flex min-h-11 items-center bg-slate-950/80 px-2.5 rounded-lg border font-mono text-[12px] ${className} ${
         active ? 'ring-1 ring-amber-300/70' : ''
       }`}
     >

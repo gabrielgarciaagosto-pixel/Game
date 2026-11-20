@@ -42,7 +42,7 @@ export const CoolerRoom: React.FC = () => {
           type="button"
           data-tutorial-target="back"
           onPointerDown={() => setActiveStation('OVERVIEW')}
-          className="px-3 py-1.5 bg-slate-800 rounded text-xs font-semibold shrink-0"
+          className="min-h-11 px-3 bg-slate-800 rounded text-xs font-semibold shrink-0"
         >
           Back
         </button>

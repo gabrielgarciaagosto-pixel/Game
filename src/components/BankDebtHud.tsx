@@ -14,18 +14,22 @@ export const BankDebtHud: React.FC = () => {
   const bankWarningIssued = useGameStore((s) => s.bankWarningIssued);
   const bankForeclosed = useGameStore((s) => s.bankForeclosed);
   const [, setTick] = useState(0);
+  const show =
+    !bankForeclosed &&
+    cash < 0 &&
+    (overdraftAccruedMs >= BANK_WARNING_AFTER_MS || bankWarningIssued);
 
   useEffect(() => {
+    if (!show) return;
     const id = window.setInterval(() => setTick((n) => n + 1), 1000);
     const unsub = subscribeClock(() => setTick((n) => n + 1));
     return () => {
       window.clearInterval(id);
       unsub();
     };
-  }, []);
+  }, [show]);
 
-  if (bankForeclosed || cash >= 0) return null;
-  if (overdraftAccruedMs < BANK_WARNING_AFTER_MS && !bankWarningIssued) return null;
+  if (!show) return null;
 
   const remaining = foreclosureMsRemaining(overdraftAccruedMs);
 

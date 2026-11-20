@@ -5,7 +5,7 @@
  */
 import { audioManager } from '../utils/audioManager';
 
-const URL = '/audio/processor/cremulator-running.wav';
+const URL = '/audio/processor/cremulator-running.flac';
 const OFF_FADE_SEC = 0.12;
 /** Share of the interface bus. The bed used to take the whole bus. */
 const BUS_SHARE = 0.45;

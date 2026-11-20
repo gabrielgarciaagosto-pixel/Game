@@ -47,7 +47,7 @@ function ChapelMusicPicker({
   onPick: (id: string) => void;
 }) {
   const chip = (on: boolean) =>
-    `px-2 py-1 rounded text-[11px] border ${
+    `inline-flex min-h-11 items-center px-3 rounded text-[12px] border ${
       on
         ? 'border-amber-400 bg-amber-900/50 text-amber-100'
         : 'border-violet-700 bg-violet-950/60'
@@ -237,7 +237,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
     return (
       <div
         data-chapel-empty
-        className="safe-screen fixed inset-0 z-50 bg-violet-950/95 text-violet-50 flex flex-col select-none overflow-auto"
+        className="safe-screen fixed inset-0 z-50 bg-violet-950/95 text-violet-50 flex flex-col select-none overflow-hidden"
       >
         <div className="flex justify-between items-start border-b border-violet-800 pb-3 gap-3">
           <div className="min-w-0">
@@ -250,12 +250,12 @@ export const ShowroomAndChapelModal: React.FC = () => {
             type="button"
             data-tutorial-target="back"
             onPointerDown={() => setActiveStation('OVERVIEW')}
-            className="px-3 py-2 bg-violet-900 rounded text-xs"
+            className="min-h-11 px-3 bg-violet-900 rounded text-xs"
           >
             Back
           </button>
         </div>
-        <div className="flex-1 flex flex-col gap-3 mt-3 pb-4">
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 mt-3 pb-4">
           <div
             className="relative w-full rounded-xl border-2 border-violet-700 overflow-hidden bg-[#c4a574] touch-none"
             style={{ aspectRatio: String(CHAPEL_ART_ASPECT) }}
@@ -320,7 +320,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
     );
 
   return (
-    <div className="safe-screen fixed inset-0 z-50 bg-violet-950/95 text-violet-50 flex flex-col select-none overflow-auto">
+    <div className="safe-screen fixed inset-0 z-50 bg-violet-950/95 text-violet-50 flex flex-col select-none overflow-hidden">
       <div className="flex justify-between items-start border-b border-violet-800 pb-3 gap-3">
         <div className="min-w-0">
           <h2 className="text-lg font-bold text-violet-300">
@@ -349,7 +349,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
             type="button"
             data-tutorial-target="back"
             onPointerDown={() => setActiveStation('OVERVIEW')}
-            className="px-3 py-2 bg-violet-900 rounded text-xs"
+            className="min-h-11 px-3 bg-violet-900 rounded text-xs"
           >
             Back
           </button>
@@ -363,7 +363,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col gap-3 mt-3 pb-4">
+      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 mt-3 pb-4">
         <FamilyPreferenceCard prefs={currentCase.familyChapelPrefs} />
         {/* Floor */}
         <div

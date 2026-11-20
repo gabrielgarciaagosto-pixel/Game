@@ -10,8 +10,8 @@ export const ServiceFeedbackModal: React.FC = () => {
   if (!feedback) return null;
 
   return (
-    <div className="fixed inset-0 z-[11000] bg-black/70 flex items-center justify-center p-5 select-none">
-      <div className="max-w-md w-full max-h-[88vh] overflow-y-auto rounded-2xl border border-emerald-700/60 bg-slate-950 p-5 shadow-xl space-y-3">
+    <div className="house-sheet-overlay z-[11000] bg-black/70 select-none">
+      <div className="house-sheet overflow-y-auto rounded-2xl border border-emerald-700/60 bg-slate-950 p-5 shadow-xl space-y-3">
         <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-400/80">
           Family feedback
         </p>
@@ -159,7 +159,7 @@ export const ServiceFeedbackModal: React.FC = () => {
         <button
           type="button"
           onPointerDown={() => clear()}
-          className="w-full py-2.5 rounded-lg bg-emerald-800 active:bg-emerald-700 font-bold text-sm"
+          className="w-full min-h-11 rounded-lg bg-emerald-800 active:bg-emerald-700 font-bold text-sm"
         >
           Continue
         </button>

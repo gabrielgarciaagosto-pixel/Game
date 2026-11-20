@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { formatDeviceDate, formatTimeOf } from '../utils/clock12';
 import { useGameStore } from '../store/useGameStore';
 
@@ -15,6 +15,14 @@ export const HouseMail: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const unread = houseMail.reduce((count, letter) => count + (letter.read ? 0 : 1), 0);
   const open = houseMail.find((letter) => letter.id === openId) ?? null;
 
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.coverFab = '1';
+    return () => {
+      delete root.dataset.coverFab;
+    };
+  }, []);
+
   return (
     <div
       data-house-mail-root
@@ -22,17 +30,21 @@ export const HouseMail: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       style={{ fontFamily: 'Georgia, "Iowan Old Style", Palatino, "Palatino Linotype", serif' }}
     >
       <header
-        className="shrink-0 flex items-center justify-between gap-3 border-b border-[#4a3d30] bg-[#2c261f] px-3 py-2 text-[#f3ead7]"
-        style={{ paddingTop: 'calc(var(--safe-top) + 0.35rem)' }}
+        className="shrink-0 flex items-center justify-between gap-3 border-b border-[#4a3d30] bg-[#2c261f] py-2 text-[#f3ead7]"
+        style={{
+          paddingTop: 'calc(var(--safe-top) + 0.35rem)',
+          paddingLeft: 'var(--safe-left)',
+          paddingRight: 'var(--safe-right)',
+        }}
       >
-        <div>
+        <div className="min-w-0">
           <p className="text-[10px] tracking-[0.22em] uppercase text-[#c4a574]">Office mail</p>
           <h2 className="text-base leading-tight">Night Desk</h2>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="rounded border border-[#c4a574]/50 px-3 py-1.5 text-[12px] text-[#f3ead7]"
+          className="shrink-0 min-h-11 rounded border border-[#c4a574]/50 px-3 text-[13px] text-[#f3ead7]"
         >
           Close
         </button>
@@ -43,13 +55,18 @@ export const HouseMail: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           data-house-mail="open"
           className="flex min-h-0 flex-1 flex-col bg-[#f4ecd9]"
         >
-          <div className="shrink-0 border-b border-[#d9cbb4] px-4 py-3">
+          <div
+            className="shrink-0 border-b border-[#d9cbb4] py-3"
+            style={{ paddingLeft: 'var(--safe-left)', paddingRight: 'var(--safe-right)' }}
+          >
             <button
               type="button"
+              data-house-mail-back
               onClick={() => setOpenId(null)}
-              className="mb-3 text-[12px] uppercase tracking-[0.14em] text-[#6b5344]"
+              className="mb-3 inline-flex min-h-11 items-center gap-2 rounded border border-[#6b5344] bg-[#efe4d0] px-3 text-[15px] font-semibold text-[#3a3128]"
             >
-              Inbox
+              <span aria-hidden>‹</span>
+              Back
             </button>
             <dl className="space-y-1 text-[13px] leading-snug">
               <div className="grid grid-cols-[4.5rem_1fr] gap-2">
@@ -71,8 +88,12 @@ export const HouseMail: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             </dl>
           </div>
           <div
-            className="min-h-0 flex-1 overflow-y-auto px-4 py-3 text-[14px] leading-[1.45] whitespace-pre-wrap"
-            style={{ paddingBottom: '8.5rem' }}
+            className="min-h-0 flex-1 overflow-y-auto py-3 text-[14px] leading-[1.45] whitespace-pre-wrap"
+            style={{
+              paddingLeft: 'var(--safe-left)',
+              paddingRight: 'var(--safe-right)',
+              paddingBottom: 'calc(var(--safe-bottom) + 0.75rem)',
+            }}
           >
             {open.body}
           </div>
@@ -90,7 +111,10 @@ export const HouseMail: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               The night desk has not written. Mail arrives after the house has been closed.
             </p>
           ) : (
-            <ul className="min-h-0 flex-1 overflow-y-auto" style={{ paddingBottom: '8.5rem' }}>
+            <ul
+              className="min-h-0 flex-1 overflow-y-auto"
+              style={{ paddingBottom: 'calc(var(--safe-bottom) + 0.75rem)' }}
+            >
               {houseMail.map((letter) => (
                 <li key={letter.id} className="border-b border-[#e4d8c2]">
                   <button

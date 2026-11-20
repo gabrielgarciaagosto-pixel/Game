@@ -1359,8 +1359,18 @@ const yieldingSaveStorage = {
 if (typeof window !== 'undefined') {
   window.addEventListener('pagehide', flushGameSaveNow);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') flushGameSaveNow();
+    const root = document.documentElement;
+    if (document.visibilityState === 'hidden') {
+      root.dataset.pageHidden = '1';
+      commitLiveStamps();
+      flushGameSaveNow();
+      return;
+    }
+    delete root.dataset.pageHidden;
   });
+  if (document.visibilityState === 'hidden') {
+    document.documentElement.dataset.pageHidden = '1';
+  }
 }
 
 /** Pause Zustand persist writes (Capacitor-safe wipe). */
@@ -1594,6 +1604,43 @@ function admitQueuedCase(
   };
 }
 
+/** How long a quiet parlor may keep a sim stamp off the saved store. */
+const STAMP_KEEP_MS = 8000;
+let decayWall: number | null = null;
+let retortWall: number | null = null;
+
+function notedAt(saved: number | null | undefined, wall: number | null): number | null {
+  if (wall == null) return saved ?? null;
+  if (saved == null) return wall;
+  return Math.max(saved, wall);
+}
+
+/** Write the in-memory sim clocks into the save when the page hides. */
+function commitLiveStamps() {
+  const patch: Partial<GameState> = {};
+  const state = useGameStore.getState();
+  if (decayWall != null && state.decaySimulatedAt !== decayWall) {
+    patch.decaySimulatedAt = decayWall;
+  }
+  if (retortWall != null) {
+    const machinesStale = state.retortMachines.some(
+      (m) => (m.burnSimulatedAt ?? 0) < retortWall!
+    );
+    const retortStale = (state.retort.burnSimulatedAt ?? 0) < retortWall;
+    if (machinesStale) {
+      patch.retortMachines = state.retortMachines.map((m) =>
+        (m.burnSimulatedAt ?? 0) >= retortWall!
+          ? m
+          : { ...m, burnSimulatedAt: retortWall }
+      );
+    }
+    if (retortStale) {
+      patch.retort = { ...state.retort, burnSimulatedAt: retortWall };
+    }
+  }
+  if (Object.keys(patch).length > 0) useGameStore.setState(patch);
+}
+
 function stepOneRetort(
   machine: RetortMachine,
   cases: DecedentCase[],
@@ -1620,7 +1667,7 @@ function stepOneRetort(
   }
   if (!cremationCase) return stamp(machine);
   const targets = getCremationTargets(cremationCase.weightLbs);
-  const since = machine.burnSimulatedAt;
+  const since = notedAt(machine.burnSimulatedAt, retortWall);
   const dt = since == null ? BURN_TICK_MS : Math.max(0, now - since);
   const progress = Math.min(1, machine.elapsedSec / targets.targetDurationSec);
   const before = machine.elapsedSec;
@@ -2938,6 +2985,17 @@ export const useGameStore = create<GameState>()(
         }
         if (m.phase === 'BURN' && (m.primaryOn || m.secondaryOn)) burnActive = true;
       }
+      retortWall = now;
+      const quiet =
+        !finishedName &&
+        !burnActive &&
+        !state.cremationBurnActive &&
+        machines.every((m) => m.phase === 'IDLE' || m.phase === 'DONE');
+      const persistedStamp = state.retortMachines.reduce(
+        (oldest, m) => Math.min(oldest, m.burnSimulatedAt ?? 0),
+        now
+      );
+      if (quiet && now - persistedStamp < STAMP_KEEP_MS) return state;
       return {
         retort: active,
         retortMachines: machines,
@@ -2959,10 +3017,9 @@ export const useGameStore = create<GameState>()(
   tickDecay: () =>
     set((state) => {
       const now = gameNow();
+      const decayMark = notedAt(state.decaySimulatedAt, decayWall);
       const gapSec =
-        state.decaySimulatedAt == null
-          ? 0
-          : Math.max(0, (now - state.decaySimulatedAt) / 1000);
+        decayMark == null ? 0 : Math.max(0, (now - decayMark) / 1000);
       const count = retortCount(state.facilityLevels);
       const aligned = alignMachines(
         state.retortMachines,
@@ -3018,7 +3075,15 @@ export const useGameStore = create<GameState>()(
         changed = true;
         return { ...c, decayLevel: nextDecay };
       });
-      if (!changed && state.decaySimulatedAt === now) return state;
+      decayWall = now;
+      const decayPersisted = state.decaySimulatedAt;
+      if (
+        !changed &&
+        decayPersisted != null &&
+        now - decayPersisted < STAMP_KEEP_MS
+      ) {
+        return state;
+      }
       return {
         ...(changed ? { cases } : {}),
         decaySimulatedAt: now,

@@ -17,7 +17,7 @@ export type MusicBedId = BuiltinBedId | string;
 const BED_URLS: Record<BuiltinBedId, string> = {
   theme: '/audio/ossuarian-theme.m4a',
   crematoryStart: '/audio/crematory-start.m4a',
-  crematoryLoop: '/audio/crematory/crematory-running.wav',
+  crematoryLoop: '/audio/crematory/crematory-running.flac',
 };
 
 const DEFAULT_VOLUME: Record<BuiltinBedId, number> = {
@@ -347,10 +347,6 @@ class AudioManager {
     this.retryPendingElement();
     if (this.unlocked) return;
     this.unlocked = true;
-    // Theme is not a live bed. Crematory clips preload in the background
-    // so a slow decode cannot hold the first tap.
-    void this.preload('crematoryStart').catch(() => undefined);
-    void this.preload('crematoryLoop').catch(() => undefined);
   }
 
   registerUrl(id: string, url: string) {

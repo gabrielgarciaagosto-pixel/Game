@@ -150,7 +150,7 @@ export const EmbalmingMiniGame: React.FC = () => {
             type="button"
             data-tutorial-target="back"
             onPointerDown={() => setActiveStation('OVERVIEW')}
-            className="px-4 py-2 bg-slate-800 rounded text-sm"
+            className="min-h-11 px-4 bg-slate-800 rounded text-sm"
           >
             Back
           </button>
@@ -237,7 +237,7 @@ export const EmbalmingMiniGame: React.FC = () => {
   const label = displayCaseName(currentCase);
 
   return (
-    <div className="safe-screen fixed inset-0 z-50 bg-slate-950/95 text-slate-100 flex flex-col justify-between select-none">
+    <div className="safe-screen fixed inset-0 z-50 bg-slate-950/95 text-slate-100 flex flex-col justify-between select-none overflow-y-auto">
       <div className="flex justify-between items-center border-b border-slate-800 pb-3 gap-3">
         <div>
           <h2 className="text-lg md:text-xl font-bold text-emerald-400">
@@ -289,7 +289,7 @@ export const EmbalmingMiniGame: React.FC = () => {
             type="button"
             data-tutorial-target="back"
             onPointerDown={() => setActiveStation('OVERVIEW')}
-            className="px-4 py-2 bg-slate-800 rounded text-sm active:bg-slate-700"
+            className="min-h-11 px-4 bg-slate-800 rounded text-sm active:bg-slate-700"
           >
             Back
           </button>

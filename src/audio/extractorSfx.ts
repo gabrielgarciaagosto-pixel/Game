@@ -14,7 +14,7 @@ import { audioManager } from '../utils/audioManager';
 
 const CLIPS = {
   startup: '/audio/extractor/extractor-startup.wav',
-  running: '/audio/extractor/extractor-running.wav',
+  running: '/audio/extractor/extractor-running.flac',
 } as const;
 
 type ClipId = keyof typeof CLIPS;

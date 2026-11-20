@@ -166,6 +166,20 @@ function App() {
 
   const onTitle = titleGate || !hasStartedGame;
   const onHub = hasStartedGame && !titleGate && activeStation === 'OVERVIEW';
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const room =
+      hasStartedGame &&
+      !titleGate &&
+      activeStation !== 'OVERVIEW' &&
+      activeStation !== 'COMPUTER';
+    if (room) root.dataset.stationFab = 'hide';
+    else delete root.dataset.stationFab;
+    return () => {
+      delete root.dataset.stationFab;
+    };
+  }, [activeStation, hasStartedGame, titleGate]);
   const [hubToastTop, setHubToastTop] = useState<number | null>(null);
   useLayoutEffect(() => {
     if (!intakeToast || !onHub) {
@@ -340,7 +354,7 @@ function App() {
               type="button"
               onPointerDown={clearIntakeToast}
               onClick={clearIntakeToast}
-              className="shrink-0 rounded bg-cyan-700 px-2 py-0.5 text-[11px] leading-none active:bg-cyan-600"
+              className="inline-flex min-h-11 shrink-0 items-center rounded bg-cyan-700 px-3 text-[12px] font-bold active:bg-cyan-600"
             >
               Dismiss
             </button>

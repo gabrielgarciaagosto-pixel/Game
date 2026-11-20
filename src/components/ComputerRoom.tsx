@@ -48,6 +48,28 @@ const BROWSER_APPS: DesktopApp[] = [
   'COOL',
 ];
 
+/** The desk clock ticks every second. It stays its own component so the
+ * permit form does not render again on each tick. */
+const DesktopClock: React.FC<{ cash: number }> = ({ cash }) => {
+  const [clock, setClock] = useState(() => gameDate());
+  useEffect(() => {
+    const id = window.setInterval(() => setClock(gameDate()), 1000);
+    const unsub = subscribeClock(() => setClock(gameDate()));
+    return () => {
+      window.clearInterval(id);
+      unsub();
+    };
+  }, []);
+  return (
+    <div
+      className="min-w-0 flex-1 truncate text-right font-mono text-[11px] text-[#9eecc0] crt-phosphor-glow"
+      data-device-clock
+    >
+      {formatDeviceDate(clock)} · {formatTimeOf(clock)} · ${cash.toLocaleString()}
+    </div>
+  );
+};
+
 /**
  * Office computer: CRT desktop + icons; apps open in a fake browser.
  * VR-441 draft stays mounted (hidden) so FILES / shop switches don't wipe it.
@@ -75,7 +97,6 @@ export const ComputerRoom: React.FC = () => {
         ? computerOpenApp
         : 'DESKTOP'
   );
-  const [clock, setClock] = useState(() => gameDate());
   const [form, setForm] = useState<PermitFormDraft>(emptyPermitForm());
   const [feedback, setFeedback] = useState<string | null>(null);
   const [pobFilter, setPobFilter] = useState('');
@@ -92,15 +113,6 @@ export const ComputerRoom: React.FC = () => {
     }
     setApp('DESKTOP');
   }, [computerOpenApp]);
-
-  useEffect(() => {
-    const id = window.setInterval(() => setClock(gameDate()), 1000);
-    const unsub = subscribeClock(() => setClock(gameDate()));
-    return () => {
-      window.clearInterval(id);
-      unsub();
-    };
-  }, []);
 
   const placeOptions = useMemo(() => {
     const q = pobFilter.trim().toLowerCase();
@@ -133,8 +145,6 @@ export const ComputerRoom: React.FC = () => {
     }
   };
 
-  const clockLabel = `${formatDeviceDate(clock)} · ${formatTimeOf(clock)}`;
-
   return (
     <div
       className="fixed inset-0 z-40 flex flex-col select-none overflow-hidden text-slate-100 crt-desktop"
@@ -152,7 +162,11 @@ export const ComputerRoom: React.FC = () => {
             ? ''
             : 'invisible pointer-events-none absolute inset-0'
         }`}
-        style={{ paddingTop: 'var(--safe-top)' }}
+        style={{
+          paddingTop: 'var(--safe-top)',
+          paddingBottom:
+            'calc(var(--files-fab-bottom) + var(--fab-stack-height) + 0.35rem)',
+        }}
       >
         <div className="px-4 flex justify-between items-start">
           <div>
@@ -167,7 +181,7 @@ export const ComputerRoom: React.FC = () => {
             type="button"
             onClick={() => setActiveStation('OVERVIEW')}
             style={{ touchAction: 'manipulation' }}
-            className="px-3 py-2 rounded border border-[#7dffb2]/40 bg-black/50 text-[11px] font-bold text-[#b8f0d0] font-mono"
+            className="min-h-11 px-3 rounded border border-[#7dffb2]/40 bg-black/50 text-[11px] font-bold text-[#b8f0d0] font-mono"
             data-tutorial-target="shut-down"
           >
             Shut down
@@ -175,11 +189,7 @@ export const ComputerRoom: React.FC = () => {
         </div>
 
         <div
-          className="flex-1 px-2 pt-2 grid grid-cols-2 gap-x-1 gap-y-1 content-start max-w-lg overflow-y-auto"
-          style={{
-            paddingBottom:
-              'calc(var(--files-fab-bottom) + var(--fab-stack-height) - var(--safe-bottom) + 0.35rem)',
-          }}
+          className="flex-1 min-h-0 px-2 pt-2 pb-2 grid grid-cols-2 gap-x-1 gap-y-1 content-start max-w-lg overflow-y-auto"
         >
           <DesktopAppIcon kind="VR441" onOpen={() => openApp('VR441')} />
           <DesktopAppIcon kind="SHOP" onOpen={() => openApp('SHOP')} />
@@ -197,12 +207,19 @@ export const ComputerRoom: React.FC = () => {
           <DesktopAppIcon kind="SETTINGS" onOpen={() => setSettingsOpen(true)} />
         </div>
 
-        <div className="crt-taskbar relative z-[7] shrink-0 h-10 flex items-center justify-between px-3">
+        <div
+          className="crt-taskbar relative z-[7] shrink-0 flex items-center gap-2 px-3"
+          style={{
+            minHeight: '2.75rem',
+            paddingLeft: 'var(--safe-left)',
+            paddingRight: 'var(--safe-right)',
+          }}
+        >
           <button
             type="button"
             onClick={() => setActiveStation('OVERVIEW')}
             style={{ touchAction: 'manipulation' }}
-            className="px-2 py-1 rounded-sm bg-[#2a5a40] border border-[#7dffb2]/35 text-[10px] font-bold text-[#d7ffe8]"
+            className="shrink-0 min-h-11 px-3 rounded-sm bg-[#2a5a40] border border-[#7dffb2]/35 text-[11px] font-bold text-[#d7ffe8]"
           >
             Start
           </button>
@@ -210,7 +227,7 @@ export const ComputerRoom: React.FC = () => {
             type="button"
             data-house-mail-task
             onClick={() => openApp('MAIL')}
-            className={`px-2 py-1 rounded-sm border text-[10px] font-bold ${
+            className={`shrink-0 min-h-11 px-3 rounded-sm border text-[11px] font-bold ${
               unreadMail > 0
                 ? 'border-[#e7d7b8] bg-[#7a2e2a] text-[#f4ecd9]'
                 : 'border-[#7dffb2]/35 bg-[#1a3328] text-[#d7ffe8]'
@@ -218,12 +235,7 @@ export const ComputerRoom: React.FC = () => {
           >
             {unreadMail > 0 ? `Mail ${unreadMail}` : 'Mail'}
           </button>
-          <div
-            className="font-mono text-[11px] text-[#9eecc0] crt-phosphor-glow"
-            data-device-clock
-          >
-            {clockLabel} · ${cash.toLocaleString()}
-          </div>
+          <DesktopClock cash={cash} />
         </div>
       </div>
 

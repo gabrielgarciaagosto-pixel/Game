@@ -28,6 +28,16 @@ export const CrematoryAudio: React.FC = () => {
     audioManager.installGestureUnlock();
   }, []);
 
+  // Decode the burn beds when the crematory is open, not on the title.
+  // The first ignition still waits on crossfade if the player is faster
+  // than the decode. A cold launch no longer fetches both clips.
+  useEffect(() => {
+    if (titleGate) return;
+    if (activeStation !== 'CREMATION' && audioMode === 'OFF') return;
+    void audioManager.preload('crematoryStart').catch(() => undefined);
+    void audioManager.preload('crematoryLoop').catch(() => undefined);
+  }, [activeStation, titleGate, audioMode]);
+
   // Start sting → loop handoff
   useEffect(() => {
     const onNearEnd = (id: string) => {

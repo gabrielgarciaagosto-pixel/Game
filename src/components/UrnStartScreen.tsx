@@ -268,25 +268,28 @@ export const UrnStartScreen: React.FC<UrnStartScreenProps> = ({
         }
 
         .splash-settings {
-          margin-top: 0.85rem;
+          margin-top: 0.35rem;
+          min-height: 2.75rem;
+          padding: 0.35rem 0.85rem;
           border: none;
           background: transparent;
           color: #6e675c;
           font-family: 'Cinzel', Georgia, 'Times New Roman', serif;
-          font-size: 0.68rem;
-          letter-spacing: 0.16em;
+          font-size: 0.78rem;
+          letter-spacing: 0.14em;
           text-transform: uppercase;
           cursor: pointer;
         }
 
         .splash-soon {
-          margin-top: 0.15rem;
+          min-height: 2.75rem;
+          padding: 0.35rem 0.85rem;
           border: none;
           background: transparent;
           color: #c4a574;
           font-family: 'Cinzel', Georgia, 'Times New Roman', serif;
-          font-size: 0.68rem;
-          letter-spacing: 0.16em;
+          font-size: 0.78rem;
+          letter-spacing: 0.14em;
           text-transform: uppercase;
           cursor: pointer;
         }

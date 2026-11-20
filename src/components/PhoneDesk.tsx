@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   PHONE_CONTACTS,
   contactAccess,
@@ -49,7 +49,7 @@ function Row({
           <button
             type="button"
             onClick={() => onCall(contact.id)}
-            className="shrink-0 rounded-full bg-emerald-500 px-3 py-1.5 text-[12px] font-black text-emerald-950"
+            className="inline-flex min-h-11 shrink-0 items-center rounded-full bg-emerald-500 px-3 text-[13px] font-black text-emerald-950"
           >
             Call
           </button>
@@ -156,29 +156,42 @@ export const PhoneBook: React.FC = () => {
 
 /** Desk phone on the office computer. Each contact cools down on its own. */
 export const PhoneDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.coverFab = '1';
+    return () => {
+      delete root.dataset.coverFab;
+    };
+  }, []);
+
   return (
     <div className="absolute inset-0 z-20 flex flex-col bg-[#07110e] text-slate-100" data-phone-desk>
       <header
-        className="flex items-center gap-2 border-b border-emerald-900/60 px-3 py-3"
-        style={{ paddingTop: 'calc(var(--safe-top) + 0.6rem)' }}
+        className="flex items-center gap-2 border-b border-emerald-900/60 py-3"
+        style={{
+          paddingTop: 'calc(var(--safe-top) + 0.6rem)',
+          paddingLeft: 'var(--safe-left)',
+          paddingRight: 'var(--safe-right)',
+        }}
       >
-        <div>
+        <div className="min-w-0">
           <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-300/80">Desk phone</p>
           <h2 className="text-base font-bold">Call for extra work</h2>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="ml-auto rounded-full border border-emerald-800 px-3 py-1.5 text-[12px] font-bold text-emerald-100"
+          className="ml-auto shrink-0 min-h-11 rounded-full border border-emerald-800 px-3 text-[13px] font-bold text-emerald-100"
         >
           Close
         </button>
       </header>
       <div
-        className="min-h-0 flex-1 overflow-y-auto px-3 py-3"
+        className="min-h-0 flex-1 overflow-y-auto py-3"
         style={{
-          paddingBottom:
-            'calc(var(--files-fab-bottom) + var(--fab-stack-height) + 0.75rem)',
+          paddingLeft: 'var(--safe-left)',
+          paddingRight: 'var(--safe-right)',
+          paddingBottom: 'calc(var(--safe-bottom) + 0.75rem)',
         }}
       >
         <PhoneBook />

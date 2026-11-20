@@ -174,9 +174,9 @@ export const NotificationAsk: React.FC = () => {
   return (
     <div
       data-notify-ask
-      className="sheet-safe fixed inset-0 z-[10025] flex items-end justify-center bg-black/75 sm:items-center"
+      className="house-sheet-overlay z-[10025] bg-black/75"
     >
-      <div className="w-full max-w-sm rounded-2xl border border-[#3a3228] bg-[#12100e] p-5 text-[#ebe6dd] shadow-2xl">
+      <div className="house-sheet overflow-y-auto rounded-2xl border border-[#3a3228] bg-[#12100e] p-5 text-[#ebe6dd] shadow-2xl">
         <p className="text-[10px] uppercase tracking-[0.22em] text-[#6e675c]">
           The house
         </p>

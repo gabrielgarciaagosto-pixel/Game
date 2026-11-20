@@ -144,10 +144,71 @@ body {
 html[data-sheet-open] .files-fab-anchor,
 html[data-sheet-open] .dev-summon-fab,
 html[data-sheet-open] .dev-summon-panel,
-html[data-shop-open] .files-fab-anchor {
+html[data-shop-open] .files-fab-anchor,
+html[data-cover-fab] .files-fab-anchor,
+html[data-cover-fab] .dev-summon-fab,
+html[data-cover-fab] .dev-summon-panel,
+html[data-station-fab='hide'] .files-fab-anchor,
+html[data-station-fab='hide'] .dev-summon-fab,
+html[data-station-fab='hide'] .dev-summon-panel {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
+}
+
+/* Sheets stay inside the screen. The card scrolls. Close stays reachable. */
+.house-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: safe center;
+  align-items: center;
+  overflow: auto;
+  padding-top: var(--safe-top);
+  padding-right: var(--safe-right);
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
+}
+
+.house-sheet {
+  box-sizing: border-box;
+  width: min(100%, 24rem);
+  min-height: 0;
+  max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 1rem);
+}
+
+/* Short phones and landscape: the raised FAB stack ate the screen. */
+@media (max-height: 700px) {
+  :root {
+    --files-fab-bottom: calc(var(--safe-bottom) + 0.65rem);
+  }
+}
+
+@media (max-height: 520px) {
+  :root {
+    --safe-top-floor: 0.35rem;
+    --files-fab-height: 2.75rem;
+    --phone-fab-height: 2.75rem;
+  }
+}
+
+@media (max-height: 480px) {
+  .safe-hub [data-hub-news],
+  .safe-hub [data-hub-last-case] {
+    display: none;
+  }
+
+  /* Rooms scroll inside the band above the calendar and the buttons. */
+  [data-hub-grid] {
+    overflow-y: auto;
+    grid-template-rows: repeat(4, minmax(5.5rem, auto));
+  }
+
+  [data-hub-grid] button {
+    padding: 0.35rem 0.5rem;
+  }
 }
 
 /* The shop used to reserve a black band for FILES and PHONE. */
@@ -1227,6 +1288,35 @@ canvas {
   line-height: 1.25;
   white-space: nowrap;
 }
+html[data-page-hidden='1'] .hub-bob,
+html[data-page-hidden='1'] .hub-fx i,
+html[data-page-hidden='1'] .hub-fx-gold,
+html[data-page-hidden='1'] .hub-fx-crt i,
+html[data-page-hidden='1'] .hub-atmo-flame,
+html[data-page-hidden='1'] .hub-atmo-fume span,
+html[data-page-hidden='1'] .hub-atmo-frost span,
+html[data-page-hidden='1'] .hub-atmo-dust span,
+html[data-page-hidden='1'] .hub-candle,
+html[data-page-hidden='1'] .hub-candle-flame,
+html[data-page-hidden='1'] .hub-candle-wax,
+html[data-page-hidden='1'] .hub-petal,
+html[data-page-hidden='1'] .chapel-mourner,
+html[data-page-hidden='1'] .chapel-mourner-settle,
+html[data-page-hidden='1'] .chapel-mourner-head,
+html[data-page-hidden='1'] .chapel-service-glow,
+html[data-page-hidden='1'] .hub-chapel-live-glow,
+html[data-page-hidden='1'] .hub-atmo-crt,
+html[data-page-hidden='1'] .hub-atmo-debt,
+html[data-page-hidden='1'] .hub-spirit,
+html[data-page-hidden='1'] .hub-spirit-glow,
+html[data-page-hidden='1'] .hub-spirit-core,
+html[data-page-hidden='1'] .hub-spirit-mote,
+html[data-page-hidden='1'] .tutorial-spirit-art,
+html[data-page-hidden='1'] .tutorial-dim,
+html[data-page-hidden='1'] .crt-flicker {
+  animation-play-state: paused;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hub-bob,
   .hub-fx i,
@@ -1565,6 +1655,11 @@ canvas {
   font-size: 11px;
   line-height: 1.15;
 }
+.cooler-actions button {
+  min-height: 2.75rem;
+  font-size: 12px;
+}
+
 .cooler-kick {
   height: 0.85rem;
   margin: 0 -0.5rem;
