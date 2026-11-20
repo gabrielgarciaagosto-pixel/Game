@@ -480,7 +480,10 @@ export const MainHubMenu: React.FC = () => {
         />
       )}
 
-      <div className="relative z-40 shrink-0 border-b border-slate-800/90 pb-1.5 space-y-1 px-1">
+      <div
+        className="relative z-40 shrink-0 border-b border-slate-800/90 pb-1.5 space-y-1 px-1"
+        data-hub-head
+      >
         <NewsTicker />
         <RankStrip xp={careerXp} />
         <p className="text-[11px] text-slate-400 leading-snug" data-hub-last-case>

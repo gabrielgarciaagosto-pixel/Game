@@ -213,19 +213,23 @@ function PlayApp() {
       return;
     }
     const measure = () => {
+      const head = document.querySelector('[data-hub-head]');
+      const stats = document.querySelector('[data-hub-stats]');
       const rank = document.querySelector('[data-rank-display]');
-      const news = document.querySelector('[data-hub-news]');
-      if (!rank) return;
-      const floor = Math.max(
-        rank.getBoundingClientRect().bottom,
-        news ? news.getBoundingClientRect().bottom : 0
-      );
-      const next = Math.ceil(floor + 2);
+      const anchor = head ?? stats ?? rank;
+      if (!anchor) return;
+      const next = Math.ceil(anchor.getBoundingClientRect().bottom + 8);
       setHubToastTop((prev) => (prev === next ? prev : next));
     };
     measure();
+    const head = document.querySelector('[data-hub-head]');
+    const observer = head ? new ResizeObserver(measure) : null;
+    if (head && observer) observer.observe(head);
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
   }, [intakeToast, onHub]);
 
   // Wait for persist merge so returning players don't flash splash + theme
