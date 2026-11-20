@@ -1,0 +1,223 @@
+rules_version = '2';
+// Master Urn reads and writes with the parlor password account.
+// The player game uses anonymous auth. Publish this file from the Firebase
+// console before a player build with stats, gifts, or parlor news ships.
+// Do not require email_verified. Console accounts are often unverified.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isMaster() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'password'
+        && request.auth.token.email == 'gabrielgarciaagosto@gmail.com';
+    }
+
+    function isAnonymousPlayer() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+
+    function installIdOk(id) {
+      return id is string && id.matches('^[A-Za-z0-9]{16,80}$');
+    }
+
+    function ownsInstall(installId) {
+      return isAnonymousPlayer()
+        && installIdOk(installId)
+        && exists(/databases/$(database)/documents/presence/$(installId))
+        && get(/databases/$(database)/documents/presence/$(installId)).data.owner == request.auth.uid;
+    }
+
+    function sessionsOk(list) {
+      return list is list && list.size() <= 8;
+    }
+
+    function presenceOk(installId) {
+      let data = request.resource.data;
+      return data.keys().hasOnly([
+          'owner',
+          'installId',
+          'versionName',
+          'versionCode',
+          'platform',
+          'firstSeen',
+          'lastSeen',
+          'sessionStartedAt',
+          'sessionMs',
+          'recentSessionMs',
+          'playerName',
+          'cash',
+          'reputation',
+          'intermentScore',
+          'ossilegiumGrams',
+          'urnsCount',
+          'casesHandled',
+          'careerXp',
+          'rankTitle',
+          'homesKept',
+          'activeStation',
+          'ownedPropertyLabel',
+          'ownedPropertyCity'
+        ])
+        && data.owner == request.auth.uid
+        && data.installId == installId
+        && installIdOk(data.installId)
+        && data.versionName is string
+        && data.versionName.size() > 0
+        && data.versionName.size() < 40
+        && data.versionCode is int
+        && data.versionCode > 0
+        && data.versionCode < 1000000
+        && data.platform in ['web', 'android', 'ios']
+        && data.firstSeen is int
+        && data.firstSeen > 0
+        && data.lastSeen is int
+        && data.lastSeen > request.time.toMillis() - 10 * 60 * 1000
+        && data.lastSeen < request.time.toMillis() + 2 * 60 * 1000
+        && data.firstSeen <= data.lastSeen
+        && data.sessionStartedAt is int
+        && data.sessionStartedAt > 0
+        && data.sessionStartedAt <= data.lastSeen + 2 * 60 * 1000
+        && data.sessionMs is int
+        && data.sessionMs >= 0
+        && data.sessionMs < 48 * 60 * 60 * 1000
+        && sessionsOk(data.recentSessionMs)
+        && data.playerName is string
+        && data.playerName.size() > 0
+        && data.playerName.size() <= 24
+        && data.cash is int
+        && data.cash > -1000000000
+        && data.cash < 1000000000
+        && data.reputation is int
+        && data.reputation > -1000000
+        && data.reputation < 1000000
+        && data.intermentScore is int
+        && data.intermentScore >= 0
+        && data.intermentScore < 1000000000
+        && data.ossilegiumGrams is int
+        && data.ossilegiumGrams >= 0
+        && data.ossilegiumGrams < 1000000000
+        && data.urnsCount is int
+        && data.urnsCount >= 0
+        && data.urnsCount < 1000000
+        && data.casesHandled is int
+        && data.casesHandled >= 0
+        && data.casesHandled < 10000000
+        && data.careerXp is int
+        && data.careerXp >= 0
+        && data.careerXp < 1000000000
+        && data.rankTitle is string
+        && data.rankTitle.size() > 0
+        && data.rankTitle.size() <= 40
+        && data.homesKept is int
+        && data.homesKept >= 0
+        && data.homesKept <= 1000
+        && data.activeStation in [
+          'OVERVIEW',
+          'COOLER',
+          'EMBALMING',
+          'CREMATION',
+          'URN_FILLING',
+          'SHOWROOM',
+          'URN_VAULT',
+          'EMPORIUM',
+          'COMPUTER'
+        ]
+        && data.ownedPropertyLabel is string
+        && data.ownedPropertyLabel.size() <= 80
+        && data.ownedPropertyCity is string
+        && data.ownedPropertyCity.size() <= 40;
+    }
+
+    function freshStamp(value) {
+      return value is int
+        && value > request.time.toMillis() - 10 * 60 * 1000
+        && value < request.time.toMillis() + 2 * 60 * 1000;
+    }
+
+    function commandOk(target) {
+      let data = request.resource.data;
+      return data.keys().hasOnly(['target', 'kind', 'amount', 'createdAt'])
+        && data.target == target
+        && data.kind in ['remains', 'money']
+        && data.amount is int
+        && freshStamp(data.createdAt)
+        && (
+          (data.kind == 'remains' && data.amount == 1)
+          || (data.kind == 'money' && data.amount >= 1 && data.amount <= 1000000)
+        );
+    }
+
+    function receiptOk(receiptId) {
+      let data = request.resource.data;
+      return data.keys().hasOnly(['owner', 'consumedAt'])
+        && data.owner == request.auth.uid
+        && freshStamp(data.consumedAt)
+        && installIdOk(receiptId);
+    }
+
+    function newsOk() {
+      let data = request.resource.data;
+      return data.keys().hasOnly(['text', 'createdAt'])
+        && data.text is string
+        && data.text.size() > 0
+        && data.text.size() <= 160
+        && freshStamp(data.createdAt);
+    }
+
+    match /presence/{installId} {
+      allow read: if isMaster();
+      allow create: if isAnonymousPlayer() && presenceOk(installId);
+      allow update: if isAnonymousPlayer()
+        && resource.data.owner == request.auth.uid
+        && request.resource.data.owner == resource.data.owner
+        && (
+          !resource.data.keys().hasAny(['firstSeen'])
+          || request.resource.data.firstSeen == resource.data.firstSeen
+        )
+        && presenceOk(installId);
+      allow delete: if false;
+    }
+
+    // A gift for every parlor. Players may list only target == "all".
+    match /commands/{commandId} {
+      allow read: if isMaster()
+        || (isAnonymousPlayer() && resource.data.target == 'all');
+      allow create: if isMaster() && commandOk('all');
+      allow update, delete: if false;
+
+      match /receipts/{receiptId} {
+        allow get: if isMaster() || ownsInstall(receiptId);
+        allow list: if isMaster();
+        allow create: if ownsInstall(receiptId) && receiptOk(receiptId);
+        allow update, delete: if false;
+      }
+    }
+
+    // A gift for one parlor. The path is the install id, which the rules can prove.
+    match /direct/{installId}/commands/{commandId} {
+      allow read: if isMaster() || ownsInstall(installId);
+      allow create: if isMaster() && installIdOk(installId) && commandOk(installId);
+      allow update, delete: if false;
+
+      match /receipts/{receiptId} {
+        allow get: if isMaster() || (receiptId == installId && ownsInstall(installId));
+        allow list: if isMaster();
+        allow create: if receiptId == installId
+          && ownsInstall(installId)
+          && receiptOk(receiptId);
+        allow update, delete: if false;
+      }
+    }
+
+    // A headline for every parlor. Players can read. Only Master Urn can write.
+    match /houseNews/{newsId} {
+      allow read: if isMaster() || isAnonymousPlayer();
+      allow create: if isMaster() && newsOk();
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,39 +1,748 @@
 import { create } from 'zustand';
-import type { DecedentCase, Rank, ShowroomItem } from '../types/game';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import {
+  directiveLabel,
+  displayCaseName,
+  type ArchivedCaseFile,
+  type CaseInboxFile,
+  type CaseLocation,
+  type DecedentCase,
+  type PreferredCasketMaterial,
+  type PreferredUrnMaterial,
+  type Rank,
+  type ShowroomItem,
+  type StationId,
+} from '../types/game';
+
+/** Most recent intake or finished service, for the hub “Last case” line. */
+export type LastCaseNote = {
+  id: string;
+  name: string;
+  service: string;
+  at: number;
+};
+import {
+  BURN_TICK_MS,
+  IDLE_RETORT,
+  type RetortMachine,
+} from '../retort/retortTypes';
+import {
+  advanceRetortBy,
+  steadyBurnRate,
+  stepRetortDoor,
+} from '../retort/tickRetort';
+import {
+  alignBays,
+  alignMachines,
+  freshLoad,
+  machineIsBusy,
+  retortCount,
+} from '../retort/retortRoster';
+import { audioManager } from '../utils/audioManager';
+import { playIntakeBell } from '../utils/soundEffects';
+import {
+  kinFromId,
+  resolvePlayerName,
+  rollFamilyKin,
+} from '../data/playerName';
+import {
+  TUTORIAL_CASE2_ARRIVE_ID,
+  TUTORIAL_STEPS,
+  TUTORIAL_TAG_HOLD_MS,
+  TUTORIAL_TAG_STEP,
+  nextTutorialBeat,
+  readTutorialGate,
+  releaseHeldTagWindow,
+  tutorialReleasesTag,
+  type TutorialPhase,
+} from '../tutorial/steps';
+import { getCremationTargets } from '../utils/mortuaryMath';
+import { getUrnById, URN_MATERIALS } from '../data/urnCatalog';
+import { beautifyTarget, type BeautifyStep } from '../data/urnVariety';
+import {
+  CASKET_MATERIALS,
+  getCasketById,
+} from '../data/casketCatalog';
+import {
+  CHAPEL_DECOR_CATALOG,
+  defaultChapelLayout,
+  maxFlowerStands,
+  type ChapelLayoutPiece,
+  type ChapelServiceLayout,
+  type ChapelThemeSelection,
+  type FlowerKind,
+} from '../data/chapelDecor';
+import {
+  coolerBayCapacity,
+  DEFAULT_FACILITY_LEVELS,
+  missingCollectionReqs,
+  nextFacilityTier,
+  totalFacilitySpaceUsed,
+  type FacilityUpgradeId,
+  type FacilityUpgradeLevels,
+  vaultSlotCapacity,
+} from '../data/facilityUpgrades';
+import {
+  BRAND_OFFERS,
+  BUTTON_OFFERS,
+  DEFAULT_WARDROBE,
+  DOOR_OFFERS,
+  FUEL_TIERS,
+  PREHEAT_PRICE,
+  QUALITY_TIERS,
+  QUEUE_PRICE,
+  SPEED_TIERS,
+  brandLabel,
+  cremainsQualityScore,
+  defaultRetortBay,
+  fuelCostFor,
+  fuelMemoDollars,
+  fuelPlanBonus,
+  liftPoorRank,
+  preheatCaseBonus,
+  qualityCaseBonus,
+  queueCaseBonus,
+  retortBayCaseBonus,
+  speedCaseBonus,
+  normalizeWardrobe,
+  retortSpeedFactor,
+  type CrematoryWardrobe,
+  type RetortBay,
+  type RetortBrandId,
+  type RetortButtonStyleId,
+  type RetortDoorId,
+} from '../data/crematoryCatalog';
+import {
+  STARTER_PROPERTY,
+  earlyPayoffAmount,
+  getPropertyById,
+  loanProductById,
+  makeMortgageLoan,
+  makePersonalLoan,
+  ownedFromListing,
+  type ActiveBankLoan,
+  type OwnedProperty,
+} from '../data/bankProducts';
+import {
+  EMPTY_FLEET_ASSIGNMENT,
+  RETIRED_FLEET_REFUNDS,
+  getFleetVehicle,
+  normalizeFleetAssignment,
+  recoveryCaseCash,
+  resolveCortege,
+  type FleetAssignment,
+  type FleetClass,
+} from '../data/funeralFleets';
+import {
+  BANK_FORECLOSURE_AFTER_MS,
+  BANK_LOAN_GRACE_MS,
+  BANK_PAYMENT_DRAFTED,
+  BANK_PAYMENT_DUE,
+  BANK_PAYMENT_OVERDUE,
+  BANK_WARNING_AFTER_MS,
+  BANK_WARNING_MESSAGE,
+  LOAN_INSTALLMENT_MS,
+} from '../data/bankForeclosure';
+import {
+  directiveNeedsCremationPermit,
+  findExactPermitCaseMatch,
+  initialPermitStatus,
+  PERMIT_ERROR_STREAK_FINE,
+  PERMIT_ERROR_STREAK_LIMIT,
+  PERMIT_ERROR_STREAK_REP_HIT,
+  PERMIT_REJECT_GENERIC,
+  rollPermitEvaluationDueAt,
+  UNPERMITTED_CREMATION_FINE,
+  UNPERMITTED_CREMATION_REP_HIT,
+  type FinanceLedgerEntry,
+  type PermitFormDraft,
+  type PermitSubmissionRecord,
+} from '../data/cremationPermits';
+import {
+  chapelPrefMatchBonus,
+  evaluateChapelPrefMatches,
+  rollFamilyChapelPreferences,
+  serviceMusicLabel,
+  stableServiceMusicId,
+  type FamilyChapelPreferences,
+} from '../data/familyChapelPrefs';
+import {
+  generateDecedentVitals,
+  type CremationPermitStatus,
+} from '../data/decedentVitals';
+import {
+  consumeRareStock,
+  createShopRotation,
+  isHourGatedCasket,
+  isHourGatedUrn,
+  RARE_SCHEDULE,
+  type ShopRotationState,
+} from '../data/shopRotation';
+import {
+  satisfactionToRewards,
+  scoreChapelArrangement,
+} from '../utils/chapelSatisfaction';
+import {
+  rollFamilyUrnDueAt,
+  rollFamilyUrnWaitMs,
+} from '../data/familyUrnTiming';
+import {
+  caseUsesUrnStand,
+  directiveNeedsCasket,
+  directiveNeedsUrn,
+  pickOwnedCasket,
+  pickOwnedUrn,
+  reserveFamilyChoice,
+  stockIncludingStaged,
+} from '../data/familyUrnPick';
+import {
+  REQUIRED_PREF_DELTA,
+  THIN_SELECTION_PENALTY,
+  clampRating,
+  inventoryUnits,
+  ratingTier,
+  thinSelectionHit,
+} from '../data/caseRating';
+import { pickFamilyReview } from '../data/familyReviews';
+import {
+  LEGENDARY_CROSS_REP,
+  LEGENDARY_VESSEL_CHANCE,
+  rollLegendaryVisit,
+} from '../data/legendarySpirits';
+import {
+  notifyHouse,
+  setNotificationGate,
+} from '../utils/houseNotifications';
+import { gameNow } from '../utils/gameNow';
+import {
+  ABSENCE_MAIL_MIN_MS,
+  composeAbsenceLetter,
+  readHouseMail,
+  takeAbsenceSnap,
+  wireWeight,
+  type AbsenceSnap,
+  type HouseLetter,
+} from '../office/absenceMail';
+import { headlineById, renderHeadline } from '../data/newsHeadlines';
+import { readIntakeDevOptions } from '../dev/intakeOptions';
+import {
+  COOLER_RIVAL_NOTE,
+  PHONE_EXTRA_PER_DAY,
+  SERVICE_GRACE_FINE,
+  SERVICE_RESCHEDULE_REP,
+  advanceIntakeSchedule,
+  localDayKey,
+  rollIntakeGapMs,
+  serviceTiming,
+} from '../data/pacing';
+import {
+  contactAccess,
+  phoneContactById,
+  pickPhoneLine,
+  type PhoneCallResult,
+} from '../data/phoneContacts';
+import {
+  XP_NEW_HOME,
+  XP_URN_SEALED,
+  grantCareer,
+  serviceCareerXp,
+  titleAtXp,
+  type RankFanfare,
+} from '../data/rankProgression';
+import { EMBALMING_SUPPLY_BASE, type NewsHeadline } from '../data/newsHeadlines';
+import {
+  advanceNewsWire,
+  headlineFeeDelta,
+  intakeNewsFactor,
+  quotedPrice,
+  waitingSpawn,
+  type NewsWireItem,
+} from '../news/newsWire';
+
+export const TAG_WINDOW_MS = 60_000;
+/** Automatic intake gap: 4–8 real hours, five cases on a local day. */
+export const INTAKE_MIN_MS = 4 * 3_600_000;
+export const INTAKE_MAX_MS = 8 * 3_600_000;
+/** SCI stretches the day to 8–12 hours and two cases. */
+export const SLOW_INTAKE_MIN_MS = 8 * 3_600_000;
+export const SLOW_INTAKE_MAX_MS = 12 * 3_600_000;
+/** Decay points per second outside cooler when not embalmed/cremated */
+export const DECAY_PER_SEC = 0.35;
 
 interface GameState {
+  hasStartedGame: boolean;
+  /**
+   * Cold launch always starts true and is not saved. Continue clears it
+   * without touching the save. A reload sets it true again.
+   */
+  titleGate: boolean;
+  /** What families and the state call the player. Blank resolves to Mortician. */
+  playerName: string;
+  /** new until the first game; offer on the hub; active while the Tutorial Spirit is up; done when finished or skipped. */
+  tutorial: TutorialPhase;
+  tutorialStep: number;
+  tutorialCaseId: string | null;
+  /** The player has dragged the Tutorial Spirit. The first step waits on this. */
+  tutorialSpiritMoved: boolean;
+  /** Snapped Tutorial Spirit position. Null uses the left-edge default. */
+  tutorialSpirit: { x: number; y: number } | null;
+  /** Furthest urn-processor beat while the tutorial is active. */
+  tutorialBeat: string | null;
+  /**
+   * A Legendary Spirit waiting on stay or cross over.
+   * Only rolled after an S+ farewell. Not persisted through a missed choice
+   * if the player has not answered; it is saved so a reload keeps the visit.
+   */
+  legendaryOffer: {
+    spiritId: string;
+    decedentName: string;
+    die: number;
+    showSecret: boolean;
+    vesselKind: 'urn' | 'casket';
+    vesselId: string;
+  } | null;
+  /** Spirits who chose to stay. Quiet. No mischief. */
+  legendaryKept: { spiritId: string }[];
+  /** Runtime only — which case-file panels are open. */
+  filesPanelOpen: boolean;
+  archivesPanelOpen: boolean;
+  tutorialFileRead: boolean;
+  /** The player has looked at a REJECTED filing. Runtime only. */
+  tutorialSawRejection: boolean;
+  settingsOpen: boolean;
   cash: number;
   reputation: number;
   ossilegiumCommuneGrams: number;
-  activeStation:
-    | 'OVERVIEW'
-    | 'EMBALMING'
-    | 'CREMATION'
-    | 'URN_FILLING'
-    | 'SHOWROOM';
-  currentCase: DecedentCase;
+  activeStation: StationId;
+  /**
+   * Which Computer desktop app to open (null = desktop).
+   * EMPORIUM redirects here with 'SHOP'. Not persisted.
+   */
+  computerOpenApp:
+    | 'VR441'
+    | 'SHOP'
+    | 'BANK'
+    | 'REALTY'
+    | 'FLEETS'
+    | 'CRAIGMILE'
+    | 'COOL'
+    | 'PHONE'
+    | 'MAIL'
+    | null;
+  /** Optional deep-link tab when opening BANK (not persisted) */
+  bankOpenTab: 'overview' | 'loans' | 'listings' | null;
+  cases: DecedentCase[];
+  activeCaseId: string | null;
+  inboxFiles: CaseInboxFile[];
+  /** Finished case files. Newest first. Wiped on Reset Game. */
+  archivedCases: ArchivedCaseFile[];
+  intakeToast: string | null;
+  /** System notices for arrivals and family vessel choices. Off until the player allows them. */
+  notificationsEnabled: boolean;
+  /**
+   * True after the phone-notices sheet has been answered.
+   * Older saves omit it, so a finished tutorial is asked on the next launch.
+   */
+  notificationPromptSeen: boolean;
+  /** Night desk letters. Newest first. */
+  houseMail: HouseLetter[];
+  /** Wall clock when the house was last open. Null until the first played minute. */
+  houseClosedAt: number | null;
+  /** Runtime snapshot of a closed stretch. Not saved. */
+  absenceSnap: AbsenceSnap | null;
+  sealAbsenceMail: () => void;
+  markHouseLetterRead: (id: string) => void;
+  /**
+   * gameNow() of the last decay step.
+   * Null on an older save, so the first tick does not invent decay for an unknown gap.
+   */
+  decaySimulatedAt: number | null;
   showroomInventory: ShowroomItem[];
+  /** Owned counts keyed by urn catalog id */
+  urnInventory: Record<string, number>;
+  /** Owned counts keyed by casket catalog id (collection — not consumed by upgrades) */
+  casketInventory: Record<string, number>;
+  /** Permanent chapel décor ids owned via Emporium */
+  chapelOwnedDecor: string[];
+  /** Per-case chapel layout ( bier + flowers + theme ), persisted */
+  chapelLayouts: Record<string, ChapelServiceLayout>;
+  /** Tier levels for facility upgrades */
+  facilityLevels: FacilityUpgradeLevels;
+  /** Hour-window rare stock remaining (persisted) */
+  shopRotation: ShopRotationState;
   placedFlowers: Array<'LILIES' | 'ROSES' | 'WREATH'>;
   serviceRatingBonus: number;
   legalAlert: string | null;
-  setActiveStation: (station: GameState['activeStation']) => void;
-  completeEmbalming: (rank: Rank, tipMultiplier: number) => void;
-  completeCremation: (rank: Rank, boneAshGrams: number) => void;
-  completeUrnFilling: (bonusCash: number) => void;
+  /** Post-service family feedback (honored prefs + boost) — not persisted */
+  serviceFeedback: {
+    decedentName: string;
+    /** "Mom", "Dad", or another family word for the thank-you. */
+    kinLabel: string;
+    honored: string[];
+    missed: string[];
+    prefBonus: number;
+    tipCash: number;
+    payoutBoostPct: number;
+    reputationDelta: number;
+    fleetRecovery: string | null;
+    fleetEscort: string | null;
+    fleetFlower: string | null;
+    fleetCoach: string | null;
+    fleetRep: number;
+    fleetCash: number;
+    fleetFlowerCash: number;
+    intermentThisService: number;
+    intermentTotal: number;
+    /** Signed lines that add up to the cash posted this service. */
+    payoutLines: { label: string; amount: number }[];
+    payoutNet: number;
+    /** Fuel taken when the retort fired. Already off the balance; not in the net. */
+    fuelMetered: number;
+    /** House rating after required prefs and thin-stock adjustments, 0–100. */
+    rating: number;
+    ratingLetter: string;
+    ratingLines: { label: string; delta: number }[];
+    review: string;
+    reviewSigner: string;
+  } | null;
+  /** Computer portal — cremation permit filing history (wiped on Reset Game) */
+  permitSubmissions: PermitSubmissionRecord[];
+  /** Consecutive rejected permit filings → streak fine */
+  permitWrongStreak: number;
+  /** Simple cash ledger (permit fees, fines, …) — wiped on Reset Game */
+  financeLedger: FinanceLedgerEntry[];
+  /**
+   * gameNow() when cash first went negative; null when cash >= 0.
+   * Foreclosure counts wall time from this stamp, including while the house is closed.
+   */
+  negativeCashSinceMs: number | null;
+  /** Wall milliseconds spent overdrawn this stretch. Mirrors now - negativeCashSinceMs. */
+  overdraftAccruedMs: number;
+  /** True after the day-scale bank warning toast for this debt stretch */
+  bankWarningIssued: boolean;
+  /** True when three open days of debt triggered foreclosure */
+  bankForeclosed: boolean;
+  /** Current funeral home property (persisted) */
+  ownedProperty: OwnedProperty;
+  /** Open personal loans + mortgages (persisted) */
+  activeLoans: ActiveBankLoan[];
+  /** Owned Lampblack cortege vehicle ids (persisted) */
+  ownedFleetIds: string[];
+  /** Explicit cortege slots; null = auto-best in that class (persisted) */
+  fleetAssignment: FleetAssignment;
+  /** Lifetime interment from funeral coaches (persisted) */
+  intermentScore: number;
+  /** Newest intake or last finished service (persisted). */
+  lastCase: LastCaseNote | null;
+  /** Headlines currently on the hub wire. */
+  newsWire: NewsWireItem[];
+  /** Earliest gameNow() for the next volume or price effect. */
+  newsNextLiveAt: number;
+  /** Earliest gameNow() for the next celebrity roll. */
+  newsCelebGate: number;
+  /** Headline ids that just left the wire, so they do not repeat at once. */
+  newsRecent: string[];
+  /** Local day key for the automatic intake cap. */
+  intakeDayKey: string;
+  intakeSpawnedToday: number;
+  /** Next automatic arrival. Null while Pause Case Intake is on. */
+  nextIntakeAt: number | null;
+  /** True after the first empty-cooler case of a new clock. */
+  intakeBootstrapped: boolean;
+  phoneDayKey: string;
+  phoneCasesToday: number;
+  /** Per-contact cooldown stamps. Calling one does not write the others. */
+  phoneCooldownUntil: Record<string, number>;
+  phoneLastResult: PhoneCallResult | null;
+  /** Lifetime house XP. Rank is derived from this. */
+  careerXp: number;
+  /** Parlors kept, including the starter. A relocation adds one. */
+  homesKept: number;
+  /** Reputation marks that have already paid XP. */
+  repMilestonesClaimed: number[];
+  /** Set when a title changes. Cleared by the fanfare. */
+  rankFanfare: RankFanfare | null;
+  tickNews: () => void;
+  tickIntake: (opts?: { catchUpLimit?: number }) => void;
+  placePhoneCall: (contactId: string) => void;
+  grantCareerXp: (gain: number) => void;
+  dismissRankFanfare: () => void;
+  /**
+   * Wall-clock when the player left the embalming table.
+   * Fumes linger on the hub. Not persisted.
+   */
+  embalmingLeftAtMs: number | null;
+  /** Working cremulator available for urn processing */
+  cremulatorOwned: boolean;
+  cremulatorDamaged: boolean;
+  /** Synced from Millennium retort — slows/stops decay while burning */
+  cremationBurnActive: boolean;
+  cremationBurnProgress: number;
+  cremationHeatNormalized: number;
+  /** Latches once burn reaches 15% — stays frozen through sweep / burner stops */
+  cremationDecayArrested: boolean;
+  /** Persistent Millennium retort — the chamber currently on screen */
+  retort: RetortMachine;
+  /** Every owned chamber. Index 0 is the original retort. */
+  retortMachines: RetortMachine[];
+  activeRetortIndex: number;
+  /** Upgrades and cosmetics per chamber. */
+  retortBays: RetortBay[];
+  crematoryWardrobe: CrematoryWardrobe;
+  startGame: () => void;
+  /** Leave the title and return to the saved station. Does not rewrite the save. */
+  resumeGame: () => void;
+  setPlayerName: (name: string) => void;
+  setSettingsOpen: (open: boolean) => void;
+  beginTutorial: () => void;
+  skipTutorial: () => void;
+  skipTutorialStep: () => void;
+  completeTutorialStep: () => void;
+  replayTutorial: () => void;
+  setTutorialSpirit: (pos: { x: number; y: number } | null) => void;
+  setTutorialSpiritMoved: (moved: boolean) => void;
+  noteTutorialBeat: (beat: string) => void;
+  noteTutorialSawRejection: () => void;
+  /** Wall clock when the parlor last went to the background. Runtime only. */
+  parlorHiddenAt: number | null;
+  noteParlorHidden: () => void;
+  noteParlorShown: () => void;
+  keepLegendarySpirit: () => void;
+  crossLegendarySpirit: () => void;
+  noteTutorialFile: (caseId: string) => void;
+  setCaseFilePanels: (filesOpen: boolean, archivesOpen: boolean) => void;
+  /**
+   * Wipe gameplay progress in memory (title screen). Pair with pausing
+   * persist writes so Capacitor reloads cannot resurrect the old save.
+   */
+  /** Wipe to title. Pass toast text for player-facing resets; omit for DEV default. */
+  hardResetGameState: (toast?: string | null) => void;
+  setActiveStation: (station: StationId) => void;
+  setComputerOpenApp: (
+    app:
+      | 'VR441'
+      | 'SHOP'
+      | 'BANK'
+      | 'REALTY'
+      | 'FLEETS'
+      | 'CRAIGMILE'
+      | 'COOL'
+      | 'PHONE'
+      | 'MAIL'
+      | null
+  ) => void;
+  buyFleetVehicle: (id: string) => { ok: boolean; message: string };
+  assignFleetVehicle: (fleetClass: FleetClass, id: string | null) => void;
+  setBankOpenTab: (tab: 'overview' | 'loans' | 'listings' | null) => void;
+  patchRetort: (partial: Partial<RetortMachine>) => void;
+  selectRetort: (index: number) => void;
+  chargeRetortFuel: () => void;
+  queueCaseOnRetort: (caseId: string) => void;
+  buyCrematoryTrack: (
+    track: 'speed' | 'quality' | 'fuel' | 'preheat' | 'queue',
+    bayIndex?: number
+  ) => { ok: boolean; message: string };
+  buyCrematoryCosmetic: (
+    kind: 'brand' | 'door' | 'buttons',
+    id: string,
+    bayIndex?: number
+  ) => { ok: boolean; message: string };
+  ensureRetortForCase: (caseId: string) => void;
+  resetRetort: () => void;
+  tickRetortDoor: () => void;
+  tickRetortBurn: () => void;
+  syncCremationDecayState: (state: {
+    active: boolean;
+    progress: number;
+    heatNormalized: number;
+  }) => void;
+  clearCremationDecayState: () => void;
+  selectActiveCase: (caseId: string) => void;
+  /** Sync selection to the case currently on a station without clearing chapel décor */
+  focusCase: (caseId: string) => void;
+  tagBodyInCooler: (caseId: string) => void;
+  markFileRead: (fileId: string) => void;
+  setServiceDate: (caseId: string, serviceDateMs: number) => void;
+  clearIntakeToast: () => void;
+  receiveNewIntake: (opts?: {
+    toast?: string;
+    directive?: DecedentCase['directive'];
+    /** Phone already shows the outcome. Do not cover that screen with the hub toast. */
+    quiet?: boolean;
+  }) => boolean;
+  expireUntaggedNames: () => void;
+  tickDecay: () => void;
+  /** Fire due family urn requests → toast + case file update */
+  tickFamilyUrnChoices: () => void;
+  /** Resolve pending cremation permit evaluations that are due */
+  tickPermitEvaluations: () => void;
+  /** Track continuous negative cash → bank warning → foreclosure */
+  tickBankForeclosure: () => void;
+  /** Player dismisses foreclosure → wipe save like Reset Game */
+  acknowledgeBankForeclosure: () => void;
+  facilitySpaceUsed: () => number;
+  facilitySpaceTotal: () => number;
+  takeBankLoan: (productId: string) => { ok: boolean; message: string };
+  payBankLoanInstallment: (loanId: string) => { ok: boolean; message: string };
+  earlyPayoffBankLoan: (loanId: string) => { ok: boolean; message: string };
+  buyProperty: (
+    listingId: string,
+    method: 'CASH' | 'MORTGAGE'
+  ) => { ok: boolean; message: string };
+  tickBankLoans: () => void;
+  markActiveCaseEmbalmed: () => boolean;
+  /** File a cremation permit from the Computer portal (vitals-only match + fee) */
+  submitCremationPermit: (
+    form: PermitFormDraft,
+    filingFee: number
+  ) => { ok: boolean; message: string };
+  getActiveCase: () => DecedentCase | null;
+  moveCaseTo: (caseId: string, location: CaseLocation) => void;
+  /** @deprecated prefer moveCaseTo(caseId, location) */
+  moveActiveCaseTo: (location: CaseLocation, caseId?: string) => void;
+  takeCaseToStation: (caseId: string, station: StationId) => void;
+  takeActiveCaseToStation: (station: StationId, caseId?: string) => void;
+  completeEmbalming: (
+    rank: Rank,
+    tipMultiplier: number,
+    caseId: string
+  ) => void;
+  completeCremation: (
+    rank: Rank,
+    boneAshGrams: number,
+    caseId: string
+  ) => void;
+  completeUrnFilling: (
+    bonusCash: number,
+    caseId: string,
+    pourQuality?: number
+  ) => void;
+  /** Mark cremulator ash ready so Emporium trips resume at SELECT_URN / POUR */
+  markUrnAshReady: (caseId: string) => void;
+  storeUrnInVault: (caseId: string) => void;
   buyShowroomItem: (itemId: string) => void;
-  placeFloralSpray: (flower: 'LILIES' | 'ROSES' | 'WREATH') => void;
-  finalizeServiceAndNextCase: (chosenDisposition: 'BURIAL' | 'CREMATION') => void;
+  buyUrn: (urnId: string) => boolean;
+  /** Turn one owned vessel into a banded, refinished, or engraved form. */
+  beautifyUrn: (urnId: string, step: BeautifyStep) => boolean;
+  buyCasket: (casketId: string) => boolean;
+  buyChapelDecor: (decorId: string) => boolean;
+  buyFacilityUpgrade: (id: FacilityUpgradeId) => {
+    ok: boolean;
+    reason?: 'cash' | 'collection' | 'space' | 'maxed';
+    message?: string;
+  };
+  offerUrnToCase: (caseId: string, urnId: string | null) => void;
+  offerCasketToCase: (caseId: string, casketId: string | null) => void;
+  ensureChapelLayout: (caseId: string) => void;
+  setChapelTheme: (
+    caseId: string,
+    theme: Partial<ChapelThemeSelection>
+  ) => void;
+  setChapelServiceMusic: (caseId: string, musicTrackId: string | null) => void;
+  moveChapelPiece: (
+    caseId: string,
+    pieceId: string,
+    x: number,
+    y: number
+  ) => void;
+  placeFloralSpray: (
+    flower: 'LILIES' | 'ROSES' | 'WREATH',
+    caseId: string
+  ) => void;
+  removeChapelFlower: (caseId: string, pieceId: string) => void;
+  finalizeServiceAndNextCase: (
+    chosenDisposition: 'BURIAL' | 'CREMATION',
+    caseId: string,
+    settlement?: { urnHandoff?: boolean }
+  ) => void;
   clearLegalAlert: () => void;
+  clearServiceFeedback: () => void;
+  setNotificationsEnabled: (enabled: boolean) => void;
+  markNotificationPromptSeen: () => void;
+  damageCremulator: () => void;
+  buyReplacementCremulator: () => boolean;
+  coolerCapacity: () => number;
+  vaultCapacity: () => number;
 }
 
-const generateRandomCase = (): DecedentCase => {
-  const names = [
-    'Arthur Pendelton',
-    'Walter Vex',
-    'Eleanor Vance',
-    'Silas Thorne',
-    'Harold Finch',
-  ];
+export const CREMULATOR_REPLACEMENT_COST = 1850;
+
+/** Prefer the selected case when it is already at `location`, else any case there. */
+export function caseAtLocation(
+  cases: DecedentCase[],
+  location: CaseLocation,
+  activeCaseId: string | null
+): DecedentCase | null {
+  const selected = cases.find(
+    (c) => c.id === activeCaseId && c.location === location
+  );
+  if (selected) return selected;
+  return cases.find((c) => c.location === location) ?? null;
+}
+
+const FIRST_NAMES = [
+  'Arthur',
+  'Walter',
+  'Eleanor',
+  'Silas',
+  'Harold',
+  'Margaret',
+  'Clara',
+  'Victor',
+  'Beatrice',
+  'Raymond',
+  'Dorothy',
+  'Francis',
+  'Irene',
+  'Otto',
+  'Lillian',
+  'Gerald',
+  'Esther',
+  'Norman',
+  'Agatha',
+  'Edmund',
+  'Pearl',
+  'Theodore',
+  'Mabel',
+  'Curtis',
+  'Sylvia',
+] as const;
+
+const LAST_NAMES = [
+  'Pendelton',
+  'Vex',
+  'Vance',
+  'Thorne',
+  'Finch',
+  'Ashcroft',
+  'Blackwood',
+  'Crowe',
+  'Dunmore',
+  'Ellsworth',
+  'Fairchild',
+  'Graves',
+  'Holloway',
+  'Ingram',
+  'Lockwood',
+  'Marlow',
+  'North',
+  'Oakley',
+  'Pritchard',
+  'Quill',
+  'Ravenscroft',
+  'Sterling',
+  'Underwood',
+  'Whitaker',
+  'York',
+] as const;
+
+function randomDecedentName(): string {
+  const first = FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)];
+  const last = LAST_NAMES[Math.floor(Math.random() * LAST_NAMES.length)];
+  return `${first} ${last}`;
+}
+
+export function generateRandomCase(now = gameNow()): DecedentCase {
   const weights = [135, 165, 190, 245, 285];
   const conditions: Array<{
     cond: DecedentCase['tissueCondition'];
@@ -47,28 +756,306 @@ const generateRandomCase = (): DecedentCase => {
     'BURIAL_VIEWING',
     'CREMATION_DIRECT',
     'VIEWING_THEN_CREMATION',
+    'CREMATION_THEN_VIEWING',
   ];
-  const flowers: DecedentCase['preferredFlowers'][] = [
-    'LILIES',
-    'ROSES',
-    'WREATH',
-  ];
+  const urnMats = URN_MATERIALS as PreferredUrnMaterial[];
+  const casketMats = CASKET_MATERIALS as PreferredCasketMaterial[];
 
   const pickedCond = conditions[Math.floor(Math.random() * conditions.length)];
+  const directive = directives[Math.floor(Math.random() * directives.length)];
+  const payoutByDirective: Record<DecedentCase['directive'], number> = {
+    CREMATION_DIRECT: basePayoutFor('CREMATION_DIRECT'),
+    BURIAL_VIEWING: basePayoutFor('BURIAL_VIEWING'),
+    VIEWING_THEN_CREMATION: basePayoutFor('VIEWING_THEN_CREMATION'),
+    CREMATION_THEN_VIEWING: basePayoutFor('CREMATION_THEN_VIEWING'),
+  };
+  const vitals = generateDecedentVitals(now);
+  const preferredFlowers = 'ROSES' as const;
+  const needsVessel =
+    directiveNeedsUrn(directive) || directiveNeedsCasket(directive);
+  const urnWaitMs = needsVessel ? rollFamilyUrnWaitMs() : null;
   return {
     id: Math.random().toString(36).substring(2, 8).toUpperCase(),
-    name: names[Math.floor(Math.random() * names.length)],
+    name: randomDecedentName(),
+    familyRelation: rollFamilyKin(),
     weightLbs: weights[Math.floor(Math.random() * weights.length)],
     tissueCondition: pickedCond.cond,
     dehydrationFactor: pickedCond.factor,
-    directive: directives[Math.floor(Math.random() * directives.length)],
-    preferredFlowers: flowers[Math.floor(Math.random() * flowers.length)],
+    directive,
+    preferredFlowers,
+    familyChapelPrefs: rollFamilyChapelPreferences(preferredFlowers),
+    preferredUrnMaterial: urnMats[Math.floor(Math.random() * urnMats.length)],
+    preferredCasketMaterial:
+      casketMats[Math.floor(Math.random() * casketMats.length)],
+    offeredUrnId: null,
+    offeredCasketId: null,
+    familyRequestedUrnId: null,
+    familyRequestedCasketId: null,
+    familyUrnDueAt: urnWaitMs == null ? null : now + urnWaitMs,
+    familyUrnRemainingMs: urnWaitMs,
+    urnPourQuality: 0,
+    urnAshReady: false,
+    location: 'COOLER',
     isEmbalmed: false,
     isCremated: false,
     isUrnFilled: false,
-    basePayout: 1200,
+    basePayout: payoutByDirective[directive],
+    arrivedAt: now,
+    tagExpiresAt: now + TAG_WINDOW_MS,
+    tagRemainingMs: TAG_WINDOW_MS,
+    isTagged: false,
+    nameExpired: false,
+    decayLevel: 0,
+    leftCoolerAt: null,
+    serviceDateMs: null,
+    ...vitals,
+    cremationPermitStatus: initialPermitStatus(directive),
+    cremationPermitSubmittedAt: null,
+    cremationPermitEvaluatesAt: null,
+    cremationPermitRejectReason: null,
+    unpermittedCremation: false,
+    headlineCase: null,
   };
-};
+}
+
+/** Professional fee by directive. Dev spawns use the same table. */
+export function basePayoutFor(directive: DecedentCase['directive']): number {
+  switch (directive) {
+    case 'CREMATION_DIRECT':
+      return 1400;
+    case 'BURIAL_VIEWING':
+      return 2200;
+    case 'VIEWING_THEN_CREMATION':
+      return 2800;
+    case 'CREMATION_THEN_VIEWING':
+      return 2500;
+  }
+}
+
+function generateHeadlineCase(h: NewsHeadline, now = gameNow()): DecedentCase {
+  const base = generateRandomCase(now);
+  const directive = 'BURIAL_VIEWING' as const;
+  const stageName = h.celeb ?? base.name;
+  return {
+    ...base,
+    name: stageName,
+    directive,
+    basePayout: basePayoutFor(directive),
+    familyUrnDueAt: base.familyUrnDueAt,
+    familyUrnRemainingMs: base.familyUrnRemainingMs,
+    familyRequestedUrnId: null,
+    familyRequestedCasketId: null,
+    cremationPermitStatus: initialPermitStatus(directive),
+    cremationPermitRejectReason: null,
+    headlineCase: { headlineId: h.id, stageName },
+  };
+}
+
+export function toInboxFile(c: DecedentCase): CaseInboxFile {
+  return {
+    id: c.id,
+    decedentName: c.name,
+    intakeTimestamp: c.arrivedAt,
+    weightLbs: c.weightLbs,
+    tissueCondition: c.tissueCondition,
+    directive: c.directive,
+    preferredFlowers: c.preferredFlowers,
+    familyChapelPrefs: c.familyChapelPrefs,
+    isRead: false,
+    serviceDateMs: c.serviceDateMs,
+    familyRequestedUrnId: c.familyRequestedUrnId,
+    familyRequestedCasketId: c.familyRequestedCasketId,
+    dateOfBirthMs: c.dateOfBirthMs,
+    dateOfDeathMs: c.dateOfDeathMs,
+    timeOfDeathHour: c.timeOfDeathHour,
+    timeOfDeathMinute: c.timeOfDeathMinute,
+    placeOfBirth: c.placeOfBirth,
+    cremationPermitStatus: c.cremationPermitStatus,
+    cremationPermitRejectReason: c.cremationPermitRejectReason,
+    headlineNote: c.headlineCase
+      ? 'Headline case. Tag the body, keep it fresh, embalm, and set a chapel the family would know. Careful work pays about 2.4× the fee. A sloppy service pays less than the ordinary fee.'
+      : null,
+  };
+}
+
+const ARCHIVE_LIMIT = 40;
+
+function toArchivedCase(
+  c: DecedentCase,
+  file: CaseInboxFile | undefined,
+  outcome: string,
+  payout: number,
+  closedAt = gameNow()
+): ArchivedCaseFile {
+  return {
+    id: c.id,
+    closedAt,
+    decedentName: file?.decedentName ?? displayCaseName(c),
+    weightLbs: c.weightLbs,
+    tissueCondition: c.tissueCondition,
+    directive: c.directive,
+    preferredFlowers: c.preferredFlowers ?? 'LILIES',
+    dateOfBirthMs: c.dateOfBirthMs ?? file?.dateOfBirthMs ?? 0,
+    dateOfDeathMs: c.dateOfDeathMs ?? file?.dateOfDeathMs ?? 0,
+    timeOfDeathHour: c.timeOfDeathHour ?? file?.timeOfDeathHour ?? 0,
+    timeOfDeathMinute: c.timeOfDeathMinute ?? file?.timeOfDeathMinute ?? 0,
+    placeOfBirth: c.placeOfBirth ?? file?.placeOfBirth ?? '',
+    cremationPermitStatus:
+      c.cremationPermitStatus ?? file?.cremationPermitStatus ?? 'NOT_REQUIRED',
+    outcome,
+    payout,
+  };
+}
+
+function rememberClosedCase(
+  archived: ArchivedCaseFile[],
+  record: ArchivedCaseFile
+): ArchivedCaseFile[] {
+  return [record, ...archived.filter((a) => a.id !== record.id)].slice(
+    0,
+    ARCHIVE_LIMIT
+  );
+}
+
+const PERMIT_STATUSES = [
+  'NOT_REQUIRED',
+  'NONE',
+  'PENDING',
+  'APPROVED',
+  'REJECTED',
+] as const;
+
+function normalizeArchives(raw: unknown): ArchivedCaseFile[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ArchivedCaseFile[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const a = item as Partial<ArchivedCaseFile>;
+    if (typeof a.id !== 'string' || typeof a.decedentName !== 'string') continue;
+    const directive = a.directive;
+    if (
+      directive !== 'BURIAL_VIEWING' &&
+      directive !== 'CREMATION_DIRECT' &&
+      directive !== 'VIEWING_THEN_CREMATION' &&
+      directive !== 'CREMATION_THEN_VIEWING'
+    ) {
+      continue;
+    }
+    const permit = PERMIT_STATUSES.includes(
+      a.cremationPermitStatus as (typeof PERMIT_STATUSES)[number]
+    )
+      ? a.cremationPermitStatus!
+      : 'NOT_REQUIRED';
+    out.push({
+      id: a.id,
+      closedAt: typeof a.closedAt === 'number' ? a.closedAt : 0,
+      decedentName: a.decedentName,
+      weightLbs: typeof a.weightLbs === 'number' ? a.weightLbs : 0,
+      tissueCondition:
+        a.tissueCondition === 'DEHYDRATED' || a.tissueCondition === 'EDEMATOUS'
+          ? a.tissueCondition
+          : 'NORMAL',
+      directive,
+      preferredFlowers:
+        a.preferredFlowers === 'ROSES' || a.preferredFlowers === 'WREATH'
+          ? a.preferredFlowers
+          : 'LILIES',
+      dateOfBirthMs: typeof a.dateOfBirthMs === 'number' ? a.dateOfBirthMs : 0,
+      dateOfDeathMs: typeof a.dateOfDeathMs === 'number' ? a.dateOfDeathMs : 0,
+      timeOfDeathHour:
+        typeof a.timeOfDeathHour === 'number' ? a.timeOfDeathHour : 0,
+      timeOfDeathMinute:
+        typeof a.timeOfDeathMinute === 'number' ? a.timeOfDeathMinute : 0,
+      placeOfBirth: typeof a.placeOfBirth === 'string' ? a.placeOfBirth : '',
+      cremationPermitStatus: permit,
+      outcome: typeof a.outcome === 'string' && a.outcome ? a.outcome : 'Closed',
+      payout: typeof a.payout === 'number' ? a.payout : 0,
+    });
+  }
+  return out.slice(0, ARCHIVE_LIMIT);
+}
+
+function syncInboxPermit(
+  files: CaseInboxFile[],
+  caseId: string,
+  patch: Partial<CaseInboxFile>
+): CaseInboxFile[] {
+  return files.map((f) => (f.id === caseId ? { ...f, ...patch } : f));
+}
+
+function normalizeCase(c: DecedentCase): DecedentCase {
+  const arrivedAt = c.arrivedAt ?? gameNow();
+  const vitals =
+    c.dateOfBirthMs != null &&
+    c.dateOfDeathMs != null &&
+    c.placeOfBirth != null &&
+    c.timeOfDeathHour != null &&
+    c.timeOfDeathMinute != null
+      ? {
+          dateOfBirthMs: c.dateOfBirthMs,
+          dateOfDeathMs: c.dateOfDeathMs,
+          timeOfDeathHour: c.timeOfDeathHour,
+          timeOfDeathMinute: c.timeOfDeathMinute,
+          placeOfBirth: c.placeOfBirth,
+        }
+      : generateDecedentVitals(arrivedAt);
+  const permitStatus: CremationPermitStatus =
+    c.cremationPermitStatus ?? initialPermitStatus(c.directive);
+  const prefs: FamilyChapelPreferences =
+    c.familyChapelPrefs ?? rollFamilyChapelPreferences('ROSES');
+  const urnPending =
+    directiveNeedsUrn(c.directive) && !c.familyRequestedUrnId;
+  const casketPending =
+    directiveNeedsCasket(c.directive) && !c.familyRequestedCasketId;
+  const vesselPending = urnPending || casketPending;
+  return {
+    ...c,
+    preferredFlowers: 'ROSES',
+    familyChapelPrefs: {
+      ...prefs,
+      flowers: 'ROSES',
+      musicTrackId: prefs.musicTrackId || stableServiceMusicId(c.id || 'house'),
+    },
+    preferredUrnMaterial: c.preferredUrnMaterial ?? URN_MATERIALS[0],
+    preferredCasketMaterial: c.preferredCasketMaterial ?? CASKET_MATERIALS[0],
+    offeredUrnId: c.offeredUrnId ?? null,
+    offeredCasketId: c.offeredCasketId ?? null,
+    familyRequestedUrnId: c.familyRequestedUrnId ?? null,
+    familyRequestedCasketId: c.familyRequestedCasketId ?? null,
+    familyUrnDueAt: !vesselPending
+      ? null
+      : typeof c.familyUrnDueAt === 'number'
+        ? c.familyUrnDueAt
+        : typeof c.familyUrnRemainingMs === 'number'
+          ? gameNow() + Math.max(0, c.familyUrnRemainingMs)
+          : rollFamilyUrnDueAt(arrivedAt),
+    familyUrnRemainingMs: !vesselPending
+      ? null
+      : typeof c.familyUrnRemainingMs === 'number'
+        ? c.familyUrnRemainingMs
+        : rollFamilyUrnWaitMs(),
+    tagRemainingMs:
+      c.isTagged || c.nameExpired
+        ? 0
+        : typeof c.tagRemainingMs === 'number'
+          ? c.tagRemainingMs
+          : c.tagExpiresAt != null &&
+              c.tagExpiresAt - arrivedAt > TAG_WINDOW_MS + 1000
+            ? c.tagExpiresAt - arrivedAt
+            : TAG_WINDOW_MS,
+    urnPourQuality: c.urnPourQuality ?? 0,
+    cremainsQuality: c.cremainsQuality ?? 0,
+    urnAshReady: c.urnAshReady ?? false,
+    ...vitals,
+    cremationPermitStatus: permitStatus,
+    cremationPermitSubmittedAt: c.cremationPermitSubmittedAt ?? null,
+    cremationPermitEvaluatesAt: c.cremationPermitEvaluatesAt ?? null,
+    cremationPermitRejectReason: c.cremationPermitRejectReason ?? null,
+    familyRelation: c.familyRelation || kinFromId(c.id),
+    unpermittedCremation: c.unpermittedCremation ?? false,
+    headlineCase: c.headlineCase ?? null,
+  };
+}
 
 const flowerItemId: Record<'LILIES' | 'ROSES' | 'WREATH', string> = {
   LILIES: 'flower_lilies',
@@ -76,191 +1063,3506 @@ const flowerItemId: Record<'LILIES' | 'ROSES' | 'WREATH', string> = {
   WREATH: 'flower_wreath',
 };
 
-export const useGameStore = create<GameState>((set, get) => ({
-  cash: 2500,
-  reputation: 100,
-  ossilegiumCommuneGrams: 0,
-  activeStation: 'OVERVIEW',
-  currentCase: generateRandomCase(),
+function updateCaseById(
+  cases: DecedentCase[],
+  caseId: string,
+  updater: (c: DecedentCase) => DecedentCase
+): DecedentCase[] {
+  return cases.map((c) => (c.id === caseId ? updater(c) : c));
+}
+
+function resolveActiveCase(state: GameState): DecedentCase | null {
+  if (!state.activeCaseId) return null;
+  return state.cases.find((c) => c.id === state.activeCaseId) ?? null;
+}
+
+function resolveCase(
+  state: GameState,
+  caseId?: string | null
+): DecedentCase | null {
+  if (caseId) return state.cases.find((c) => c.id === caseId) ?? null;
+  return resolveActiveCase(state);
+}
+
+function relocateCase(
+  c: DecedentCase,
+  location: CaseLocation,
+  now: number
+): DecedentCase {
+  return {
+    ...c,
+    location,
+    leftCoolerAt:
+      location === 'COOLER'
+        ? null
+        : c.location === 'COOLER'
+          ? now
+          : c.leftCoolerAt,
+  };
+}
+
+function stationForLocation(location: CaseLocation): StationId | null {
+  if (location === 'COOLER') return 'COOLER';
+  if (location === 'CHAPEL') return 'SHOWROOM';
+  if (location === 'URN_VAULT') return 'URN_VAULT';
+  if (location === 'EMBALMING') return 'EMBALMING';
+  if (location === 'CREMATION') return 'CREMATION';
+  if (location === 'URN_FILLING') return 'URN_FILLING';
+  return null;
+}
+
+/** Derive placedFlowers mirror from per-case chapel layout (no inventory change). */
+function flowersFromLayout(
+  state: GameState,
+  caseId: string
+): Array<'LILIES' | 'ROSES' | 'WREATH'> {
+  const layout = state.chapelLayouts[caseId];
+  return (layout?.pieces ?? [])
+    .map((p) => p.kind)
+    .filter(
+      (k): k is 'LILIES' | 'ROSES' | 'WREATH' =>
+        k === 'LILIES' || k === 'ROSES' || k === 'WREATH'
+    );
+}
+
+/**
+ * Random delay before the next automatic intake.
+ * Normal is 4–8 hours. SCI uses 8–12. Flow and news nudge that, inside a day-scale floor.
+ */
+export function nextIntakeDelayMs(clientFlow = 1, slow = false): number {
+  return rollIntakeGapMs(slow, clientFlow);
+}
+
+const defaultShowroomInventory: ShowroomItem[] = [
+  {
+    id: 'casket_oak',
+    name: 'Half-Couch Oak Casket',
+    category: 'CASKET',
+    cost: 400,
+    resaleValue: 1100,
+    prestigeBonus: 10,
+    ownedCount: 1,
+  },
+  {
+    id: 'coffin_oct',
+    name: 'Traditional Tapered Coffin',
+    category: 'COFFIN',
+    cost: 250,
+    resaleValue: 700,
+    prestigeBonus: 5,
+    ownedCount: 2,
+  },
+  {
+    id: 'keepsake_mini',
+    name: 'Miniature Keepsake Urn Set',
+    category: 'KEEPSAKE',
+    cost: 65,
+    resaleValue: 210,
+    prestigeBonus: 6,
+    ownedCount: 3,
+  },
+  {
+    id: 'flower_lilies',
+    name: 'Standing Peace Lily Spray',
+    category: 'FLOWER',
+    cost: 50,
+    resaleValue: 160,
+    prestigeBonus: 4,
+    ownedCount: 2,
+  },
+  {
+    id: 'flower_roses',
+    name: 'Rose Casket Spray',
+    category: 'FLOWER',
+    cost: 55,
+    resaleValue: 175,
+    prestigeBonus: 4,
+    ownedCount: 1,
+  },
+  {
+    id: 'flower_wreath',
+    name: 'Memorial Laurel Wreath',
+    category: 'FLOWER',
+    cost: 70,
+    resaleValue: 200,
+    prestigeBonus: 5,
+    ownedCount: 1,
+  },
+  {
+    id: 'decor_pews',
+    name: 'Velvet Cushioned Chapel Bench',
+    category: 'DECOR',
+    cost: 600,
+    resaleValue: 0,
+    prestigeBonus: 20,
+    ownedCount: 1,
+  },
+];
+
+/** Default persisted gameplay fields for a brand-new / Reset Game save. */
+export function freshPersistedGameFields() {
+  return {
+    hasStartedGame: false as const,
+    cash: 2500,
+    reputation: 100,
+    ossilegiumCommuneGrams: 0,
+    activeStation: 'OVERVIEW' as const,
+    cases: [] as DecedentCase[],
+    activeCaseId: null as string | null,
+    inboxFiles: [] as CaseInboxFile[],
+    archivedCases: [] as ArchivedCaseFile[],
+    playerName: '',
+    tutorial: 'new' as TutorialPhase,
+    tutorialStep: 0,
+    tutorialCaseId: null as string | null,
+    tutorialSpiritMoved: false,
+    tutorialSpirit: null as { x: number; y: number } | null,
+    tutorialBeat: null as string | null,
+    legendaryOffer: null as GameState['legendaryOffer'],
+    legendaryKept: [] as { spiritId: string }[],
+    showroomInventory: defaultShowroomInventory.map((i) => ({ ...i })),
+    urnInventory: {
+      urn_carrara_classic: 1,
+      urn_walnut_pillar: 1,
+    } as Record<string, number>,
+    casketInventory: {
+      'gabriel-pine-orthodox-raw-blonde-pine': 1,
+      'gabriel-poplar-mission-natural-poplar': 1,
+    } as Record<string, number>,
+    chapelOwnedDecor: [] as string[],
+    chapelLayouts: {} as Record<string, ChapelServiceLayout>,
+    facilityLevels: { ...DEFAULT_FACILITY_LEVELS },
+    shopRotation: createShopRotation(),
+    placedFlowers: [] as ('LILIES' | 'ROSES' | 'WREATH')[],
+    serviceRatingBonus: 0,
+    cremulatorOwned: true,
+    cremulatorDamaged: false,
+    cremationBurnActive: false,
+    cremationBurnProgress: 0,
+    cremationHeatNormalized: 0,
+    cremationDecayArrested: false,
+    retort: { ...IDLE_RETORT },
+    retortMachines: [{ ...IDLE_RETORT }],
+    activeRetortIndex: 0,
+    retortBays: [defaultRetortBay()],
+    crematoryWardrobe: {
+      brands: [...DEFAULT_WARDROBE.brands],
+      doors: [...DEFAULT_WARDROBE.doors],
+      buttons: [...DEFAULT_WARDROBE.buttons],
+    },
+    permitSubmissions: [] as PermitSubmissionRecord[],
+    permitWrongStreak: 0,
+    financeLedger: [] as FinanceLedgerEntry[],
+    negativeCashSinceMs: null as number | null,
+    overdraftAccruedMs: 0,
+    bankWarningIssued: false,
+    bankForeclosed: false,
+    ownedProperty: ownedFromListing(STARTER_PROPERTY, 0),
+    activeLoans: [] as ActiveBankLoan[],
+    ownedFleetIds: [] as string[],
+    fleetAssignment: { ...EMPTY_FLEET_ASSIGNMENT },
+    intermentScore: 0,
+    notificationsEnabled: false,
+    notificationPromptSeen: false,
+    houseMail: [] as HouseLetter[],
+    houseClosedAt: null as number | null,
+    decaySimulatedAt: null as number | null,
+    lastCase: null as LastCaseNote | null,
+    newsWire: [] as NewsWireItem[],
+    newsNextLiveAt: 0,
+    newsCelebGate: 0,
+    newsRecent: [] as string[],
+    intakeDayKey: '',
+    intakeSpawnedToday: 0,
+    nextIntakeAt: null as number | null,
+    intakeBootstrapped: false,
+    phoneDayKey: '',
+    phoneCasesToday: 0,
+    phoneCooldownUntil: {} as Record<string, number>,
+    phoneLastResult: null as PhoneCallResult | null,
+    careerXp: 0,
+    homesKept: 1,
+    repMilestonesClaimed: [] as number[],
+    rankFanfare: null as RankFanfare | null,
+  };
+}
+
+type SavedSlice = { state: unknown; version?: number };
+
+let saveTimer: number | null = null;
+let savePending: { name: string; value: SavedSlice } | null = null;
+
+function writePendingSave() {
+  const job = savePending;
+  savePending = null;
+  if (!job) return;
+  try {
+    localStorage.setItem(job.name, JSON.stringify(job.value));
+  } catch {
+    /* Quota or a locked WebView store. The parlor keeps going in memory. */
+  }
+}
+
+function cancelPendingSave() {
+  if (saveTimer != null) {
+    window.clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  savePending = null;
+}
+
+/** Stringify and write on a later turn, unless the page is going away. */
+function flushGameSaveNow() {
+  if (saveTimer != null) {
+    window.clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  writePendingSave();
+}
+
+/**
+ * Save storage that does not stringify on the same turn as a game update.
+ * The parlor tick and the retort used to write the whole save on the
+ * WebView UI thread several times in one burst. Android treats a blocked
+ * UI thread as "isn't responding."
+ */
+const yieldingSaveStorage = {
+  getItem: (name: string): SavedSlice | null => {
+    try {
+      const raw = localStorage.getItem(name);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as SavedSlice;
+      if (!parsed || typeof parsed !== 'object' || !('state' in parsed)) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  },
+  setItem: (name: string, value: SavedSlice) => {
+    savePending = { name, value };
+    if (saveTimer != null) return;
+    saveTimer = window.setTimeout(() => {
+      saveTimer = null;
+      writePendingSave();
+    }, 50);
+  },
+  removeItem: (name: string) => {
+    cancelPendingSave();
+    try {
+      localStorage.removeItem(name);
+    } catch {
+      /* ignore */
+    }
+  },
+};
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', flushGameSaveNow);
+  document.addEventListener('visibilitychange', () => {
+    const root = document.documentElement;
+    if (document.visibilityState === 'hidden') {
+      root.dataset.pageHidden = '1';
+      commitLiveStamps();
+      flushGameSaveNow();
+      return;
+    }
+    delete root.dataset.pageHidden;
+  });
+  if (document.visibilityState === 'hidden') {
+    document.documentElement.dataset.pageHidden = '1';
+  }
+}
+
+/** Pause Zustand persist writes (Capacitor-safe wipe). */
+export function pauseGamePersistWrites() {
+  cancelPendingSave();
+  useGameStore.persist.setOptions({
+    storage: createJSONStorage(() => ({
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {},
+    })),
+  });
+}
+
+function normalizeLastCase(raw: unknown): LastCaseNote | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Partial<LastCaseNote>;
+  if (typeof r.name !== 'string' || typeof r.service !== 'string') return null;
+  return {
+    id: typeof r.id === 'string' ? r.id : '',
+    name: r.name,
+    service: r.service,
+    at: typeof r.at === 'number' ? r.at : 0,
+  };
+}
+
+/** Restore default localStorage persist after a wipe cycle. */
+export function resumeGamePersistWrites() {
+  useGameStore.persist.setOptions({
+    storage: yieldingSaveStorage,
+  });
+}
+
+function focusMachines(
+  state: {
+    retortMachines?: RetortMachine[];
+    retortBays?: RetortBay[];
+    facilityLevels: FacilityUpgradeLevels;
+  },
+  active: RetortMachine,
+  index: number
+) {
+  const count = retortCount(state.facilityLevels);
+  const aligned = alignMachines(
+    state.retortMachines,
+    active,
+    index,
+    count
+  );
+  return {
+    retort: aligned.machines[aligned.index]!,
+    retortMachines: aligned.machines,
+    activeRetortIndex: aligned.index,
+    retortBays: alignBays(state.retortBays, count),
+  };
+}
+
+function retortForMove(
+  state: {
+    retort: RetortMachine;
+    retortMachines?: RetortMachine[];
+    retortBays?: RetortBay[];
+    facilityLevels: FacilityUpgradeLevels;
+    activeRetortIndex?: number;
+  },
+  caseId: string,
+  location: CaseLocation
+): { halt: Record<string, unknown> | null; extra: Record<string, unknown> } {
+  const count = retortCount(state.facilityLevels);
+  const aligned = alignMachines(
+    state.retortMachines,
+    state.retort,
+    state.activeRetortIndex ?? 0,
+    count
+  );
+  let bays = alignBays(state.retortBays, count);
+  if (location !== 'CREMATION') {
+    bays = bays.map((b) =>
+      b.queueCaseId === caseId ? { ...b, queueCaseId: null } : b
+    );
+    const hold = aligned.machines.findIndex((m) => m.caseId === caseId);
+    if (hold < 0) return { halt: null, extra: { retortBays: bays } };
+    const machines = aligned.machines.slice();
+    machines[hold] = { ...IDLE_RETORT };
+    const stillBurn = machines.some(
+      (m) => m.phase === 'BURN' && (m.primaryOn || m.secondaryOn)
+    );
+    return {
+      halt: null,
+      extra: {
+        retort: machines[aligned.index]!,
+        retortMachines: machines,
+        activeRetortIndex: aligned.index,
+        retortBays: bays,
+        cremationBurnActive: stillBurn,
+        ...(stillBurn
+          ? {}
+          : {
+              cremationBurnProgress: 0,
+              cremationHeatNormalized: 0,
+              cremationDecayArrested: false,
+            }),
+      },
+    };
+  }
+  const already = aligned.machines.findIndex(
+    (m) => m.caseId === caseId && machineIsBusy(m)
+  );
+  if (already >= 0) {
+    return {
+      halt: null,
+      extra: {
+        retort: aligned.machines[already]!,
+        retortMachines: aligned.machines,
+        activeRetortIndex: already,
+        retortBays: bays,
+      },
+    };
+  }
+  const free = aligned.machines.findIndex((m) => !machineIsBusy(m));
+  if (free >= 0) {
+    return {
+      halt: null,
+      extra: {
+        retort: aligned.machines[free]!,
+        retortMachines: aligned.machines,
+        activeRetortIndex: free,
+        retortBays: bays,
+      },
+    };
+  }
+  const queueAt = bays.findIndex((b) => b.queueSlot && !b.queueCaseId);
+  if (queueAt >= 0) {
+    const nextBays = bays.slice();
+    nextBays[queueAt] = { ...bays[queueAt]!, queueCaseId: caseId };
+    const hold = aligned.machines.find((m) => machineIsBusy(m));
+    return {
+      halt: {
+        intakeToast: `Queued on retort ${String.fromCharCode(65 + queueAt)} — loads when that chamber clears.`,
+        retortBays: nextBays,
+        activeStation: 'CREMATION',
+        activeCaseId: hold?.caseId ?? caseId,
+      },
+      extra: {},
+    };
+  }
+  const hold = aligned.machines.find((m) => machineIsBusy(m));
+  return {
+    halt: {
+      intakeToast:
+        'Retort occupied — finish the current cremation before loading another case.',
+      activeStation: 'CREMATION',
+      activeCaseId: hold?.caseId ?? state.retort.caseId,
+    },
+    extra: {},
+  };
+}
+
+function settleFinishedChamber(
+  state: {
+    retort: RetortMachine;
+    retortMachines?: RetortMachine[];
+    retortBays?: RetortBay[];
+    facilityLevels: FacilityUpgradeLevels;
+    activeRetortIndex?: number;
+  },
+  finishedId: string
+) {
+  const count = retortCount(state.facilityLevels);
+  const aligned = alignMachines(
+    state.retortMachines,
+    state.retort,
+    state.activeRetortIndex ?? 0,
+    count
+  );
+  const bays = alignBays(state.retortBays, count);
+  const hold = aligned.machines.findIndex((m) => m.caseId === finishedId);
+  const index = hold >= 0 ? hold : aligned.index;
+  const bay = bays[index] ?? defaultRetortBay();
+  const finished = aligned.machines[index];
+  const fuelChargedCost =
+    finished?.fuelCharged === true && typeof finished.fuelChargedCost === 'number'
+      ? finished.fuelChargedCost
+      : null;
+  const machines = aligned.machines.slice();
+  machines[index] = { ...IDLE_RETORT };
+  bays[index] = { ...bay, queueCaseId: null };
+  const stillBurn = machines.some(
+    (m) => m.phase === 'BURN' && (m.primaryOn || m.secondaryOn)
+  );
+  return {
+    index,
+    bay,
+    queuedId: bay.queueCaseId,
+    retort: machines[index]!,
+    retortMachines: machines,
+    activeRetortIndex: index,
+    retortBays: bays,
+    cremationBurnActive: stillBurn,
+    fuelChargedCost,
+  };
+}
+
+/** Load the case that was waiting on this chamber, if it is still in the cooler. */
+function admitQueuedCase(
+  cases: DecedentCase[],
+  settled: ReturnType<typeof settleFinishedChamber>,
+  now: number
+) {
+  const queued = settled.queuedId
+    ? cases.find((c) => c.id === settled.queuedId && c.location === 'COOLER')
+    : undefined;
+  if (!queued) {
+    return {
+      cases,
+      machines: settled.retortMachines,
+      retort: settled.retort,
+      queued: null as DecedentCase | null,
+    };
+  }
+  const loaded = freshLoad(queued.id, settled.bay.preheat);
+  const machines = settled.retortMachines.slice();
+  machines[settled.index] = loaded;
+  return {
+    cases: updateCaseById(cases, queued.id, (c) =>
+      relocateCase(c, 'CREMATION', now)
+    ),
+    machines,
+    retort: loaded,
+    queued,
+  };
+}
+
+/** How long a quiet parlor may keep a sim stamp off the saved store. */
+const STAMP_KEEP_MS = 8000;
+let decayWall: number | null = null;
+let retortWall: number | null = null;
+
+function notedAt(saved: number | null | undefined, wall: number | null): number | null {
+  if (wall == null) return saved ?? null;
+  if (saved == null) return wall;
+  return Math.max(saved, wall);
+}
+
+/** Write the in-memory sim clocks into the save when the page hides. */
+function commitLiveStamps() {
+  const patch: Partial<GameState> = {};
+  const state = useGameStore.getState();
+  if (decayWall != null && state.decaySimulatedAt !== decayWall) {
+    patch.decaySimulatedAt = decayWall;
+  }
+  if (retortWall != null) {
+    const machinesStale = state.retortMachines.some(
+      (m) => (m.burnSimulatedAt ?? 0) < retortWall!
+    );
+    const retortStale = (state.retort.burnSimulatedAt ?? 0) < retortWall;
+    if (machinesStale) {
+      patch.retortMachines = state.retortMachines.map((m) =>
+        (m.burnSimulatedAt ?? 0) >= retortWall!
+          ? m
+          : { ...m, burnSimulatedAt: retortWall }
+      );
+    }
+    if (retortStale) {
+      patch.retort = { ...state.retort, burnSimulatedAt: retortWall };
+    }
+  }
+  if (Object.keys(patch).length > 0) useGameStore.setState(patch);
+}
+
+function stepOneRetort(
+  machine: RetortMachine,
+  cases: DecedentCase[],
+  speed: number,
+  now: number
+): RetortMachine {
+  const stamp = (next: RetortMachine): RetortMachine =>
+    next.burnSimulatedAt === now ? next : { ...next, burnSimulatedAt: now };
+  const cremationCase = cases.find(
+    (c) => c.id === machine.caseId && c.location === 'CREMATION'
+  );
+  if (!cremationCase && machine.phase !== 'IDLE') {
+    return { ...IDLE_RETORT, burnSimulatedAt: now };
+  }
+  if (machine.phase === 'IDLE' || machine.phase === 'DONE') return stamp(machine);
+  if (
+    !machine.blowerOn &&
+    !machine.secondaryOn &&
+    !machine.primaryOn &&
+    !machine.purging &&
+    machine.phase !== 'BURN'
+  ) {
+    return stamp(machine);
+  }
+  if (!cremationCase) return stamp(machine);
+  const targets = getCremationTargets(cremationCase.weightLbs);
+  const since = notedAt(machine.burnSimulatedAt, retortWall);
+  const dt = since == null ? BURN_TICK_MS : Math.max(0, now - since);
+  const progress = Math.min(1, machine.elapsedSec / targets.targetDurationSec);
+  const before = machine.elapsedSec;
+  let next = advanceRetortBy(
+    machine,
+    dt,
+    targets.getMaxSafeTempF(progress),
+    now
+  );
+  if (
+    speed > 1 &&
+    next.phase === 'BURN' &&
+    next.primaryOn &&
+    next.elapsedSec > before
+  ) {
+    const delta = next.elapsedSec - before;
+    next = { ...next, elapsedSec: before + delta * speed };
+  }
+  return { ...next, burnSimulatedAt: now };
+}
+
+function tutorialGateOf(state: GameState) {
+  return readTutorialGate(state);
+}
+
+function spawnTutorialViewing(now: number): DecedentCase {
+  const base = generateRandomCase(now);
+  return {
+    ...base,
+    directive: 'BURIAL_VIEWING',
+    familyRelation: 'Dad',
+    familyRequestedUrnId: null,
+    familyRequestedCasketId: null,
+    basePayout: basePayoutFor('BURIAL_VIEWING'),
+    cremationPermitStatus: initialPermitStatus('BURIAL_VIEWING'),
+    cremationPermitSubmittedAt: null,
+    cremationPermitEvaluatesAt: null,
+    cremationPermitRejectReason: null,
+    unpermittedCremation: false,
+    isTagged: false,
+    nameExpired: false,
+    isEmbalmed: false,
+    isCremated: false,
+    isUrnFilled: false,
+    location: 'COOLER',
+    tagExpiresAt: now + TUTORIAL_TAG_HOLD_MS,
+    tagRemainingMs: TUTORIAL_TAG_HOLD_MS,
+  };
+}
+
+function casesWithTagWindowReleased(
+  state: GameState,
+  now: number
+): DecedentCase[] | null {
+  if (!state.tutorialCaseId) return null;
+  let changed = false;
+  const cases = state.cases.map((c) => {
+    if (c.id !== state.tutorialCaseId) return c;
+    const next = releaseHeldTagWindow(c, now, TAG_WINDOW_MS);
+    if (next !== c) changed = true;
+    return next;
+  });
+  return changed ? cases : null;
+}
+
+function advanceTutorial(state: GameState, force: boolean) {
+  if (state.tutorial !== 'active') return state;
+  const step = TUTORIAL_STEPS[state.tutorialStep];
+  if (!force && (!step || !step.done(tutorialGateOf(state)))) return state;
+  const next = state.tutorialStep + 1;
+  const entering = TUTORIAL_STEPS[next];
+  const released = tutorialReleasesTag(entering?.id)
+    ? casesWithTagWindowReleased(state, gameNow())
+    : null;
+  if (!step || next >= TUTORIAL_STEPS.length) {
+    return {
+      ...(released ? { cases: released } : {}),
+      tutorial: 'done' as const,
+      tutorialStep: 0,
+      tutorialFileRead: false,
+      tutorialSawRejection: false,
+      tutorialBeat: null,
+    };
+  }
+  const viewing =
+    entering?.id === TUTORIAL_CASE2_ARRIVE_ID
+      ? spawnTutorialViewing(gameNow())
+      : null;
+  const cases = viewing
+    ? [...(released ?? state.cases), viewing]
+    : released ?? null;
+  return {
+    ...(cases ? { cases } : {}),
+    ...(viewing
+      ? {
+          inboxFiles: [toInboxFile(viewing), ...state.inboxFiles],
+          tutorialCaseId: viewing.id,
+          activeCaseId: viewing.id,
+        }
+      : {}),
+    tutorialStep: next,
+    tutorialFileRead: false,
+    tutorialSawRejection: false,
+  };
+}
+
+function readTutorialBell(value: unknown): { x: number; y: number } | null {
+  if (!value || typeof value !== 'object') return null;
+  const pos = value as { x?: unknown; y?: unknown };
+  if (typeof pos.x !== 'number' || typeof pos.y !== 'number') return null;
+  if (!Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return null;
+  return { x: pos.x, y: pos.y };
+}
+
+/** One notice per time the cooler fills, not once a second. */
+/** One reminder per loan due-time, so the parlor tick does not repeat it. */
+const bankReminded = new Set<string>();
+const HOUSE_OPEN_HEARTBEAT_MS = 60_000;
+
+function absenceReady(state: {
+  hasStartedGame: boolean;
+  titleGate: boolean;
+  tutorial: string;
+  bankForeclosed: boolean;
+}): boolean {
+  return (
+    state.hasStartedGame &&
+    !state.titleGate &&
+    state.tutorial === 'done' &&
+    !state.bankForeclosed
+  );
+}
+
+function ensureAbsenceSnap(
+  state: {
+    hasStartedGame: boolean;
+    titleGate: boolean;
+    tutorial: string;
+    bankForeclosed: boolean;
+    houseClosedAt: number | null;
+    absenceSnap: AbsenceSnap | null;
+    cases: DecedentCase[];
+    newsWire: { headlineId: string }[];
+  },
+  now: number
+): AbsenceSnap | null {
+  if (state.absenceSnap) return state.absenceSnap;
+  if (!absenceReady(state) || state.houseClosedAt == null) return null;
+  if (now - state.houseClosedAt < ABSENCE_MAIL_MIN_MS) return null;
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return null;
+  return takeAbsenceSnap(state.cases, state.newsWire.map((item) => item.headlineId), state.houseClosedAt);
+}
+
+export const useGameStore = create<GameState>()(
+  persist(
+    (set, get) => ({
+  ...freshPersistedGameFields(),
+  titleGate: true,
+  parlorHiddenAt: null,
+  absenceSnap: null,
+  filesPanelOpen: false,
+  archivesPanelOpen: false,
+  tutorialFileRead: false,
+  tutorialSawRejection: false,
+  settingsOpen: false,
+  computerOpenApp: null,
+  bankOpenTab: null,
+  intakeToast: null,
   legalAlert: null,
-  placedFlowers: [],
-  serviceRatingBonus: 0,
-  showroomInventory: [
-    {
-      id: 'casket_oak',
-      name: 'Half-Couch Oak Casket',
-      category: 'CASKET',
-      cost: 400,
-      resaleValue: 1100,
-      prestigeBonus: 10,
-      ownedCount: 1,
-    },
-    {
-      id: 'coffin_oct',
-      name: 'Traditional Tapered Coffin',
-      category: 'COFFIN',
-      cost: 250,
-      resaleValue: 700,
-      prestigeBonus: 5,
-      ownedCount: 2,
-    },
-    {
-      id: 'urn_marble',
-      name: 'Carrara Marble Urn',
-      category: 'URN',
-      cost: 120,
-      resaleValue: 380,
-      prestigeBonus: 8,
-      ownedCount: 2,
-    },
-    {
-      id: 'keepsake_mini',
-      name: 'Miniature Keepsake Urn Set',
-      category: 'KEEPSAKE',
-      cost: 65,
-      resaleValue: 210,
-      prestigeBonus: 6,
-      ownedCount: 3,
-    },
-    {
-      id: 'flower_lilies',
-      name: 'Standing Peace Lily Spray',
-      category: 'FLOWER',
-      cost: 50,
-      resaleValue: 160,
-      prestigeBonus: 4,
-      ownedCount: 2,
-    },
-    {
-      id: 'flower_roses',
-      name: 'Rose Casket Spray',
-      category: 'FLOWER',
-      cost: 55,
-      resaleValue: 175,
-      prestigeBonus: 4,
-      ownedCount: 1,
-    },
-    {
-      id: 'flower_wreath',
-      name: 'Memorial Laurel Wreath',
-      category: 'FLOWER',
-      cost: 70,
-      resaleValue: 200,
-      prestigeBonus: 5,
-      ownedCount: 1,
-    },
-    {
-      id: 'decor_pews',
-      name: 'Velvet Cushioned Chapel Bench',
-      category: 'DECOR',
-      cost: 600,
-      resaleValue: 0,
-      prestigeBonus: 20,
-      ownedCount: 1,
-    },
-  ],
+  serviceFeedback: null,
+  embalmingLeftAtMs: null,
 
-  setActiveStation: (station) => set({ activeStation: station }),
+  getActiveCase: () => resolveActiveCase(get()),
 
-  completeEmbalming: (rank, tipMultiplier) =>
+  startGame: () =>
     set((state) => {
-      if (state.currentCase.isEmbalmed) {
-        return { activeStation: 'OVERVIEW' };
-      }
+      const now = gameNow();
+      const cases = state.cases.map((c, index) => {
+        if (index !== 0 || c.isTagged || c.nameExpired) return c;
+        return {
+          ...c,
+          arrivedAt: now,
+          tagExpiresAt: now + TAG_WINDOW_MS,
+          tagRemainingMs: TAG_WINDOW_MS,
+          nameExpired: false,
+        };
+      });
+      const inboxFiles = state.inboxFiles.map((f, index) =>
+        index === 0 ? { ...f, intakeTimestamp: now } : f
+      );
       return {
-        currentCase: {
-          ...state.currentCase,
-          isEmbalmed: true,
-          embalmRank: rank,
-        },
-        cash: Math.round(state.cash + 350 * tipMultiplier),
-        reputation:
-          state.reputation +
-          (rank === 'S+' ? 25 : rank === 'S' ? 15 : rank === 'F' ? -5 : 5),
-        activeStation: 'OVERVIEW',
+        hasStartedGame: true,
+        titleGate: false,
+        activeStation: 'OVERVIEW' as const,
+        cases,
+        inboxFiles,
+        tutorial: state.tutorial === 'new' ? 'offer' : state.tutorial,
       };
     }),
 
-  completeCremation: (rank, boneAshGrams) => {
-    const { currentCase } = get();
-    if (currentCase.isCremated) {
-      set({ activeStation: 'URN_FILLING' });
+  resumeGame: () => set({ titleGate: false }),
+
+  setPlayerName: (name) => set({ playerName: resolvePlayerName(name) }),
+  setSettingsOpen: (open) => set({ settingsOpen: open }),
+  beginTutorial: () => {
+    const state = get();
+    const now = gameNow();
+    const base = generateRandomCase(now);
+    const next: DecedentCase = {
+      ...base,
+      directive: 'CREMATION_DIRECT',
+      familyRelation: 'Mom',
+      familyUrnDueAt: now + 45_000,
+      familyUrnRemainingMs: 45_000,
+      familyRequestedUrnId: null,
+      familyRequestedCasketId: null,
+      basePayout: basePayoutFor('CREMATION_DIRECT'),
+      cremationPermitStatus: initialPermitStatus('CREMATION_DIRECT'),
+      cremationPermitSubmittedAt: null,
+      cremationPermitEvaluatesAt: null,
+      cremationPermitRejectReason: null,
+      unpermittedCremation: false,
+      isTagged: false,
+      nameExpired: false,
+      tagExpiresAt: now + TUTORIAL_TAG_HOLD_MS,
+      tagRemainingMs: TUTORIAL_TAG_HOLD_MS,
+    };
+    set({
+      cases: [...state.cases, next],
+      inboxFiles: [toInboxFile(next), ...state.inboxFiles],
+      activeCaseId: state.activeCaseId ?? next.id,
+      tutorial: 'active',
+      tutorialStep: 0,
+      tutorialCaseId: next.id,
+      tutorialFileRead: false,
+      tutorialSawRejection: false,
+      tutorialSpiritMoved: false,
+      tutorialBeat: null,
+      intakeToast: null,
+    });
+  },
+  skipTutorial: () =>
+    set((state) => {
+      const released = casesWithTagWindowReleased(state, gameNow());
+      return {
+        tutorial: 'done',
+        tutorialStep: 0,
+        tutorialFileRead: false,
+        tutorialSawRejection: false,
+        tutorialBeat: null,
+        ...(released ? { cases: released } : {}),
+      };
+    }),
+  skipTutorialStep: () =>
+    set((state) => advanceTutorial(state, true)),
+  completeTutorialStep: () =>
+    set((state) => advanceTutorial(state, false)),
+  replayTutorial: () =>
+    set({
+      tutorial: 'offer',
+      tutorialStep: 0,
+      tutorialCaseId: null,
+      tutorialFileRead: false,
+      tutorialSawRejection: false,
+      tutorialSpiritMoved: false,
+      tutorialBeat: null,
+    }),
+  setTutorialSpirit: (pos) => set({ tutorialSpirit: pos }),
+  setTutorialSpiritMoved: (moved) => set({ tutorialSpiritMoved: moved }),
+  noteTutorialBeat: (beat) =>
+    set((state) => {
+      if (state.tutorial !== 'active') return state;
+      const next = nextTutorialBeat(state.tutorialBeat, beat);
+      if (next === state.tutorialBeat) return state;
+      return { tutorialBeat: next };
+    }),
+  noteTutorialSawRejection: () =>
+    set((state) => {
+      if (state.tutorial !== 'active' || state.tutorialSawRejection) return state;
+      return { tutorialSawRejection: true };
+    }),
+  noteParlorHidden: () => {
+    const now = gameNow();
+    const state = get();
+    if (!absenceReady(state)) {
+      set({ parlorHiddenAt: now });
       return;
     }
-    // Check if cremating a Burial-Only decedent -> LAWSUIT!
-    if (currentCase.directive === 'BURIAL_VIEWING') {
-      set((state) => ({
+    set({
+      parlorHiddenAt: now,
+      houseClosedAt: state.absenceSnap ? state.houseClosedAt : now,
+      absenceSnap:
+        state.absenceSnap ??
+        takeAbsenceSnap(
+          state.cases,
+          state.newsWire.map((item) => item.headlineId),
+          now
+        ),
+    });
+  },
+  noteParlorShown: () => {
+    if (get().parlorHiddenAt == null) return;
+    set({ parlorHiddenAt: null });
+  },
+  sealAbsenceMail: () => {
+    const state = get();
+    if (!absenceReady(state)) return;
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    const now = gameNow();
+    const snap = state.absenceSnap;
+    if (!snap) {
+      if (state.houseClosedAt == null || now - state.houseClosedAt >= HOUSE_OPEN_HEARTBEAT_MS) {
+        set({ houseClosedAt: now });
+      }
+      return;
+    }
+    const arrivedNames = state.cases
+      .filter((item) => !snap.caseIds.includes(item.id))
+      .map((item) => displayCaseName(item));
+    const wire = state.newsWire
+      .filter((item) => !snap.newsIds.includes(item.headlineId))
+      .map((item) => {
+        const headline = headlineById(item.headlineId);
+        if (!headline) return null;
+        return {
+          id: item.headlineId,
+          text: renderHeadline(headline.text, item.homeLabel),
+          weight: wireWeight(headline.category, headline.group),
+        };
+      })
+      .filter((item): item is { id: string; text: string; weight: number } => item != null);
+    const letter = composeAbsenceLetter({
+      snap,
+      until: now,
+      playerName: resolvePlayerName(state.playerName),
+      arrivedNames,
+      wire,
+      cases: state.cases.map((item) => ({
+        id: item.id,
+        name: displayCaseName(item),
+        serviceDateMs: item.serviceDateMs ?? null,
+        urnId: item.familyRequestedUrnId ?? null,
+        casketId: item.familyRequestedCasketId ?? null,
+        urnName: item.familyRequestedUrnId
+          ? (getUrnById(item.familyRequestedUrnId)?.name ?? null)
+          : null,
+        casketName: item.familyRequestedCasketId
+          ? (getCasketById(item.familyRequestedCasketId)?.name ?? null)
+          : null,
+        needsUrn: directiveNeedsUrn(item.directive) && !item.familyRequestedUrnId,
+        needsCasket: directiveNeedsCasket(item.directive) && !item.familyRequestedCasketId,
+      })),
+    });
+    if (!letter) {
+      set({ absenceSnap: null, houseClosedAt: now });
+      return;
+    }
+    set({
+      absenceSnap: null,
+      houseClosedAt: now,
+      houseMail: [letter, ...state.houseMail].slice(0, 40),
+    });
+  },
+  markHouseLetterRead: (id) =>
+    set((state) => ({
+      houseMail: state.houseMail.map((letter) =>
+        letter.id === id ? { ...letter, read: true } : letter
+      ),
+    })),
+  keepLegendarySpirit: () => {
+    const offer = get().legendaryOffer;
+    if (!offer) return;
+    const kept = get().legendaryKept.some((row) => row.spiritId === offer.spiritId)
+      ? get().legendaryKept
+      : [...get().legendaryKept, { spiritId: offer.spiritId }];
+    set({
+      legendaryKept: kept,
+      legendaryOffer: null,
+      intakeToast: 'They will stay with the house. No one has to leave before they are ready.',
+    });
+  },
+  crossLegendarySpirit: () => {
+    const state = get();
+    const offer = state.legendaryOffer;
+    if (!offer) return;
+    const gifted = Math.random() < LEGENDARY_VESSEL_CHANCE;
+    const urnInventory = { ...state.urnInventory };
+    const casketInventory = { ...state.casketInventory };
+    let toast = 'They crossed over. The house stands a little higher for it.';
+    if (gifted && offer.vesselKind === 'urn') {
+      urnInventory[offer.vesselId] = (urnInventory[offer.vesselId] ?? 0) + 1;
+      const name = getUrnById(offer.vesselId)?.name ?? 'a vessel';
+      toast = `They crossed over and left ${name} with the house.`;
+    } else if (gifted) {
+      casketInventory[offer.vesselId] = (casketInventory[offer.vesselId] ?? 0) + 1;
+      const name = getCasketById(offer.vesselId)?.name ?? 'a vessel';
+      toast = `They crossed over and left ${name} with the house.`;
+    }
+    const nextReputation = state.reputation + LEGENDARY_CROSS_REP;
+    const career = grantCareer({
+      careerXp: state.careerXp,
+      homesKept: state.homesKept,
+      repMilestonesClaimed: state.repMilestonesClaimed,
+      reputation: nextReputation,
+      gain: 0,
+      fanfare: state.rankFanfare,
+    });
+    set({
+      legendaryOffer: null,
+      reputation: nextReputation,
+      careerXp: career.careerXp,
+      homesKept: career.homesKept,
+      repMilestonesClaimed: career.repMilestonesClaimed,
+      rankFanfare: career.rankFanfare,
+      urnInventory,
+      casketInventory,
+      intakeToast: toast,
+    });
+  },
+  noteTutorialFile: (caseId) =>
+    set((state) => {
+      if (state.tutorial !== 'active') return state;
+      if (state.tutorialCaseId && caseId !== state.tutorialCaseId) return state;
+      return { tutorialFileRead: true };
+    }),
+  setCaseFilePanels: (filesOpen, archivesOpen) =>
+    set({ filesPanelOpen: filesOpen, archivesPanelOpen: archivesOpen }),
+
+  hardResetGameState: (toast) =>
+    set({
+      ...freshPersistedGameFields(),
+      playerName: get().playerName,
+      titleGate: true,
+      filesPanelOpen: false,
+      archivesPanelOpen: false,
+      tutorialFileRead: false,
+      tutorialSawRejection: false,
+      settingsOpen: false,
+      computerOpenApp: null,
+      absenceSnap: null,
+      bankOpenTab: null,
+      intakeToast:
+        toast === undefined
+          ? import.meta.env.VITE_PUBLIC_DEMO === '1'
+            ? 'Game reset — back at title.'
+            : '[DEV] Game reset — back at title.'
+          : toast,
+      legalAlert: null,
+      serviceFeedback: null,
+      embalmingLeftAtMs: null,
+    }),
+
+  setActiveStation: (station) => {
+    const prev = get().activeStation;
+    const leftEmbalming =
+      prev === 'EMBALMING' && station !== 'EMBALMING'
+        ? { embalmingLeftAtMs: Date.now() }
+        : {};
+    // Emporium lives on the Computer as a shop browser tab
+    if (station === 'EMPORIUM') {
+      set({ activeStation: 'COMPUTER', computerOpenApp: 'SHOP', ...leftEmbalming });
+      return;
+    }
+    if (station === 'COMPUTER') {
+      set({ activeStation: 'COMPUTER', computerOpenApp: null, ...leftEmbalming });
+      return;
+    }
+    set({ activeStation: station, ...leftEmbalming });
+  },
+
+  setComputerOpenApp: (app) => set({ computerOpenApp: app }),
+  setBankOpenTab: (tab) => set({ bankOpenTab: tab }),
+
+  facilitySpaceUsed: () => totalFacilitySpaceUsed(get().facilityLevels),
+  facilitySpaceTotal: () => get().ownedProperty?.spaceTotal ?? STARTER_PROPERTY.space,
+
+
+  selectActiveCase: (caseId) => {
+    const state = get();
+    if (!state.cases.some((c) => c.id === caseId)) return;
+    if (state.activeCaseId === caseId) return;
+    // Chapel flowers live in per-case layouts (merch already consumed).
+    // Do NOT refund on case switch — that double-refunded when sprays were removed later.
+    set({
+      activeCaseId: caseId,
+      placedFlowers: flowersFromLayout(state, caseId),
+      serviceRatingBonus: 0,
+    });
+  },
+
+  focusCase: (caseId) => {
+    const state = get();
+    if (!state.cases.some((c) => c.id === caseId)) return;
+    if (state.activeCaseId === caseId) return;
+    set({ activeCaseId: caseId });
+  },
+
+  tagBodyInCooler: (caseId) =>
+    set((state) => {
+      const cases = state.cases.map((c) => {
+        if (c.id !== caseId) return c;
+        if (c.isTagged || c.nameExpired || c.tagRemainingMs <= 0) return c;
+        return { ...c, isTagged: true, nameExpired: false, tagRemainingMs: 0 };
+      });
+      const tagged = cases.find((c) => c.id === caseId);
+      const lastCase =
+        state.lastCase && state.lastCase.id === caseId && tagged?.isTagged
+          ? { ...state.lastCase, name: tagged.name }
+          : state.lastCase;
+      if (state.activeCaseId === caseId) return { cases, lastCase };
+      // Same as selectActiveCase: mirror layout flowers, never refund merch
+      return {
+        cases,
+        lastCase,
+        activeCaseId: caseId,
+        placedFlowers: flowersFromLayout(state, caseId),
+        serviceRatingBonus: 0,
+      };
+    }),
+
+  markFileRead: (fileId) =>
+    set((state) => ({
+      inboxFiles: state.inboxFiles.map((f) =>
+        f.id === fileId ? { ...f, isRead: true } : f
+      ),
+    })),
+
+  setServiceDate: (caseId, serviceDateMs) =>
+    set((state) => {
+      const now = gameNow();
+      if (serviceDateMs <= now) {
+        return {
+          legalAlert:
+            'Pick an hour that has not already passed. The family is keeping the calendar.',
+        };
+      }
+      const current = state.cases.find((c) => c.id === caseId);
+      const missed = serviceTiming(current?.serviceDateMs ?? null, now) === 'missed';
+      const reputation = missed
+        ? Math.max(0, state.reputation - SERVICE_RESCHEDULE_REP)
+        : state.reputation;
+      return {
+        reputation,
+        cases: updateCaseById(state.cases, caseId, (c) => ({
+          ...c,
+          serviceDateMs,
+        })),
+        inboxFiles: state.inboxFiles.map((f) =>
+          f.id === caseId ? { ...f, serviceDateMs, isRead: true } : f
+        ),
+        intakeToast: missed
+          ? `Rescheduled. The family will remember this — reputation −${SERVICE_RESCHEDULE_REP}.`
+          : state.intakeToast,
+      };
+    }),
+
+  clearIntakeToast: () => set({ intakeToast: null }),
+
+  coolerCapacity: () =>
+    coolerBayCapacity(get().facilityLevels.cooler_bays || 0),
+
+  vaultCapacity: () => vaultSlotCapacity(get().facilityLevels.vault || 0),
+
+  receiveNewIntake: (opts) => {
+    const state = get();
+    const coolerCount = state.cases.filter((c) => c.location === 'COOLER')
+      .length;
+    const cap = coolerBayCapacity(state.facilityLevels.cooler_bays || 0);
+    if (coolerCount >= cap) return false;
+    let next = generateRandomCase();
+    if (opts?.directive && opts.directive !== next.directive) {
+      const wait = directiveNeedsUrn(opts.directive) ? rollFamilyUrnWaitMs() : null;
+      const now = next.arrivedAt;
+      next = {
+        ...next,
+        directive: opts.directive,
+        basePayout: basePayoutFor(opts.directive),
+        familyUrnRemainingMs: wait,
+        familyUrnDueAt: wait == null ? null : now + wait,
+        cremationPermitStatus: initialPermitStatus(opts.directive),
+        cremationPermitRejectReason: null,
+      };
+    }
+    playIntakeBell();
+    set({
+      cases: [...state.cases, next],
+      inboxFiles: [toInboxFile(next), ...state.inboxFiles],
+      intakeToast: opts?.quiet
+        ? state.intakeToast
+        : (opts?.toast ?? `${next.name} — tag in the cooler`),
+      activeCaseId: state.activeCaseId ?? next.id,
+      lastCase: {
+        id: next.id,
+        name: displayCaseName(next),
+        service: directiveLabel(next.directive),
+        at: next.arrivedAt,
+      },
+    });
+    if (!(opts?.quiet && !opts?.toast)) {
+      notifyHouse(
+        'New remains',
+        `${next.name} has arrived. Tag them in the cooler within 60 seconds.`
+      );
+    }
+    return true;
+  },
+
+  tickIntake: (opts) => {
+    const state = get();
+    if (!state.hasStartedGame || state.titleGate || state.bankForeclosed) return;
+    if (state.tutorial === 'offer' || state.tutorial === 'new') return;
+    const career = grantCareer({
+      careerXp: state.careerXp,
+      homesKept: state.homesKept,
+      repMilestonesClaimed: state.repMilestonesClaimed,
+      reputation: state.reputation,
+      gain: 0,
+      fanfare: state.rankFanfare,
+    });
+    if (
+      career.careerXp !== state.careerXp ||
+      career.repMilestonesClaimed.length !== state.repMilestonesClaimed.length
+    ) {
+      set(career);
+    }
+    const dev =
+      import.meta.env.VITE_PUBLIC_DEMO === '1' ||
+      import.meta.env.VITE_DEV_TOOLS === '0' ||
+      import.meta.env.VITE_DEV_TOOLS === 'false'
+        ? { sci: false, pause: false }
+        : readIntakeDevOptions();
+    const now = gameNow();
+    let snap = ensureAbsenceSnap(state, now);
+    const coolerCount = state.cases.filter((c) => c.location === 'COOLER').length;
+    const cap = coolerBayCapacity(state.facilityLevels.cooler_bays || 0);
+    const flow =
+      (state.ownedProperty?.clientFlow ?? 1) *
+      intakeNewsFactor(state.newsWire, now);
+    const advanced = advanceIntakeSchedule({
+      now,
+      schedule: {
+        dayKey: state.intakeDayKey,
+        spawned: state.intakeSpawnedToday,
+        nextAt: state.nextIntakeAt,
+        bootstrapped: state.intakeBootstrapped,
+      },
+      pause: dev.pause,
+      slow: dev.sci && !dev.pause,
+      flow,
+      coolerEmpty: coolerCount === 0,
+      coolerFull: coolerCount >= cap,
+      catchUpLimit: opts?.catchUpLimit ?? 64,
+    });
+    let spawned = advanced.schedule.spawned;
+    let made = 0;
+    let lostToRival = advanced.lostToRival;
+    for (let i = 0; i < advanced.spawnCount; i += 1) {
+      if (!get().receiveNewIntake()) {
+        lostToRival += advanced.spawnCount - i;
+        break;
+      }
+      made += 1;
+    }
+    const phoneDay = localDayKey(now);
+    const phoneReset = state.phoneDayKey !== phoneDay;
+    const nextSchedule = {
+      intakeDayKey: advanced.schedule.dayKey,
+      intakeSpawnedToday: spawned,
+      nextIntakeAt: advanced.schedule.nextAt,
+      intakeBootstrapped: advanced.schedule.bootstrapped,
+      phoneDayKey: phoneDay,
+      phoneCasesToday: phoneReset ? 0 : state.phoneCasesToday,
+    };
+        const same =
+      nextSchedule.intakeDayKey === state.intakeDayKey &&
+      nextSchedule.intakeSpawnedToday === state.intakeSpawnedToday &&
+      nextSchedule.nextIntakeAt === state.nextIntakeAt &&
+      nextSchedule.intakeBootstrapped === state.intakeBootstrapped &&
+      !phoneReset;
+    if (snap && lostToRival > 0) {
+      snap = { ...snap, lostCalls: snap.lostCalls + lostToRival };
+    }
+    if (same && made === 0 && lostToRival === 0) {
+      if (snap && snap !== state.absenceSnap) set({ absenceSnap: snap });
+      return;
+    }
+    if (lostToRival > 0 && document.visibilityState === 'hidden') {
+      notifyHouse('Another house', COOLER_RIVAL_NOTE);
+    }
+    set({
+      ...nextSchedule,
+      ...(lostToRival > 0 ? { intakeToast: COOLER_RIVAL_NOTE } : {}),
+      ...(snap ? { absenceSnap: snap } : {}),
+    });
+  },
+
+  placePhoneCall: (contactId) => {
+    const state = get();
+    const contact = phoneContactById(contactId);
+    if (!contact) return;
+    const now = gameNow();
+    const day = localDayKey(now);
+    const casesToday = state.phoneDayKey === day ? state.phoneCasesToday : 0;
+    const held = titleAtXp(state.careerXp);
+    const access = contactAccess(contact, {
+      reputation: state.reputation,
+      homesOwned: state.homesKept,
+      rankIndex: held.index,
+      rankTitle: held.title,
+    });
+    const fail = (text: string, armCooldown: boolean) => {
+      set({
+        phoneDayKey: day,
+        phoneCasesToday: casesToday,
+        phoneCooldownUntil: armCooldown
+          ? { ...state.phoneCooldownUntil, [contact.id]: now + contact.cooldownMs }
+          : state.phoneCooldownUntil,
+        phoneLastResult: { contactId: contact.id, at: now, hit: false, text },
+      });
+    };
+    if (!access.unlocked) {
+      fail(access.reason, false);
+      return;
+    }
+    const readyAt = state.phoneCooldownUntil[contact.id] ?? 0;
+    if (now < readyAt) return;
+    const coolerCount = state.cases.filter((c) => c.location === 'COOLER').length;
+    const coolerCap = coolerBayCapacity(state.facilityLevels.cooler_bays || 0);
+    if (coolerCount >= coolerCap) {
+      fail('The cooler has no open bay. Make room, then call again.', false);
+      return;
+    }
+    if (casesToday >= PHONE_EXTRA_PER_DAY) {
+      fail(
+        'The extra line is full for today. Two calls already landed a case.',
+        false
+      );
+      return;
+    }
+    const hit = Math.random() < contact.odds;
+    if (!hit) {
+      fail(pickPhoneLine(contact.miss), true);
+      return;
+    }
+    const toast = pickPhoneLine(contact.hit);
+    const landed = get().receiveNewIntake({
+      toast,
+      directive: contact.directiveBias ?? undefined,
+      quiet: true,
+    });
+    if (!landed) {
+      fail('The cooler filled before the van arrived.', false);
+      return;
+    }
+    set({
+      phoneDayKey: day,
+      phoneCasesToday: casesToday + 1,
+      phoneCooldownUntil: {
+        ...get().phoneCooldownUntil,
+        [contact.id]: now + contact.cooldownMs,
+      },
+      phoneLastResult: { contactId: contact.id, at: now, hit: true, text: toast },
+    });
+  },
+
+  grantCareerXp: (gain) => {
+    const state = get();
+    if (!Number.isFinite(gain) || gain === 0) return;
+    set(
+      grantCareer({
+        careerXp: state.careerXp,
+        homesKept: state.homesKept,
+        repMilestonesClaimed: state.repMilestonesClaimed,
+        reputation: state.reputation,
+        gain,
+        fanfare: state.rankFanfare,
+      })
+    );
+  },
+
+  dismissRankFanfare: () => set({ rankFanfare: null }),
+
+  tickNews: () => {
+    const state = get();
+    if (!state.hasStartedGame || state.bankForeclosed) return;
+    const now = gameNow();
+    const coolerCount = state.cases.filter((c) => c.location === 'COOLER').length;
+    const cap = coolerBayCapacity(state.facilityLevels.cooler_bays || 0);
+    const result = advanceNewsWire({
+      wire: state.newsWire,
+      nextLiveAt: state.newsNextLiveAt,
+      celebGate: state.newsCelebGate,
+      recent: state.newsRecent,
+      now,
+      ownedListingId: state.ownedProperty?.listingId ?? '',
+      openCaseIds: new Set(state.cases.map((c) => c.id)),
+      headlineCaseOpen: state.cases.some((c) => c.headlineCase != null),
+    });
+    const heldHeadline = waitingSpawn(state.newsWire);
+    if (!result.changed && !result.spawn && !heldHeadline) return;
+
+    let cases = state.cases;
+    let inboxFiles = state.inboxFiles;
+    let wire = result.wire;
+    let intakeToast = state.intakeToast;
+    let lastCase = state.lastCase;
+    let activeCaseId = state.activeCaseId;
+    const spawn = result.spawn;
+    const spawnSlot = spawn
+      ? wire.find((item) => item.live && item.headlineId === spawn.id)
+      : undefined;
+    const dropRival = (item: { headlineId: string } | undefined) => {
+      if (!item) return;
+      wire = wire.filter((row) => row !== item && row.headlineId !== item.headlineId);
+      intakeToast = COOLER_RIVAL_NOTE;
+      if (document.visibilityState === 'hidden') {
+        notifyHouse('Another house', COOLER_RIVAL_NOTE);
+      }
+    };
+    if (spawn && spawnSlot && coolerCount >= cap) {
+      dropRival(spawnSlot);
+    } else if (spawn && spawnSlot && coolerCount < cap) {
+      const next = generateHeadlineCase(spawn, now);
+      playIntakeBell();
+      cases = [...cases, next];
+      inboxFiles = [toInboxFile(next), ...inboxFiles];
+      wire = wire.map((item) =>
+        item === spawnSlot ? { ...item, caseId: next.id } : item
+      );
+      intakeToast = `${next.name} has arrived. A headline intake. Tag them within 60 seconds.`;
+      notifyHouse(
+        'New remains',
+        `${next.name} has arrived. A headline intake. Tag them within 60 seconds.`
+      );
+      activeCaseId = activeCaseId ?? next.id;
+      lastCase = {
+        id: next.id,
+        name: displayCaseName(next),
+        service: directiveLabel(next.directive),
+        at: next.arrivedAt,
+      };
+    }
+    const pending = waitingSpawn(wire);
+    if (pending && coolerCount >= cap) {
+      dropRival(pending.item);
+    } else if (pending && coolerCount < cap && pending.item.caseId == null) {
+      const next = generateHeadlineCase(pending.headline, now);
+      playIntakeBell();
+      cases = [...cases, next];
+      inboxFiles = [toInboxFile(next), ...inboxFiles];
+      wire = wire.map((item) =>
+        item === pending.item ? { ...item, caseId: next.id } : item
+      );
+      intakeToast = `${next.name} has arrived. A headline intake. Tag them within 60 seconds.`;
+      notifyHouse(
+        'New remains',
+        `${next.name} has arrived. A headline intake. Tag them within 60 seconds.`
+      );
+      activeCaseId = activeCaseId ?? next.id;
+      lastCase = {
+        id: next.id,
+        name: displayCaseName(next),
+        service: directiveLabel(next.directive),
+        at: next.arrivedAt,
+      };
+    }
+    const chimeFor =
+      spawn && !(spawnSlot && coolerCount < cap)
+        ? result.landedEffects.filter((id) => id !== spawn.id)
+        : result.landedEffects;
+    if (chimeFor.length > 0) audioManager.playNewsChime();
+    set({
+      newsWire: wire,
+      newsNextLiveAt: result.nextLiveAt,
+      newsCelebGate: result.celebGate,
+      newsRecent: result.recent,
+      cases,
+      inboxFiles,
+      intakeToast,
+      activeCaseId,
+      lastCase,
+    });
+  },
+
+  expireUntaggedNames: () =>
+    set((state) => {
+      const now = gameNow();
+      const holdTutorial =
+        state.tutorial === 'active' && state.tutorialStep < TUTORIAL_TAG_STEP;
+      let changed = false;
+      let toast: string | null = null;
+      const cases = state.cases.map((c) => {
+        if (
+          holdTutorial &&
+          c.id === state.tutorialCaseId &&
+          !c.isTagged &&
+          (c.nameExpired || c.tagRemainingMs <= TAG_WINDOW_MS)
+        ) {
+          changed = true;
+          return {
+            ...c,
+            nameExpired: false,
+            tagRemainingMs: TUTORIAL_TAG_HOLD_MS,
+            tagExpiresAt: now + TUTORIAL_TAG_HOLD_MS,
+          };
+        }
+        if (c.isTagged || c.nameExpired) return c;
+        const expires =
+          typeof c.tagExpiresAt === 'number'
+            ? c.tagExpiresAt
+            : now + Math.max(0, c.tagRemainingMs);
+        if (now >= expires) {
+          changed = true;
+          toast = `${displayCaseName(c)} went untagged. The name is gone.`;
+          return {
+            ...c,
+            tagRemainingMs: 0,
+            tagExpiresAt: expires,
+            nameExpired: true,
+          };
+        }
+        const left = Math.max(0, expires - now);
+        if (c.tagExpiresAt !== expires || c.tagRemainingMs !== left) {
+          changed = true;
+          return { ...c, tagExpiresAt: expires, tagRemainingMs: left };
+        }
+        return c;
+      });
+      if (!changed) return state;
+      if (toast) notifyHouse('The toe tag', toast);
+      return { cases, ...(toast ? { intakeToast: toast } : {}) };
+    }),
+
+  syncCremationDecayState: ({ active, progress, heatNormalized }) =>
+    set((state) => {
+      const p = Math.max(0, Math.min(1, progress));
+      return {
+        cremationBurnActive: active,
+        cremationBurnProgress: Math.max(state.cremationBurnProgress, p),
+        cremationHeatNormalized: Math.max(0, Math.min(1, heatNormalized)),
+        cremationDecayArrested:
+          state.cremationDecayArrested || p >= 0.15,
+      };
+    }),
+
+  clearCremationDecayState: () =>
+    set({
+      cremationBurnActive: false,
+      cremationBurnProgress: 0,
+      cremationHeatNormalized: 0,
+      cremationDecayArrested: false,
+    }),
+
+  patchRetort: (partial) =>
+    set((state) => {
+      const next = { ...state.retort, ...partial };
+      return focusMachines(state, next, state.activeRetortIndex ?? 0);
+    }),
+
+  selectRetort: (index) =>
+    set((state) => {
+      const count = retortCount(state.facilityLevels);
+      const aligned = alignMachines(
+        state.retortMachines,
+        state.retort,
+        state.activeRetortIndex ?? 0,
+        count
+      );
+      const i = Math.max(0, Math.min(aligned.machines.length - 1, index));
+      return {
+        retort: aligned.machines[i]!,
+        retortMachines: aligned.machines,
+        activeRetortIndex: i,
+        retortBays: alignBays(state.retortBays, count),
+      };
+    }),
+
+  chargeRetortFuel: () =>
+    set((state) => {
+      if (state.retort.fuelCharged) return state;
+      const count = retortCount(state.facilityLevels);
+      const bays = alignBays(state.retortBays, count);
+      const bay = bays[state.activeRetortIndex ?? 0] ?? defaultRetortBay();
+      const cost = quotedPrice(
+        fuelCostFor(bay.fuelTier),
+        'FUEL',
+        state.newsWire,
+        gameNow()
+      );
+      const note = {
+        id: `led_fuel_${gameNow()}`,
+        at: gameNow(),
+        amount: -cost,
+        label: `Retort fuel — ${brandLabel(bay.brand)}`,
+        kind: 'OTHER' as const,
+      };
+      return {
+        cash: state.cash - cost,
+        financeLedger: [note, ...state.financeLedger].slice(0, 80),
+        intakeToast: `Retort fuel $${cost}`,
+        ...focusMachines(
+          state,
+          { ...state.retort, fuelCharged: true, fuelChargedCost: cost },
+          state.activeRetortIndex ?? 0
+        ),
+      };
+    }),
+
+  queueCaseOnRetort: (caseId) =>
+    set((state) => {
+      const count = retortCount(state.facilityLevels);
+      const bays = alignBays(state.retortBays, count);
+      const i = Math.max(
+        0,
+        Math.min(count - 1, state.activeRetortIndex ?? 0)
+      );
+      const bay = bays[i]!;
+      if (!bay.queueSlot || bay.queueCaseId) return state;
+      const queued = state.cases.find(
+        (c) => c.id === caseId && c.location === 'COOLER'
+      );
+      if (!queued) return state;
+      bays[i] = { ...bay, queueCaseId: caseId };
+      return {
+        retortBays: bays,
+        intakeToast: `${queued.name} queued on retort ${String.fromCharCode(65 + i)}`,
+      };
+    }),
+
+  buyCrematoryTrack: (track, bayIndex) => {
+    const state = get();
+    const count = retortCount(state.facilityLevels);
+    const bays = alignBays(state.retortBays, count);
+    const picked = typeof bayIndex === 'number' ? bayIndex : state.activeRetortIndex ?? 0;
+    const i = Math.max(0, Math.min(count - 1, picked));
+    const bay = bays[i]!;
+    let price = 0;
+    let label = '';
+    const next = { ...bay };
+    if (track === 'speed') {
+      const offer = SPEED_TIERS[bay.speedTier];
+      if (!offer) return { ok: false, message: 'Speed line is finished.' };
+      price = offer.price;
+      label = offer.name;
+      next.speedTier = offer.tier;
+    } else if (track === 'quality') {
+      const offer = QUALITY_TIERS[bay.qualityTier];
+      if (!offer) return { ok: false, message: 'Quality line is finished.' };
+      price = offer.price;
+      label = offer.name;
+      next.qualityTier = offer.tier;
+    } else if (track === 'fuel') {
+      const offer = FUEL_TIERS[bay.fuelTier];
+      if (!offer) return { ok: false, message: 'Fuel line is finished.' };
+      price = offer.price;
+      label = offer.name;
+      next.fuelTier = offer.tier;
+    } else if (track === 'preheat') {
+      if (bay.preheat) return { ok: false, message: 'Pre-heat is already fitted.' };
+      price = PREHEAT_PRICE;
+      label = 'Pre-heat';
+      next.preheat = true;
+    } else {
+      if (bay.queueSlot) return { ok: false, message: 'Queue slot is already fitted.' };
+      price = QUEUE_PRICE;
+      label = 'Queue slot';
+      next.queueSlot = true;
+    }
+    if (state.cash < price) return { ok: false, message: 'Not enough cash.' };
+    bays[i] = next;
+    const note = {
+      id: `led_retort_${gameNow()}`,
+      at: gameNow(),
+      amount: -price,
+      label: `Retort ${String.fromCharCode(65 + i)} — ${label}`,
+      kind: 'OTHER' as const,
+    };
+    set({
+      cash: state.cash - price,
+      retortBays: bays,
+      financeLedger: [note, ...state.financeLedger].slice(0, 80),
+      intakeToast: `Installed ${label}`,
+    });
+    return { ok: true, message: `Installed ${label}` };
+  },
+
+  buyCrematoryCosmetic: (kind, id, bayIndex) => {
+    const state = get();
+    const wardrobe = normalizeWardrobe(state.crematoryWardrobe);
+    const count = retortCount(state.facilityLevels);
+    const bays = alignBays(state.retortBays, count);
+    const picked = typeof bayIndex === 'number' ? bayIndex : state.activeRetortIndex ?? 0;
+    const i = Math.max(0, Math.min(count - 1, picked));
+    const bay = { ...bays[i]! };
+    let price = 0;
+    let label = id;
+    let owned = false;
+    if (kind === 'brand') {
+      const brand = id as RetortBrandId;
+      owned = wardrobe.brands.includes(brand);
+      const offer = BRAND_OFFERS.find((o) => o.id === brand);
+      if (!offer && brand !== 'millennium') {
+        return { ok: false, message: 'Unknown plate.' };
+      }
+      price = owned || brand === 'millennium' ? 0 : (offer?.price ?? 0);
+      label = brand === 'millennium' ? 'Millennium' : (offer?.name ?? brand);
+      if (!owned && brand !== 'millennium') wardrobe.brands.push(brand);
+      bay.brand = brand;
+    } else if (kind === 'door') {
+      const door = id as RetortDoorId;
+      owned = wardrobe.doors.includes(door);
+      const offer = DOOR_OFFERS.find((o) => o.id === door);
+      if (!offer && door !== 'zinc') {
+        return { ok: false, message: 'Unknown finish.' };
+      }
+      price = owned || door === 'zinc' ? 0 : (offer?.price ?? 0);
+      label = door === 'zinc' ? 'Mill zinc' : (offer?.name ?? door);
+      if (!owned && door !== 'zinc') wardrobe.doors.push(door);
+      bay.door = door;
+    } else {
+      const buttons = id as RetortButtonStyleId;
+      owned = wardrobe.buttons.includes(buttons);
+      const offer = BUTTON_OFFERS.find((o) => o.id === buttons);
+      if (!offer && buttons !== 'millennium') {
+        return { ok: false, message: 'Unknown button style.' };
+      }
+      price = owned || buttons === 'millennium' ? 0 : (offer?.price ?? 0);
+      label = buttons === 'millennium' ? 'Millennium pushbuttons' : (offer?.name ?? buttons);
+      if (!owned && buttons !== 'millennium') wardrobe.buttons.push(buttons);
+      bay.buttons = buttons;
+    }
+    if (state.cash < price) return { ok: false, message: 'Not enough cash.' };
+    bays[i] = bay;
+    const note =
+      price > 0
+        ? [
+            {
+              id: `led_retort_trim_${gameNow()}`,
+              at: gameNow(),
+              amount: -price,
+              label: `Retort trim — ${label}`,
+              kind: 'OTHER' as const,
+            },
+          ]
+        : [];
+    set({
+      cash: state.cash - price,
+      retortBays: bays,
+      crematoryWardrobe: wardrobe,
+      financeLedger: [...note, ...state.financeLedger].slice(0, 80),
+      intakeToast: price > 0 ? `Fitted ${label}` : `Showing ${label}`,
+    });
+    return { ok: true, message: label };
+  },
+
+  ensureRetortForCase: (caseId) =>
+    set((state) => {
+      const count = retortCount(state.facilityLevels);
+      const aligned = alignMachines(
+        state.retortMachines,
+        state.retort,
+        state.activeRetortIndex ?? 0,
+        count
+      );
+      const bays = alignBays(state.retortBays, count);
+      const holding = aligned.machines.findIndex(
+        (m) => m.caseId === caseId && m.phase !== 'IDLE'
+      );
+      if (holding >= 0 && holding !== aligned.index) {
+        return {
+          retort: aligned.machines[holding]!,
+          retortMachines: aligned.machines,
+          activeRetortIndex: holding,
+          retortBays: bays,
+        };
+      }
+      const r = aligned.machines[aligned.index]!;
+      if (r.caseId === caseId && r.phase !== 'IDLE' && r.phase !== 'DONE') {
+        return state;
+      }
+      if (r.caseId === caseId && (r.phase === 'IDLE' || r.phase === 'DONE')) {
+        const loaded = freshLoad(caseId, bays[aligned.index]?.preheat === true);
+        return {
+          ...focusMachines(state, loaded, aligned.index),
+          cremationBurnActive: false,
+          cremationBurnProgress: 0,
+          cremationHeatNormalized: 0,
+          cremationDecayArrested: false,
+        };
+      }
+      if (machineIsBusy(r) && r.caseId !== caseId) {
+        const free = aligned.machines.findIndex((m) => !machineIsBusy(m));
+        if (free < 0) return state;
+        const loaded = freshLoad(caseId, bays[free]?.preheat === true);
+        const machines = aligned.machines.slice();
+        machines[free] = loaded;
+        return {
+          retort: loaded,
+          retortMachines: machines,
+          activeRetortIndex: free,
+          retortBays: bays,
+        };
+      }
+      const loaded = freshLoad(caseId, bays[aligned.index]?.preheat === true);
+      return {
+        ...focusMachines(state, loaded, aligned.index),
+      };
+    }),
+
+  resetRetort: () =>
+    set((state) => ({
+      ...focusMachines(state, { ...IDLE_RETORT }, state.activeRetortIndex ?? 0),
+      cremationBurnActive: false,
+      cremationBurnProgress: 0,
+      cremationHeatNormalized: 0,
+      cremationDecayArrested: false,
+    })),
+
+  tickRetortDoor: () =>
+    set((state) => {
+      const now = gameNow();
+      const count = retortCount(state.facilityLevels);
+      const aligned = alignMachines(
+        state.retortMachines,
+        state.retort,
+        state.activeRetortIndex ?? 0,
+        count
+      );
+      if (
+        !aligned.machines.some(
+          (m) => m.doorMoving || m.doorSimulatedAt != null
+        )
+      ) {
+        return state;
+      }
+      const machines = aligned.machines.map((m) => {
+        if (!m.doorMoving) {
+          return m.doorSimulatedAt == null
+            ? m
+            : { ...m, doorSimulatedAt: null };
+        }
+        const since = m.doorSimulatedAt;
+        if (since == null) {
+          return { ...stepRetortDoor(m), doorSimulatedAt: now };
+        }
+        const dt = now - since;
+        if (dt >= 1200) {
+          return {
+            ...m,
+            doorOpen: m.doorMoving === 'UP' ? 1 : 0,
+            doorMoving: null,
+            doorSimulatedAt: null,
+          };
+        }
+        let next = m;
+        const steps = Math.max(1, Math.min(40, Math.round(dt / 40)));
+        for (let i = 0; i < steps; i += 1) {
+          if (!next.doorMoving) break;
+          next = stepRetortDoor(next);
+        }
+        return { ...next, doorSimulatedAt: now };
+      });
+      return {
+        retortMachines: machines,
+        retort: machines[aligned.index]!,
+        activeRetortIndex: aligned.index,
+      };
+    }),
+
+  tickRetortBurn: () =>
+    set((state) => {
+      const now = gameNow();
+      const count = retortCount(state.facilityLevels);
+      const aligned = alignMachines(
+        state.retortMachines,
+        state.retort,
+        state.activeRetortIndex ?? 0,
+        count
+      );
+      const bays = alignBays(state.retortBays, count);
+      const house = state.facilityLevels.crematory || 0;
+      let finishedName: string | null = null;
+      const machines = aligned.machines.map((m, i) => {
+        const before = m.elapsedSec;
+        const since = m.burnSimulatedAt;
+        const dt = since == null ? 0 : Math.max(0, now - since);
+        const next = stepOneRetort(
+          m,
+          state.cases,
+          retortSpeedFactor(house, bays[i]?.speedTier ?? 0),
+          now
+        );
+        const held = state.cases.find((c) => c.id === m.caseId);
+        if (held && dt > 2000 && m.phase === 'BURN' && m.primaryOn) {
+          const target = getCremationTargets(held.weightLbs).targetDurationSec;
+          if (before < target && next.elapsedSec >= target) {
+            finishedName = displayCaseName(held);
+          }
+        }
+        return next;
+      });
+      const active = machines[aligned.index] ?? { ...IDLE_RETORT };
+      let burnActive = false;
+      let bestProgress = 0;
+      let heatNormalized = 0;
+      for (const m of machines) {
+        const held = state.cases.find((c) => c.id === m.caseId);
+        const target = held
+          ? getCremationTargets(held.weightLbs).targetDurationSec
+          : 1;
+        const progress = Math.min(1, m.elapsedSec / target);
+        if (progress > bestProgress) {
+          bestProgress = progress;
+          heatNormalized = Math.min(1, Math.max(0, (m.primaryTemp - 200) / 1200));
+        }
+        if (m.phase === 'BURN' && (m.primaryOn || m.secondaryOn)) burnActive = true;
+      }
+      retortWall = now;
+      const quiet =
+        !finishedName &&
+        !burnActive &&
+        !state.cremationBurnActive &&
+        machines.every((m) => m.phase === 'IDLE' || m.phase === 'DONE');
+      const persistedStamp = state.retortMachines.reduce(
+        (oldest, m) => Math.min(oldest, m.burnSimulatedAt ?? 0),
+        now
+      );
+      if (quiet && now - persistedStamp < STAMP_KEEP_MS) return state;
+      return {
+        retort: active,
+        retortMachines: machines,
+        activeRetortIndex: aligned.index,
+        retortBays: bays,
+        cremationBurnActive: burnActive,
+        cremationBurnProgress: Math.max(state.cremationBurnProgress, bestProgress),
+        cremationHeatNormalized: heatNormalized,
+        cremationDecayArrested:
+          state.cremationDecayArrested || bestProgress >= 0.15,
+        ...(finishedName
+          ? {
+              intakeToast: `The retort finished while the house was closed. ${finishedName} was left in the fire.`,
+            }
+          : {}),
+      };
+    }),
+
+  tickDecay: () =>
+    set((state) => {
+      const now = gameNow();
+      const decayMark = notedAt(state.decaySimulatedAt, decayWall);
+      const gapSec =
+        decayMark == null ? 0 : Math.max(0, (now - decayMark) / 1000);
+      const count = retortCount(state.facilityLevels);
+      const aligned = alignMachines(
+        state.retortMachines,
+        state.retort,
+        state.activeRetortIndex ?? 0,
+        count
+      );
+      const bays = alignBays(state.retortBays, count);
+      const house = state.facilityLevels.crematory || 0;
+      let changed = false;
+      const cases = state.cases.map((c) => {
+        const refrigerated = c.location === 'COOLER';
+        const preserved = c.isEmbalmed || c.isCremated || c.isUrnFilled;
+        if (refrigerated || preserved || c.location === 'URN_VAULT') {
+          return c;
+        }
+        if (gapSec <= 0) return c;
+
+        const holderIndex = aligned.machines.findIndex(
+          (m) => m.caseId === c.id && m.phase !== 'IDLE' && m.phase !== 'DONE'
+        );
+        const holder = holderIndex >= 0 ? aligned.machines[holderIndex] : undefined;
+        const target = getCremationTargets(c.weightLbs).targetDurationSec;
+        const heldProgress = holder
+          ? Math.min(1, holder.elapsedSec / target)
+          : 0;
+
+        let seconds = gapSec;
+        let rate = DECAY_PER_SEC;
+        if (holder && heldProgress >= 0.15) {
+          const speed = Math.max(
+            1,
+            retortSpeedFactor(house, bays[holderIndex]?.speedTier ?? 0)
+          );
+          const burnPerSec = steadyBurnRate(holder) * speed;
+          const added = burnPerSec * gapSec;
+          const before = holder.elapsedSec - added;
+          const arrest = target * 0.15;
+          if (before >= arrest || burnPerSec <= 0) seconds = 0;
+          else seconds = Math.min(gapSec, (arrest - before) / burnPerSec);
+        } else if (
+          holder &&
+          holder.phase === 'BURN' &&
+          (holder.primaryOn || holder.secondaryOn)
+        ) {
+          const heat = Math.min(1, Math.max(0, (holder.primaryTemp - 200) / 1200));
+          rate = DECAY_PER_SEC * Math.max(0.08, 1 - heat * 0.92);
+        }
+
+        if (seconds <= 0) return c;
+        const nextDecay = Math.min(100, c.decayLevel + rate * seconds);
+        if (nextDecay === c.decayLevel) return c;
+        changed = true;
+        return { ...c, decayLevel: nextDecay };
+      });
+      decayWall = now;
+      const decayPersisted = state.decaySimulatedAt;
+      if (
+        !changed &&
+        decayPersisted != null &&
+        now - decayPersisted < STAMP_KEEP_MS
+      ) {
+        return state;
+      }
+      return {
+        ...(changed ? { cases } : {}),
+        decaySimulatedAt: now,
+      };
+    }),
+
+  tickFamilyUrnChoices: () =>
+    set((state) => {
+      const now = gameNow();
+      let toast: string | null = null;
+      let notice: string | null = null;
+      let any = false;
+      let urnInventory = state.urnInventory;
+      let casketInventory = state.casketInventory;
+      const cases = state.cases.map((c) => {
+        const needUrn = directiveNeedsUrn(c.directive) && !c.familyRequestedUrnId;
+        const needCasket =
+          directiveNeedsCasket(c.directive) && !c.familyRequestedCasketId;
+        if (!needUrn && !needCasket) return c;
+        let due = c.familyUrnDueAt;
+        if (due == null) {
+          const wait =
+            typeof c.familyUrnRemainingMs === 'number'
+              ? Math.max(0, c.familyUrnRemainingMs)
+              : rollFamilyUrnWaitMs();
+          due = now + wait;
+          any = true;
+          return {
+            ...c,
+            familyUrnDueAt: due,
+            familyUrnRemainingMs: wait,
+          };
+        }
+        if (now < due) {
+          const remain = Math.max(0, due - now);
+          if (c.familyUrnRemainingMs === remain) return c;
+          any = true;
+          return { ...c, familyUrnDueAt: due, familyUrnRemainingMs: remain };
+        }
+        any = true;
+        const next = { ...c };
+        const chosen: string[] = [];
+        const waiting: string[] = [];
+        if (needUrn) {
+          const staged = c.offeredUrnId;
+          const urnId = pickOwnedUrn(c, stockIncludingStaged(urnInventory, staged));
+          const urn = urnId ? getUrnById(urnId) : null;
+          const reserved = reserveFamilyChoice(urnInventory, staged, urn ? urnId : null);
+          if (!urn || !reserved.ok) {
+            waiting.push('an urn');
+          } else {
+            urnInventory = reserved.inventory;
+            next.familyRequestedUrnId = reserved.offeredId;
+            next.offeredUrnId = reserved.offeredId;
+            chosen.push(urn.name);
+          }
+        }
+        if (needCasket) {
+          const staged = c.offeredCasketId;
+          const casketId = pickOwnedCasket(
+            c,
+            stockIncludingStaged(casketInventory, staged)
+          );
+          const casket = casketId ? getCasketById(casketId) : undefined;
+          const reserved = reserveFamilyChoice(
+            casketInventory,
+            staged,
+            casket ? casketId : null
+          );
+          if (!casket || !reserved.ok) {
+            waiting.push('a casket');
+          } else {
+            casketInventory = reserved.inventory;
+            next.familyRequestedCasketId = reserved.offeredId;
+            next.offeredCasketId = reserved.offeredId;
+            chosen.push(casket.name);
+          }
+        }
+        const who = c.isTagged ? c.name : 'their loved one';
+        if (waiting.length > 0) {
+          const step = Math.max(1, rollFamilyUrnWaitMs());
+          const passed = Math.max(0, now - due);
+          const hops = Math.floor(passed / step) + 1;
+          const cursor = due + hops * step;
+          next.familyUrnDueAt = cursor;
+          next.familyUrnRemainingMs = Math.max(0, cursor - now);
+        } else {
+          next.familyUrnDueAt = null;
+          next.familyUrnRemainingMs = null;
+        }
+        const player = resolvePlayerName(state.playerName);
+        if (chosen.length > 0 && waiting.length > 0) {
+          toast = `${player}, the family chose ${chosen.join(' and ')} for ${who}, and is waiting on ${waiting.join(' and ')}. Nothing else suitable is in stock — buy it in the Emporium. Urns can also be shaped on the bench.`;
+          notice = `${player}, the family chose ${chosen.join(' and ')} for ${who}.`;
+        } else if (chosen.length > 0) {
+          toast = `${player}, the family chose ${chosen.join(' and ')} for ${who}.`;
+          notice = toast;
+        } else if (waiting.length > 0) {
+          toast = `${player}, the family is waiting on ${waiting.join(' and ')} for ${who}. Nothing suitable is in stock — buy it in the Emporium. Urns can also be shaped on the bench.`;
+        }
+        return next;
+      });
+      if (!any) return state;
+      if (notice) notifyHouse('Family choice', notice);
+      const inboxFiles = state.inboxFiles.map((f) => {
+        const match = cases.find((c) => c.id === f.id);
+        if (!match) return f;
+        if (
+          match.familyRequestedUrnId === f.familyRequestedUrnId &&
+          (match.familyRequestedCasketId ?? null) ===
+            (f.familyRequestedCasketId ?? null)
+        ) {
+          return f;
+        }
+        return {
+          ...f,
+          familyRequestedUrnId: match.familyRequestedUrnId,
+          familyRequestedCasketId: match.familyRequestedCasketId,
+          isRead: false,
+        };
+      });
+      return {
+        cases,
+        inboxFiles,
+        urnInventory,
+        casketInventory,
+        intakeToast: toast ?? state.intakeToast,
+      };
+    }),
+
+  tickPermitEvaluations: () =>
+    set((state) => {
+      const now = gameNow();
+      let toast: string | null = null;
+      let legalAlert: string | null = null;
+      let wrongStreak = state.permitWrongStreak;
+      let cash = state.cash;
+      let reputation = state.reputation;
+      let financeLedger = state.financeLedger;
+      let any = false;
+      let permitPush: string | null = null;
+
+      const submissions = state.permitSubmissions.map((sub) => {
+        if (sub.status !== 'PENDING') return sub;
+        const left = sub.evaluatesAt - now;
+        if (left > 0) {
+          if (sub.remainingMs === left) return sub;
+          any = true;
+          return { ...sub, remainingMs: left };
+        }
+        any = true;
+        const approved =
+          sub.caseId != null && sub.mismatchLabels.length === 0;
+        if (approved) {
+          wrongStreak = 0;
+          toast = `Cremation permit APPROVED, ${resolvePlayerName(state.playerName)}.`;
+          permitPush = 'The cremation permit was approved.';
+          return {
+            ...sub,
+            status: 'APPROVED' as const,
+            evaluatedAt: now,
+          };
+        }
+        wrongStreak += 1;
+        toast = `Cremation permit REJECTED, ${resolvePlayerName(state.playerName)} — vital records could not be verified.`;
+        permitPush = 'The cremation permit was rejected. Vital records could not be verified.';
+        if (wrongStreak >= PERMIT_ERROR_STREAK_LIMIT) {
+          cash = cash - PERMIT_ERROR_STREAK_FINE;
+          reputation = Math.max(0, reputation - PERMIT_ERROR_STREAK_REP_HIT);
+          financeLedger = [
+            {
+              id: `fine-${now.toString(36)}`,
+              at: now,
+              amount: -PERMIT_ERROR_STREAK_FINE,
+              label: `Vital Records incorrect-filing fine (${PERMIT_ERROR_STREAK_LIMIT}+)`,
+              kind: 'FINE' as const,
+            },
+            ...financeLedger,
+          ].slice(0, 80);
+          legalAlert = `STATE VITAL RECORDS FINE: ${resolvePlayerName(state.playerName)}, ${PERMIT_ERROR_STREAK_LIMIT}+ incorrect cremation permit filings. $${PERMIT_ERROR_STREAK_FINE} levied and reputation docked. Review Case Files carefully before resubmitting.`;
+          wrongStreak = 0;
+        }
+        return {
+          ...sub,
+          status: 'REJECTED' as const,
+          evaluatedAt: now,
+        };
+      });
+
+      if (!any) return state;
+      if (permitPush) notifyHouse('The permit', permitPush);
+
+      let inboxFiles = state.inboxFiles;
+      const cases = state.cases.map((c) => {
+        const due = submissions.find(
+          (s) =>
+            s.caseId === c.id &&
+            s.evaluatedAt === now &&
+            (s.status === 'APPROVED' || s.status === 'REJECTED')
+        );
+        if (!due) return c;
+        if (due.status === 'APPROVED') {
+          inboxFiles = syncInboxPermit(inboxFiles, c.id, {
+            cremationPermitStatus: 'APPROVED',
+            cremationPermitRejectReason: null,
+            isRead: false,
+          });
+          return {
+            ...c,
+            cremationPermitStatus: 'APPROVED' as const,
+            cremationPermitEvaluatesAt: null,
+            cremationPermitRejectReason: null,
+          };
+        }
+        inboxFiles = syncInboxPermit(inboxFiles, c.id, {
+          cremationPermitStatus: 'REJECTED',
+          cremationPermitRejectReason: PERMIT_REJECT_GENERIC,
+          isRead: false,
+        });
+        return {
+          ...c,
+          cremationPermitStatus: 'REJECTED' as const,
+          cremationPermitEvaluatesAt: null,
+          cremationPermitRejectReason: PERMIT_REJECT_GENERIC,
+        };
+      });
+
+      return {
+        cases,
+        inboxFiles,
+        permitSubmissions: submissions,
+        permitWrongStreak: wrongStreak,
+        cash,
+        reputation,
+        financeLedger,
+        intakeToast: toast ?? state.intakeToast,
+        legalAlert: legalAlert ?? state.legalAlert,
+      };
+    }),
+
+  submitCremationPermit: (form, filingFee) => {
+    const state = get();
+    const fee = Math.max(0, Math.round(filingFee));
+    if (fee <= 0) {
+      return { ok: false, message: 'Invalid filing fee.' };
+    }
+    if (state.cash < fee) {
+      return {
+        ok: false,
+        message: `Insufficient funds. Filing fee is $${fee}.`,
+      };
+    }
+
+    const matched = findExactPermitCaseMatch(form, state.cases);
+    const now = gameNow();
+    const evaluatesAt = rollPermitEvaluationDueAt(now);
+    const exact = matched != null;
+    const submission: PermitSubmissionRecord = {
+      id: `vr441-${now.toString(36)}`,
+      caseId: exact ? matched.id : null,
+      decedentName: exact ? matched.name : form.legalName.trim() || 'UNKNOWN',
+      submittedAt: now,
+      evaluatesAt,
+      remainingMs: Math.max(1000, evaluatesAt - now),
+      evaluatedAt: null,
+      status: 'PENDING',
+      // Non-empty sentinel ⇒ evaluate as reject without leaking which fields
+      mismatchLabels: exact ? [] : ['Vital records'],
+      form: { ...form },
+      filingFee: fee,
+    };
+
+    const ledgerEntry: FinanceLedgerEntry = {
+      id: `fee-${now.toString(36)}`,
+      at: now,
+      amount: -fee,
+      label: exact
+        ? `VR-441 cremation permit filing fee`
+        : `VR-441 cremation permit filing fee (unverified)`,
+      kind: 'PERMIT_FEE',
+    };
+
+    let cases = state.cases;
+    let inboxFiles = state.inboxFiles;
+    if (exact) {
+      cases = updateCaseById(cases, matched.id, (row) => ({
+        ...row,
+        cremationPermitStatus: 'PENDING',
+        cremationPermitSubmittedAt: now,
+        cremationPermitEvaluatesAt: evaluatesAt,
+        cremationPermitRejectReason: null,
+      }));
+      inboxFiles = syncInboxPermit(inboxFiles, matched.id, {
+        cremationPermitStatus: 'PENDING',
+        cremationPermitRejectReason: null,
+        isRead: false,
+      });
+    }
+
+    set({
+      cash: state.cash - fee,
+      financeLedger: [ledgerEntry, ...state.financeLedger].slice(0, 80),
+      permitSubmissions: [submission, ...state.permitSubmissions].slice(0, 40),
+      cases,
+      inboxFiles,
+      intakeToast: `Permit filed, ${resolvePlayerName(state.playerName)} (fee $${fee}) — pending state evaluation.`,
+    });
+
+    return {
+      ok: true,
+      message: `${resolvePlayerName(state.playerName)}, submission received. Filing fee $${fee} charged. Vital Records will evaluate shortly.`,
+    };
+  },
+
+  tickBankForeclosure: () =>
+    set((state) => {
+      if (!state.hasStartedGame || state.bankForeclosed) return state;
+
+      if (state.cash >= 0) {
+        if (
+          state.negativeCashSinceMs == null &&
+          !state.bankWarningIssued &&
+          state.overdraftAccruedMs === 0
+        ) {
+          return state;
+        }
+        return {
+          negativeCashSinceMs: null,
+          overdraftAccruedMs: 0,
+          bankWarningIssued: false,
+        };
+      }
+
+      const now = gameNow();
+      const negativeCashSinceMs =
+        state.negativeCashSinceMs ?? now - state.overdraftAccruedMs;
+      const accrued = Math.max(0, now - negativeCashSinceMs);
+      if (accrued >= BANK_FORECLOSURE_AFTER_MS) {
+        notifyHouse('The bank', 'The bank has taken the parlor.');
+        return {
+          negativeCashSinceMs,
+          overdraftAccruedMs: accrued,
+          bankForeclosed: true,
+          intakeToast: 'The bank has taken the parlor.',
+          legalAlert: null,
+        };
+      }
+
+      if (accrued >= BANK_WARNING_AFTER_MS && !state.bankWarningIssued) {
+        notifyHouse(
+          'The bank',
+          'The house has been overdrawn for a day. The clock keeps running while the doors are shut.'
+        );
+        return {
+          negativeCashSinceMs,
+          overdraftAccruedMs: accrued,
+          bankWarningIssued: true,
+          intakeToast: BANK_WARNING_MESSAGE,
+        };
+      }
+
+      return {
+        negativeCashSinceMs,
+        overdraftAccruedMs: accrued,
+      };
+    }),
+
+  acknowledgeBankForeclosure: () => {
+    pauseGamePersistWrites();
+    try {
+      resumeGamePersistWrites();
+      useGameStore.persist.clearStorage();
+    } catch {
+      /* ignore */
+    }
+    try {
+      localStorage.removeItem('ossuarian-first-urn-v1');
+    } catch {
+      /* ignore */
+    }
+    pauseGamePersistWrites();
+    get().hardResetGameState(
+      'Foreclosed — the funeral home was seized. Start a new practice when ready.'
+    );
+    window.setTimeout(() => {
+      try {
+        resumeGamePersistWrites();
+        useGameStore.setState((s) => ({ intakeToast: s.intakeToast }));
+      } catch {
+        /* ignore */
+      }
+    }, 150);
+  },
+
+  moveCaseTo: (caseId, location) =>
+    set((state) => {
+      const target = resolveCase(state, caseId);
+      if (!target) return state;
+      if (location === 'URN_VAULT' && target.location !== 'URN_VAULT') {
+        const vaultCount = state.cases.filter(
+          (c) => c.location === 'URN_VAULT'
+        ).length;
+        const cap = vaultSlotCapacity(state.facilityLevels.vault || 0);
+        if (vaultCount >= cap) {
+          return {
+            legalAlert: `VAULT FULL (${cap} niches). Expand the columbarium in Emporium Upgrades.`,
+          };
+        }
+      }
+      const gate = retortForMove(state, caseId, location);
+      if (gate.halt) return gate.halt as Partial<GameState>;
+      const now = gameNow();
+      const nextStation = stationForLocation(location);
+      return {
+        activeCaseId: caseId,
+        cases: updateCaseById(state.cases, caseId, (c) =>
+          relocateCase(c, location, now)
+        ),
+        activeStation: nextStation ?? state.activeStation,
+        ...(gate.extra as Partial<GameState>),
+      };
+    }),
+
+  moveActiveCaseTo: (location, caseId) => {
+    const id = caseId ?? get().activeCaseId;
+    if (!id) return;
+    get().moveCaseTo(id, location);
+  },
+
+  takeCaseToStation: (caseId, station) =>
+    set((state) => {
+      const target = resolveCase(state, caseId);
+      if (!target) return { activeStation: station, activeCaseId: caseId };
+      const locationMap: Partial<Record<StationId, CaseLocation>> = {
+        EMBALMING: 'EMBALMING',
+        CREMATION: 'CREMATION',
+        URN_FILLING: 'URN_FILLING',
+        SHOWROOM: 'CHAPEL',
+        COOLER: 'COOLER',
+        URN_VAULT: 'URN_VAULT',
+      };
+      const location = locationMap[station];
+      if (!location) return { activeStation: station, activeCaseId: caseId };
+
+      if (location === 'URN_VAULT' && target.location !== 'URN_VAULT') {
+        const vaultCount = state.cases.filter(
+          (c) => c.location === 'URN_VAULT'
+        ).length;
+        const cap = vaultSlotCapacity(state.facilityLevels.vault || 0);
+        if (vaultCount >= cap) {
+          return {
+            legalAlert: `VAULT FULL (${cap} niches). Expand the columbarium in Emporium Upgrades.`,
+            activeCaseId: caseId,
+          };
+        }
+      }
+
+      const gate = retortForMove(state, caseId, location);
+      if (gate.halt) return gate.halt as Partial<GameState>;
+
+      const now = gameNow();
+      return {
+        activeCaseId: caseId,
+        activeStation: station,
+        cases: updateCaseById(state.cases, caseId, (c) =>
+          relocateCase(c, location, now)
+        ),
+        ...(gate.extra as Partial<GameState>),
+      };
+    }),
+
+  takeActiveCaseToStation: (station, caseId) => {
+    const id = caseId ?? get().activeCaseId;
+    if (!id) {
+      set({ activeStation: station });
+      return;
+    }
+    get().takeCaseToStation(id, station);
+  },
+
+  completeEmbalming: (rank, tipMultiplier, caseId) =>
+    set((state) => {
+      const active = resolveCase(state, caseId);
+      if (!active || active.isEmbalmed) {
+        return { activeStation: 'EMBALMING', activeCaseId: caseId };
+      }
+      // Heavy decay on the table tanks the saved embalm result
+      let savedRank = rank;
+      let tip = tipMultiplier;
+      if (active.decayLevel >= 70) {
+        savedRank = 'F';
+        tip = Math.min(tip, 0.2);
+      } else if (active.decayLevel >= 40) {
+        savedRank =
+          rank === 'S+' || rank === 'S' ? 'C' : rank === 'A' ? 'C' : 'F';
+        tip = Math.min(tip, 0.5);
+      } else if (active.decayLevel >= 15) {
+        if (rank === 'S+') savedRank = 'S';
+        else if (rank === 'S') savedRank = 'A';
+        tip = tip * 0.9;
+      }
+      return {
+        activeCaseId: caseId,
+        cases: updateCaseById(state.cases, caseId, (c) => ({
+          ...c,
+          isEmbalmed: true,
+          embalmRank: savedRank,
+          embalmTipMultiplier: tip,
+          decayLevel: c.decayLevel,
+        })),
+        cash: Math.round(
+          state.cash +
+            350 * tip -
+            quotedPrice(EMBALMING_SUPPLY_BASE, 'EMBALMING', state.newsWire, gameNow())
+        ),
+        reputation:
+          state.reputation +
+          (savedRank === 'S+'
+            ? 25
+            : savedRank === 'S'
+              ? 15
+              : savedRank === 'F'
+                ? -5
+                : 5) -
+          Math.floor(active.decayLevel / 20),
+        activeStation: 'EMBALMING',
+      };
+    }),
+
+  completeCremation: (rank, boneAshGrams, caseId) => {
+    const state = get();
+    const active = resolveCase(state, caseId);
+    if (!active) {
+      set({ activeStation: 'OVERVIEW' });
+      return;
+    }
+    if (active.isCremated) {
+      set({ activeStation: 'URN_FILLING', activeCaseId: caseId });
+      return;
+    }
+    if (active.directive === 'BURIAL_VIEWING') {
+      // Case is destroyed — return any staged urn/casket to stock
+      const inventory = { ...state.urnInventory };
+      const casketInv = { ...state.casketInventory };
+      if (active.offeredUrnId) {
+        inventory[active.offeredUrnId] =
+          (inventory[active.offeredUrnId] ?? 0) + 1;
+      }
+      if (active.offeredCasketId) {
+        casketInv[active.offeredCasketId] =
+          (casketInv[active.offeredCasketId] ?? 0) + 1;
+      }
+      const settled = settleFinishedChamber(state, active.id);
+      const remaining = state.cases.filter((c) => c.id !== active.id);
+      const admitted = admitQueuedCase(remaining, settled, gameNow());
+      const file = state.inboxFiles.find((f) => f.id === active.id);
+      set({
         cash: state.cash - 2500,
         reputation: Math.max(0, state.reputation - 40),
-        legalAlert: `LAWSUIT FILED! ${currentCase.name}'s contract specified Traditional Burial & Viewing Only. You were fined $2,500 for Wrongful Cremation!`,
-        currentCase: generateRandomCase(),
+        legalAlert: `LAWSUIT FILED! ${active.name}'s contract specified Traditional Burial & Viewing Only. You were fined $2,500 for Wrongful Cremation!`,
+        cases: admitted.cases,
+        inboxFiles: state.inboxFiles.filter((f) => f.id !== active.id),
+        archivedCases: rememberClosedCase(
+          state.archivedCases,
+          toArchivedCase(active, file, 'Wrongful cremation', -2500)
+        ),
+        urnInventory: inventory,
+        casketInventory: casketInv,
+        activeCaseId: admitted.queued?.id ?? remaining[0]?.id ?? null,
         placedFlowers: [],
         serviceRatingBonus: 0,
         activeStation: 'OVERVIEW',
-      }));
+        cremationBurnActive: settled.cremationBurnActive,
+        cremationBurnProgress: settled.cremationBurnActive
+          ? state.cremationBurnProgress
+          : 0,
+        cremationHeatNormalized: settled.cremationBurnActive
+          ? state.cremationHeatNormalized
+          : 0,
+        cremationDecayArrested: settled.cremationBurnActive
+          ? state.cremationDecayArrested
+          : false,
+        retort: admitted.retort,
+        retortMachines: admitted.machines,
+        activeRetortIndex: settled.activeRetortIndex,
+        retortBays: settled.retortBays,
+        intakeToast: admitted.queued
+          ? `${admitted.queued.name} loaded on retort ${String.fromCharCode(65 + settled.index)}`
+          : state.intakeToast,
+      });
       return;
     }
 
-    set((state) => ({
-      currentCase: {
-        ...state.currentCase,
-        isCremated: true,
-        cremationRank: rank,
-      },
+    const needsPermit = directiveNeedsCremationPermit(active.directive);
+    const unpermitted =
+      needsPermit && active.cremationPermitStatus !== 'APPROVED';
+    const settled = settleFinishedChamber(state, caseId);
+    const lifted = liftPoorRank(rank, settled.bay.qualityTier);
+    const score = cremainsQualityScore(settled.bay.qualityTier);
+    let cases = updateCaseById(state.cases, caseId, (c) => ({
+      ...c,
+      isCremated: true,
+      cremationRank: lifted,
+      cremainsQuality: score,
+      retortSpeedTier: settled.bay.speedTier,
+      retortQualityTier: settled.bay.qualityTier,
+      retortFuelTier: settled.bay.fuelTier,
+      fuelChargedCost: settled.fuelChargedCost,
+      retortPreheat: settled.bay.preheat,
+      retortQueue: settled.bay.queueSlot,
+      location: 'URN_FILLING' as const,
+      unpermittedCremation: unpermitted || c.unpermittedCremation,
+    }));
+    const admitted = admitQueuedCase(cases, settled, gameNow());
+    cases = admitted.cases;
+    const queued = admitted.queued;
+    const fineAt = gameNow();
+    const fineNote = unpermitted
+      ? [
+          {
+            id: `fine-unpermitted-${fineAt.toString(36)}`,
+            at: fineAt,
+            amount: -UNPERMITTED_CREMATION_FINE,
+            label: `Unpermitted cremation fine — ${active.name}`,
+            kind: 'FINE' as const,
+          },
+        ]
+      : [];
+
+    set({
+      activeCaseId: caseId,
+      cases,
+      inboxFiles: unpermitted
+        ? syncInboxPermit(state.inboxFiles, caseId, { isRead: false })
+        : state.inboxFiles,
+      cash: unpermitted
+        ? state.cash - UNPERMITTED_CREMATION_FINE
+        : state.cash,
+      reputation: unpermitted
+        ? Math.max(0, state.reputation - UNPERMITTED_CREMATION_REP_HIT)
+        : state.reputation,
+      legalAlert: unpermitted
+        ? `${resolvePlayerName(state.playerName)}, STATE BOARD INSPECTION: ${active.name} was cremated without an approved cremation permit (status: ${active.cremationPermitStatus}). Fine $${UNPERMITTED_CREMATION_FINE.toLocaleString()} and reputation −${UNPERMITTED_CREMATION_REP_HIT}. File permits on the Computer before firing the retort.`
+        : state.legalAlert,
+      financeLedger: [...fineNote, ...state.financeLedger].slice(0, 80),
       ossilegiumCommuneGrams:
         state.ossilegiumCommuneGrams + Math.round(boneAshGrams * 0.02),
       activeStation: 'URN_FILLING',
-    }));
+      cremationBurnActive: settled.cremationBurnActive,
+      cremationBurnProgress: settled.cremationBurnActive
+        ? state.cremationBurnProgress
+        : 0,
+      cremationHeatNormalized: settled.cremationBurnActive
+        ? state.cremationHeatNormalized
+        : 0,
+      cremationDecayArrested: settled.cremationBurnActive
+        ? state.cremationDecayArrested
+        : false,
+      retort: admitted.retort,
+      retortMachines: admitted.machines,
+      activeRetortIndex: settled.activeRetortIndex,
+      retortBays: settled.retortBays,
+      intakeToast: queued
+        ? `${queued.name} loaded on retort ${String.fromCharCode(65 + settled.index)}`
+        : state.intakeToast,
+    });
   },
 
-  completeUrnFilling: (bonusCash) =>
+  markUrnAshReady: (caseId) =>
     set((state) => {
-      if (state.currentCase.isUrnFilled) {
-        return { activeStation: 'OVERVIEW' };
+      const active = resolveCase(state, caseId);
+      if (!active || active.isUrnFilled || active.urnAshReady) return state;
+      return {
+        cases: updateCaseById(state.cases, caseId, (c) => ({
+          ...c,
+          urnAshReady: true,
+        })),
+      };
+    }),
+
+  completeUrnFilling: (bonusCash, caseId, pourQuality = 50) =>
+    set((state) => {
+      const active = resolveCase(state, caseId);
+      if (!active || active.isUrnFilled) {
+        return { activeStation: 'URN_FILLING', activeCaseId: caseId };
+      }
+      const quality = Math.max(0, Math.min(100, Math.round(pourQuality)));
+      const career = grantCareer({
+        careerXp: state.careerXp,
+        homesKept: state.homesKept,
+        repMilestonesClaimed: state.repMilestonesClaimed,
+        reputation: state.reputation,
+        gain: XP_URN_SEALED,
+        fanfare: state.rankFanfare,
+      });
+      return {
+        activeCaseId: caseId,
+        cases: updateCaseById(state.cases, caseId, (c) => ({
+          ...c,
+          isUrnFilled: true,
+          urnAshReady: false,
+          urnPourQuality: quality,
+          location: 'URN_FILLING',
+        })),
+        cash: state.cash + bonusCash,
+        activeStation: 'URN_FILLING',
+        careerXp: career.careerXp,
+        homesKept: career.homesKept,
+        repMilestonesClaimed: career.repMilestonesClaimed,
+        rankFanfare: career.rankFanfare,
+      };
+    }),
+
+  storeUrnInVault: (caseId) =>
+    set((state) => {
+      const active = resolveCase(state, caseId);
+      if (!active || !active.isUrnFilled) return state;
+      const vaultCount = state.cases.filter((c) => c.location === 'URN_VAULT')
+        .length;
+      const cap = vaultSlotCapacity(state.facilityLevels.vault || 0);
+      if (vaultCount >= cap) {
+        return {
+          legalAlert: `VAULT FULL (${cap} niches). Expand the columbarium in Emporium Upgrades.`,
+        };
       }
       return {
-        currentCase: { ...state.currentCase, isUrnFilled: true },
-        cash: state.cash + bonusCash,
-        activeStation: 'OVERVIEW',
+        activeCaseId: caseId,
+        cases: updateCaseById(state.cases, caseId, (c) => ({
+          ...c,
+          location: 'URN_VAULT',
+        })),
+        activeStation: 'URN_VAULT',
       };
     }),
 
   buyShowroomItem: (itemId) =>
     set((state) => {
       const item = state.showroomInventory.find((i) => i.id === itemId);
-      if (!item || state.cash < item.cost) return state;
+      if (!item) return state;
+      const cost =
+        item.category === 'FLOWER'
+          ? quotedPrice(item.cost, 'FLOWERS', state.newsWire, gameNow())
+          : item.cost;
+      if (state.cash < cost) return state;
       return {
-        cash: state.cash - item.cost,
-        reputation: state.reputation + item.prestigeBonus,
+        cash: state.cash - cost,
+        reputation: state.reputation + Math.min(8, item.prestigeBonus),
         showroomInventory: state.showroomInventory.map((i) =>
           i.id === itemId ? { ...i, ownedCount: i.ownedCount + 1 } : i
         ),
       };
     }),
 
-  placeFloralSpray: (flower) =>
+  buyUrn: (urnId) => {
+    const state = get();
+    const urn = getUrnById(urnId);
+    const ask = urn
+      ? quotedPrice(urn.cost, 'URNS', state.newsWire, gameNow())
+      : 0;
+    if (!urn || state.cash < ask) return false;
+    if (state.reputation < (urn.reputationRequired ?? 0)) return false;
+
+    let shopRotation = state.shopRotation;
+    if (isHourGatedUrn(urnId)) {
+      const entry = RARE_SCHEDULE.find(
+        (e) => e.kind === 'urn' && e.id === urnId
+      );
+      if (!entry) return false;
+      const next = consumeRareStock(shopRotation, entry);
+      if (!next) return false;
+      shopRotation = next;
+    }
+
+    set({
+      cash: state.cash - ask,
+      reputation: state.reputation + Math.min(10, urn.prestigeBonus),
+      urnInventory: {
+        ...state.urnInventory,
+        [urnId]: (state.urnInventory[urnId] ?? 0) + 1,
+      },
+      shopRotation,
+    });
+    return true;
+  },
+
+  beautifyUrn: (urnId, step) => {
+    const recipe = beautifyTarget(urnId, step);
+    const state = get();
+    if (!recipe) return false;
+    if ((state.urnInventory[urnId] ?? 0) < 1) return false;
+    if (state.cash < recipe.cost) return false;
+    const inventory = { ...state.urnInventory };
+    const left = (inventory[urnId] ?? 0) - 1;
+    if (left <= 0) delete inventory[urnId];
+    else inventory[urnId] = left;
+    inventory[recipe.resultId] = (inventory[recipe.resultId] ?? 0) + 1;
+    set({
+      cash: state.cash - recipe.cost,
+      urnInventory: inventory,
+    });
+    return true;
+  },
+
+  buyCasket: (casketId) => {
+    const state = get();
+    const casket = getCasketById(casketId);
+    const ask = casket
+      ? quotedPrice(casket.cost, 'CASKETS', state.newsWire, gameNow())
+      : 0;
+    if (!casket || state.cash < ask) return false;
+    if (state.reputation < (casket.reputationRequired ?? 0)) return false;
+
+    let shopRotation = state.shopRotation;
+    if (isHourGatedCasket(casketId)) {
+      const entry = RARE_SCHEDULE.find(
+        (e) => e.kind === 'casket' && e.id === casketId
+      );
+      if (!entry) return false;
+      const next = consumeRareStock(shopRotation, entry);
+      if (!next) return false;
+      shopRotation = next;
+    }
+
+    set({
+      cash: state.cash - ask,
+      reputation: state.reputation + Math.min(10, casket.prestigeBonus),
+      casketInventory: {
+        ...state.casketInventory,
+        [casketId]: (state.casketInventory[casketId] ?? 0) + 1,
+      },
+      shopRotation,
+    });
+    return true;
+  },
+
+  buyChapelDecor: (decorId) => {
+    const state = get();
+    const item = CHAPEL_DECOR_CATALOG.find((d) => d.id === decorId);
+    if (!item) return false;
+    if (state.chapelOwnedDecor.includes(decorId)) return false;
+    if (state.cash < item.cost) return false;
+    set({
+      cash: state.cash - item.cost,
+      reputation: state.reputation + Math.min(6, item.satisfactionBonus),
+      chapelOwnedDecor: [...state.chapelOwnedDecor, decorId],
+    });
+    return true;
+  },
+
+  buyFacilityUpgrade: (id) => {
+    const state = get();
+    const level = state.facilityLevels[id] ?? 0;
+    const tier = nextFacilityTier(id, level);
+    if (!tier) return { ok: false, reason: 'maxed', message: 'Fully upgraded' };
+    if (state.cash < tier.cost) {
+      return { ok: false, reason: 'cash', message: 'Insufficient cash' };
+    }
+    const missing = missingCollectionReqs(
+      tier.requires,
+      state.urnInventory,
+      state.casketInventory
+    );
+    if (missing.length > 0) {
+      return {
+        ok: false,
+        reason: 'collection',
+        message: 'Missing collection requirements',
+      };
+    }
+    const used = totalFacilitySpaceUsed(state.facilityLevels);
+    const total = state.ownedProperty?.spaceTotal ?? STARTER_PROPERTY.space;
+    if (used + tier.space > total) {
+      return {
+        ok: false,
+        reason: 'space',
+        message:
+          'Needs more facility space — open Lychgate Realty to relocate.',
+      };
+    }
+    const nextLevels = {
+      ...state.facilityLevels,
+      [id]: level + 1,
+    };
+    const grown =
+      id === 'retort_bay'
+        ? focusMachines(state, state.retort, state.activeRetortIndex ?? 0)
+        : null;
+    const grownCount = retortCount(nextLevels);
+    set({
+      cash: state.cash - tier.cost,
+      facilityLevels: nextLevels,
+      reputation: state.reputation + 3 + level,
+      intakeToast: `Upgraded ${id.replace('_', ' ')} (space ${used + tier.space}/${total})`,
+      ...(grown
+        ? {
+            retort: grown.retort,
+            retortMachines: alignMachines(
+              grown.retortMachines,
+              grown.retort,
+              grown.activeRetortIndex,
+              grownCount
+            ).machines,
+            activeRetortIndex: grown.activeRetortIndex,
+            retortBays: alignBays(grown.retortBays, grownCount),
+          }
+        : {}),
+    });
+    return { ok: true };
+  },
+
+  takeBankLoan: (productId) => {
+    const state = get();
+    const product = loanProductById(productId);
+    if (!product) return { ok: false, message: 'Unknown loan product' };
+    if (state.activeLoans.some((l) => l.productId === productId && l.kind === 'PERSONAL')) {
+      return { ok: false, message: 'You already hold this note' };
+    }
+    if (state.activeLoans.filter((l) => l.kind === 'PERSONAL').length >= 2) {
+      return { ok: false, message: 'Personal loan limit (2) reached' };
+    }
+    const now = gameNow();
+    const loan = makePersonalLoan(product, now);
+    set({
+      cash: state.cash + product.principal,
+      activeLoans: [...state.activeLoans, loan],
+      financeLedger: [
+        {
+          id: `led_loan_${now}`,
+          at: now,
+          label: `Loan advance — ${product.name}`,
+          amount: product.principal,
+          kind: 'OTHER' as const,
+        },
+        ...state.financeLedger,
+      ].slice(0, 80),
+      intakeToast: `Loan funded +$${product.principal.toLocaleString()}`,
+    });
+    return { ok: true, message: `Advanced $${product.principal.toLocaleString()}` };
+  },
+
+  payBankLoanInstallment: (loanId) => {
+    const state = get();
+    const loan = state.activeLoans.find((l) => l.id === loanId);
+    if (!loan) return { ok: false, message: 'Loan not found' };
+    const principalPay = Math.min(loan.principalRemaining, loan.paymentAmount);
+    if (principalPay <= 0) return { ok: false, message: 'Loan already paid' };
+    if (state.cash < principalPay) {
+      return { ok: false, message: 'Insufficient cash for installment' };
+    }
+    const now = gameNow();
+    const remaining = loan.principalRemaining - principalPay;
+    let activeLoans = state.activeLoans;
+    if (remaining <= 0) {
+      activeLoans = state.activeLoans.filter((l) => l.id !== loanId);
+    } else {
+      activeLoans = state.activeLoans.map((l) =>
+        l.id === loanId
+          ? {
+              ...l,
+              principalRemaining: remaining,
+              nextPaymentDueAt: now + l.paymentEveryMs,
+              missedPayments: 0,
+            }
+          : l
+      );
+    }
+    set({
+      cash: state.cash - principalPay,
+      activeLoans,
+      financeLedger: [
+        {
+          id: `led_pay_${now}`,
+          at: now,
+          label: `Loan payment — ${loan.label}`,
+          amount: -principalPay,
+          kind: 'OTHER' as const,
+        },
+        ...state.financeLedger,
+      ].slice(0, 80),
+      intakeToast:
+        remaining <= 0
+          ? `Paid off: ${loan.label}`
+          : `Payment $${principalPay} on ${loan.label}`,
+    });
+    get().tickBankForeclosure();
+    return { ok: true, message: 'Payment posted' };
+  },
+
+  earlyPayoffBankLoan: (loanId) => {
+    const state = get();
+    const loan = state.activeLoans.find((l) => l.id === loanId);
+    if (!loan) return { ok: false, message: 'Loan not found' };
+    const due = earlyPayoffAmount(loan);
+    if (state.cash < due) {
+      return { ok: false, message: `Need $${due.toLocaleString()} to pay off early` };
+    }
+    const now = gameNow();
+    set({
+      cash: state.cash - due,
+      activeLoans: state.activeLoans.filter((l) => l.id !== loanId),
+      financeLedger: [
+        {
+          id: `led_early_${now}`,
+          at: now,
+          label: `Early payoff — ${loan.label}`,
+          amount: -due,
+          kind: 'OTHER' as const,
+        },
+        ...state.financeLedger,
+      ].slice(0, 80),
+      intakeToast: `Early payoff $${due.toLocaleString()} — ${loan.label}`,
+    });
+    get().tickBankForeclosure();
+    return { ok: true, message: 'Loan closed' };
+  },
+
+  buyProperty: (listingId, method) => {
+    const state = get();
+    const listing = getPropertyById(listingId);
+    if (!listing) return { ok: false, message: 'Listing not found' };
+    if (state.ownedProperty.listingId === listing.id) {
+      return { ok: false, message: 'Already at this property' };
+    }
+    const used = totalFacilitySpaceUsed(state.facilityLevels);
+    if (used > listing.space) {
+      return {
+        ok: false,
+        message: `Too small: need ${used} space, listing has ${listing.space}. Sell/downsize upgrades first (state choice: relocate to a larger pad).`,
+      };
+    }
+    const now = gameNow();
+    const saleProceeds = Math.round(state.ownedProperty.purchasedFor * 0.4);
+    const mortgageDue = state.activeLoans
+      .filter((l) => l.kind === 'MORTGAGE')
+      .reduce((sum, l) => sum + l.principalRemaining, 0);
+    // Net equity after settling the note — never forgive remaining principal.
+    const equity = saleProceeds - mortgageDue;
+    let cash = state.cash + equity;
+    let activeLoans = state.activeLoans.filter((l) => l.kind !== 'MORTGAGE');
+    if (method === 'CASH') {
+      if (cash < listing.price) {
+        return {
+          ok: false,
+          message: `Need $${listing.price.toLocaleString()} cash (have $${cash.toLocaleString()} after sale/mortgage settle)`,
+        };
+      }
+      cash -= listing.price;
+    } else {
+      const down = Math.ceil(listing.price * 0.2);
+      if (cash < down) {
+        return {
+          ok: false,
+          message: `Need $${down.toLocaleString()} down payment (20%) after settling prior mortgage`,
+        };
+      }
+      cash -= down;
+      const financed = listing.price - down;
+      activeLoans = [...activeLoans, makeMortgageLoan(listing, financed, now)];
+    }
+    const owned = ownedFromListing(listing, listing.price);
+    const nextReputation = state.reputation + listing.repBonus;
+    const career = grantCareer({
+      careerXp: state.careerXp,
+      homesKept: state.homesKept,
+      repMilestonesClaimed: state.repMilestonesClaimed,
+      reputation: nextReputation,
+      gain: XP_NEW_HOME,
+      homesDelta: 1,
+      fanfare: state.rankFanfare,
+    });
+    const ledgerExtra: GameState['financeLedger'] = [];
+    if (saleProceeds > 0) {
+      ledgerExtra.push({
+        id: `led_sale_${now}`,
+        at: now,
+        label: 'Prior property sale (40%)',
+        amount: saleProceeds,
+        kind: 'OTHER',
+      });
+    }
+    if (mortgageDue > 0) {
+      ledgerExtra.push({
+        id: `led_mtg_settle_${now}`,
+        at: now,
+        label: 'Prior mortgage payoff on relocate',
+        amount: -mortgageDue,
+        kind: 'OTHER',
+      });
+    }
+    set({
+      cash,
+      ownedProperty: owned,
+      activeLoans,
+      reputation: nextReputation,
+      careerXp: career.careerXp,
+      homesKept: career.homesKept,
+      repMilestonesClaimed: career.repMilestonesClaimed,
+      rankFanfare: career.rankFanfare,
+      financeLedger: [
+        {
+          id: `led_prop_${now}`,
+          at: now,
+          label: `${method === 'CASH' ? 'Cash buy' : 'Mortgage'} — ${listing.label}`,
+          amount:
+            method === 'CASH'
+              ? -listing.price
+              : -Math.ceil(listing.price * 0.2),
+          kind: 'OTHER' as const,
+        },
+        ...ledgerExtra,
+        ...state.financeLedger,
+      ].slice(0, 80),
+      intakeToast: `Relocated to ${listing.city}, ${listing.stateCode} · space ${used}/${listing.space}`,
+      computerOpenApp: 'REALTY',
+    });
+    return { ok: true, message: `Now operating: ${listing.label}` };
+  },
+
+  buyFleetVehicle: (id) => {
+    const state = get();
+    const vehicle = getFleetVehicle(id);
+    if (!vehicle) return { ok: false, message: 'Vehicle not in the catalog' };
+    if (state.ownedFleetIds.includes(vehicle.id)) {
+      return { ok: false, message: `${vehicle.name} is already in the garage` };
+    }
+    if (state.cash < vehicle.price) {
+      return {
+        ok: false,
+        message: `Need $${vehicle.price.toLocaleString()} for ${vehicle.name}`,
+      };
+    }
+    const now = gameNow();
+    set({
+      cash: state.cash - vehicle.price,
+      ownedFleetIds: [...state.ownedFleetIds, vehicle.id],
+      financeLedger: [
+        {
+          id: `led_fleet_${now}`,
+          at: now,
+          label: `Fleet — ${vehicle.name}`,
+          amount: -vehicle.price,
+          kind: 'OTHER' as const,
+        },
+        ...state.financeLedger,
+      ].slice(0, 80),
+      intakeToast: `Garage: ${vehicle.name}`,
+    });
+    return { ok: true, message: `${vehicle.name} is in the garage` };
+  },
+
+  assignFleetVehicle: (fleetClass, id) => {
+    const state = get();
+    if (id) {
+      const vehicle = getFleetVehicle(id);
+      if (!vehicle || vehicle.fleetClass !== fleetClass) return;
+      if (!state.ownedFleetIds.includes(id)) return;
+    }
+    const key =
+      fleetClass === 'RECOVERY'
+        ? 'recovery'
+        : fleetClass === 'ESCORT'
+          ? 'escort'
+          : fleetClass === 'FLOWER'
+            ? 'flower'
+            : 'coach';
+    set({
+      fleetAssignment: {
+        ...normalizeFleetAssignment(state.fleetAssignment),
+        [key]: id,
+      },
+    });
+  },
+
+  tickBankLoans: () => {
+    const state = get();
+    if (!state.hasStartedGame || state.bankForeclosed) return;
+    const now = gameNow();
+    let cash = state.cash;
+    let changed = false;
+    let foreclose = false;
+    let toast: string | null = null;
+    let push: string | null = null;
+    const ledger = [...state.financeLedger];
+    const activeLoans = state.activeLoans
+      .map((loan) => {
+        const next = { ...loan };
+        let guard = 0;
+        while (
+          now >= next.nextPaymentDueAt &&
+          next.principalRemaining > 0 &&
+          guard < 400
+        ) {
+          guard += 1;
+          const dueAt = next.nextPaymentDueAt;
+          const pay = Math.min(next.paymentAmount, next.principalRemaining);
+          const every = Math.max(next.paymentEveryMs, LOAN_INSTALLMENT_MS);
+          next.paymentEveryMs = every;
+          const remindKey = `${next.id}:${dueAt}`;
+          if (cash >= pay) {
+            changed = true;
+            cash -= pay;
+            next.principalRemaining = Math.max(0, next.principalRemaining - pay);
+            next.missedPayments = 0;
+            next.nextPaymentDueAt = dueAt + every;
+            ledger.unshift({
+              id: `led_auto_${next.id}_${dueAt}`,
+              at: dueAt,
+              label: `Bank draft — ${next.label}`,
+              amount: -pay,
+              kind: 'OTHER' as const,
+            });
+            if (!bankReminded.has(remindKey)) {
+              bankReminded.add(remindKey);
+              toast = BANK_PAYMENT_DRAFTED;
+              push = BANK_PAYMENT_DUE;
+            }
+            continue;
+          }
+          next.missedPayments = Math.max(1, next.missedPayments);
+          if (now >= dueAt + BANK_LOAN_GRACE_MS) {
+            foreclose = true;
+            changed = true;
+          } else if (!bankReminded.has(remindKey)) {
+            bankReminded.add(remindKey);
+            changed = true;
+            const overdue = now > dueAt + 60_000;
+            toast = overdue ? BANK_PAYMENT_OVERDUE : BANK_PAYMENT_DUE;
+            push = toast;
+          }
+          break;
+        }
+        return next;
+      })
+      .filter((loan) => loan.principalRemaining > 0);
+    if (!changed && !foreclose) return;
+    if (push) notifyHouse('The bank', push);
+    if (foreclose) {
+      set({
+        cash,
+        activeLoans,
+        financeLedger: ledger.slice(0, 80),
+        bankForeclosed: true,
+        intakeToast: 'The bank has taken the parlor.',
+        legalAlert: null,
+      });
+      return;
+    }
+    set({
+      cash,
+      activeLoans,
+      financeLedger: ledger.slice(0, 80),
+      ...(toast ? { intakeToast: toast } : {}),
+    });
+    get().tickBankForeclosure();
+  },
+
+  markActiveCaseEmbalmed: () => {
+    if (import.meta.env.VITE_PUBLIC_DEMO === '1') return false;
+    const state = get();
+    const id = state.activeCaseId;
+    if (!id) return false;
+    const c = state.cases.find((x) => x.id === id);
+    if (!c || c.isEmbalmed) return false;
+    set({
+      cases: state.cases.map((x) =>
+        x.id === id
+          ? { ...x, isEmbalmed: true, embalmRank: x.embalmRank ?? 'A' }
+          : x
+      ),
+      intakeToast: `[DEV] Marked embalmed: ${c.name}`,
+    });
+    return true;
+  },
+
+  offerUrnToCase: (caseId, urnId) =>
     set((state) => {
+      const active = resolveCase(state, caseId);
+      if (!active) return state;
+      const previousId = active.offeredUrnId;
+      let inventory = { ...state.urnInventory };
+
+      if (previousId) {
+        inventory[previousId] = (inventory[previousId] ?? 0) + 1;
+      }
+
+      if (urnId) {
+        const available = inventory[urnId] ?? 0;
+        if (available <= 0) return state;
+        inventory[urnId] = available - 1;
+      }
+
+      return {
+        urnInventory: inventory,
+        cases: updateCaseById(state.cases, caseId, (c) => ({
+          ...c,
+          offeredUrnId: urnId,
+        })),
+      };
+    }),
+
+  offerCasketToCase: (caseId, casketId) =>
+    set((state) => {
+      const active = resolveCase(state, caseId);
+      if (!active) return state;
+      const previousId = active.offeredCasketId;
+      let inventory = { ...state.casketInventory };
+
+      if (previousId) {
+        inventory[previousId] = (inventory[previousId] ?? 0) + 1;
+      }
+
+      if (casketId) {
+        const available = inventory[casketId] ?? 0;
+        if (available <= 0) return state;
+        inventory[casketId] = available - 1;
+      }
+
+      return {
+        casketInventory: inventory,
+        cases: updateCaseById(state.cases, caseId, (c) => ({
+          ...c,
+          offeredCasketId: casketId,
+        })),
+      };
+    }),
+
+  ensureChapelLayout: (caseId) =>
+    set((state) => {
+      if (state.chapelLayouts[caseId]) return state;
+      const active = resolveCase(state, caseId);
+      if (!active) return state;
+      return {
+        chapelLayouts: {
+          ...state.chapelLayouts,
+          [caseId]: defaultChapelLayout(caseId, caseUsesUrnStand(active)),
+        },
+      };
+    }),
+
+  setChapelTheme: (caseId, theme) =>
+    set((state) => {
+      const layout =
+        state.chapelLayouts[caseId] ??
+        defaultChapelLayout(caseId, false);
+      const owned = new Set(state.chapelOwnedDecor);
+      const nextTheme: ChapelThemeSelection = {
+        ...layout.theme,
+        ...theme,
+      };
+      // Only allow owned décor ids
+      const gate = (id: string | null | undefined) =>
+        id && owned.has(id) ? id : null;
+      nextTheme.wallId = gate(nextTheme.wallId);
+      nextTheme.floorId = gate(nextTheme.floorId);
+      nextTheme.draperyId = gate(nextTheme.draperyId);
+      nextTheme.lightingId = gate(nextTheme.lightingId);
+      nextTheme.pewsId = gate(nextTheme.pewsId);
+      nextTheme.urnPedestalId = gate(nextTheme.urnPedestalId);
+      nextTheme.ornamentIds = (nextTheme.ornamentIds ?? []).filter((id) =>
+        owned.has(id)
+      );
+      return {
+        chapelLayouts: {
+          ...state.chapelLayouts,
+          [caseId]: { ...layout, theme: nextTheme },
+        },
+      };
+    }),
+
+  setChapelServiceMusic: (caseId, musicTrackId) =>
+    set((state) => {
+      const layout =
+        state.chapelLayouts[caseId] ??
+        defaultChapelLayout(caseId, false);
+      return {
+        chapelLayouts: {
+          ...state.chapelLayouts,
+          [caseId]: { ...layout, serviceMusicId: musicTrackId },
+        },
+      };
+    }),
+
+  moveChapelPiece: (caseId, pieceId, x, y) =>
+    set((state) => {
+      const layout = state.chapelLayouts[caseId];
+      if (!layout) return state;
+      const nx = Math.max(0.05, Math.min(0.95, x));
+      const ny = Math.max(0.08, Math.min(0.92, y));
+      return {
+        chapelLayouts: {
+          ...state.chapelLayouts,
+          [caseId]: {
+            ...layout,
+            pieces: layout.pieces.map((p) =>
+              p.id === pieceId ? { ...p, x: nx, y: ny } : p
+            ),
+          },
+        },
+      };
+    }),
+
+  placeFloralSpray: (flower, caseId) =>
+    set((state) => {
+      const active = resolveCase(state, caseId);
+      if (!active) return state;
       const itemId = flowerItemId[flower];
       const item = state.showroomInventory.find((i) => i.id === itemId);
       if (!item || item.ownedCount <= 0) return state;
-      if (state.placedFlowers.includes(flower)) return state;
 
-      const preferredMatch =
-        flower === state.currentCase.preferredFlowers ? 15 : 5;
+      const layout =
+        state.chapelLayouts[caseId] ??
+        defaultChapelLayout(caseId, caseUsesUrnStand(active));
+      const stands = layout.pieces.filter((p) =>
+        ['LILIES', 'ROSES', 'WREATH'].includes(p.kind)
+      ).length;
+      const maxStands = maxFlowerStands(state.chapelOwnedDecor);
+      if (stands >= maxStands) return state;
 
+      const piece: ChapelLayoutPiece = {
+        id: `flower_${flower}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        kind: flower as FlowerKind,
+        x: 0.2 + (stands % 3) * 0.25,
+        y: 0.7 + Math.floor(stands / 3) * 0.08,
+      };
+
+      // Preference / arrangement payout comes only from chapel satisfaction score
       return {
+        activeCaseId: caseId,
         placedFlowers: [...state.placedFlowers, flower],
-        serviceRatingBonus: state.serviceRatingBonus + preferredMatch,
-        reputation: state.reputation + (preferredMatch === 15 ? 8 : 2),
         showroomInventory: state.showroomInventory.map((i) =>
           i.id === itemId ? { ...i, ownedCount: i.ownedCount - 1 } : i
+        ),
+        chapelLayouts: {
+          ...state.chapelLayouts,
+          [caseId]: {
+            ...layout,
+            pieces: [...layout.pieces, piece],
+          },
+        },
+      };
+    }),
+
+  removeChapelFlower: (caseId, pieceId) =>
+    set((state) => {
+      const layout = state.chapelLayouts[caseId];
+      if (!layout) return state;
+      const piece = layout.pieces.find((p) => p.id === pieceId);
+      if (!piece || !['LILIES', 'ROSES', 'WREATH'].includes(piece.kind)) {
+        return state;
+      }
+      const flower = piece.kind as FlowerKind;
+      const itemId = flowerItemId[flower];
+      return {
+        chapelLayouts: {
+          ...state.chapelLayouts,
+          [caseId]: {
+            ...layout,
+            pieces: layout.pieces.filter((p) => p.id !== pieceId),
+          },
+        },
+        placedFlowers: (() => {
+          const idx = state.placedFlowers.indexOf(flower);
+          if (idx < 0) return state.placedFlowers;
+          const next = [...state.placedFlowers];
+          next.splice(idx, 1);
+          return next;
+        })(),
+        showroomInventory: state.showroomInventory.map((i) =>
+          i.id === itemId ? { ...i, ownedCount: i.ownedCount + 1 } : i
         ),
       };
     }),
 
-  finalizeServiceAndNextCase: (chosenDisposition) =>
+  finalizeServiceAndNextCase: (chosenDisposition, caseId, settlement) =>
     set((state) => {
-      const c = state.currentCase;
+      const c = resolveCase(state, caseId);
+      if (!c) return { activeStation: 'OVERVIEW' };
+      const urnHandoff = settlement?.urnHandoff === true;
+
       let fine = 0;
       let alertMsg: string | null = null;
 
@@ -289,20 +4591,503 @@ export const useGameStore = create<GameState>((set, get) => ({
       ) {
         fine = 1200;
         alertMsg = `COMPLIANCE FINE ($1,200): Direct cremation finalized without completing the retort burn!`;
+      } else if (c.directive === 'CREMATION_THEN_VIEWING') {
+        if (chosenDisposition === 'BURIAL') {
+          fine = 900;
+          alertMsg = `CONTRACT MISMATCH ($900): Family booked an Ossuary Memorial, not burial.`;
+        } else if (!c.isCremated || !c.isUrnFilled) {
+          fine = 1400;
+          alertMsg = `BREACH ($1,400): Ossuary Memorial requires cremation and urned remains before chapel.`;
+        } else if (!c.offeredUrnId) {
+          fine = 600;
+          alertMsg = `PRESENTATION FINE ($600): No urn on the pedestal for the memorial gathering.`;
+        }
       }
 
-      const flowerBonus = Math.round(c.basePayout * (state.serviceRatingBonus / 100));
-      const netPayout =
-        fine > 0 ? -fine : c.basePayout + flowerBonus + (c.isUrnFilled ? 150 : 0);
+      const offered = getUrnById(c.offeredUrnId);
+      const offeredCasket = getCasketById(c.offeredCasketId);
+      const timing = urnHandoff ? 'upcoming' : serviceTiming(c.serviceDateMs, gameNow());
+      if (timing === 'missed') {
+        return {
+          legalAlert: `${displayCaseName(c)}'s hour has passed. Reschedule from the case file. Setting a new time costs ${SERVICE_RESCHEDULE_REP} reputation. There is no $900 failure.`,
+        };
+      }
+      const failedService = fine > 0;
+      const graceFine = timing === 'grace' ? SERVICE_GRACE_FINE : 0;
+      const serviceFailed = failedService;
+
+      const layout = urnHandoff ? undefined : state.chapelLayouts[c.id];
+      const theme = layout?.theme ?? {
+        wallId: null,
+        floorId: null,
+        draperyId: null,
+        lightingId: null,
+        pewsId: null,
+        urnPedestalId: null,
+        ornamentIds: [],
+      };
+      const flowerKinds = (layout?.pieces ?? [])
+        .map((p) => p.kind)
+        .filter((k): k is FlowerKind =>
+          k === 'LILIES' || k === 'ROSES' || k === 'WREATH'
+        );
+      const prefMatches = urnHandoff
+        ? []
+        : evaluateChapelPrefMatches({
+            prefs: c.familyChapelPrefs,
+            theme,
+            flowersPlaced: flowerKinds,
+            serviceMusicId: layout?.serviceMusicId ?? null,
+          });
+      const prefBonusPts =
+        urnHandoff || serviceFailed ? 0 : chapelPrefMatchBonus(prefMatches);
+      const chapelScore = urnHandoff
+        ? { total: 0 }
+        : scoreChapelArrangement({
+            pieces: layout?.pieces ?? [],
+            preferred: c.preferredFlowers,
+            ownedDecorIds: state.chapelOwnedDecor,
+            theme,
+            decayLevel: c.decayLevel,
+            urnPrestige: offered?.prestigeBonus ?? 0,
+            familyPrefBonus: prefBonusPts,
+          });
+      const chapelService =
+        !urnHandoff &&
+        !serviceFailed &&
+        (c.directive === 'BURIAL_VIEWING' ||
+          c.directive === 'VIEWING_THEN_CREMATION' ||
+          c.directive === 'CREMATION_THEN_VIEWING');
+      const rosesMet = flowerKinds.includes('ROSES');
+      const musicId = c.familyChapelPrefs?.musicTrackId ?? null;
+      const musicMet =
+        !!musicId && (layout?.serviceMusicId ?? null) === musicId;
+      const thinUrns = thinSelectionHit(
+        directiveNeedsUrn(c.directive),
+        inventoryUnits(state.urnInventory, c.offeredUrnId)
+      );
+      const thinCaskets = thinSelectionHit(
+        directiveNeedsCasket(c.directive),
+        inventoryUnits(state.casketInventory, c.offeredCasketId)
+      );
+      const ratingLines: { label: string; delta: number }[] = [];
+      if (chapelService) {
+        ratingLines.push({
+          label: rosesMet
+            ? 'Roses — required, met'
+            : 'Roses — required, missing',
+          delta: rosesMet ? REQUIRED_PREF_DELTA : -REQUIRED_PREF_DELTA,
+        });
+        ratingLines.push({
+          label: musicMet ? 'Music — required, met' : 'Music — required, missed',
+          delta: musicMet ? REQUIRED_PREF_DELTA : -REQUIRED_PREF_DELTA,
+        });
+      }
+      if (!serviceFailed && thinUrns) {
+        ratingLines.push({
+          label: 'Urn selection a little small',
+          delta: -THIN_SELECTION_PENALTY,
+        });
+      }
+      if (!serviceFailed && thinCaskets) {
+        ratingLines.push({
+          label: 'Casket selection a little small',
+          delta: -THIN_SELECTION_PENALTY,
+        });
+      }
+      const ratingDelta = ratingLines.reduce((sum, line) => sum + line.delta, 0);
+      const baseRating = serviceFailed
+        ? 0
+        : chapelService
+          ? chapelScore.total
+          : clampRating(70 + Math.round((c.cremainsQuality ?? 0) / 5));
+      const rating = clampRating(baseRating + (serviceFailed ? 0 : ratingDelta));
+      // Cash, tip, and chapel reputation stay on the arrangement score
+      // the chapel preview already showed. `rating` is the house letter
+      // and the thank-you review only.
+      const chapelRewards = satisfactionToRewards(chapelScore.total);
+      const vesselBits: string[] = [];
+      if (offered) vesselBits.push(offered.name);
+      if (
+        offeredCasket &&
+        (c.directive === 'BURIAL_VIEWING' ||
+          c.directive === 'VIEWING_THEN_CREMATION')
+      ) {
+        vesselBits.push(offeredCasket.name);
+      }
+      const legendaryVisit =
+        !serviceFailed &&
+        state.legendaryOffer == null &&
+        ratingTier(rating) === 'S+'
+          ? rollLegendaryVisit()
+          : null;
+      const familyReview = serviceFailed
+        ? null
+        : pickFamilyReview(rating, {
+            name: c.name,
+            roses: chapelService
+              ? rosesMet
+                ? 'The roses were there, just as we asked'
+                : 'The roses we asked for were not in the room'
+              : 'We had not asked for a chapel of flowers',
+            music: chapelService
+              ? musicMet
+                ? `${serviceMusicLabel(musicId)} was the music we wanted`
+                : `The music was not ${serviceMusicLabel(musicId)}`
+              : 'Quiet was what this farewell needed',
+            vessel:
+              vesselBits.length > 0
+                ? vesselBits.join(' and ')
+                : 'what you had on hand',
+            stock:
+              thinUrns && thinCaskets
+                ? 'both the urn shelf and the casket selection felt a little small'
+                : thinUrns
+                  ? 'the urn shelf felt a little small'
+                  : thinCaskets
+                    ? 'the casket selection felt a little small'
+                    : 'the selection had room to choose',
+          });
+
+      // Chapel score is the single source of truth (preview matches payout)
+      const flowerBonus = serviceFailed
+        ? 0
+        : Math.round((c.basePayout * chapelRewards.payoutBoostPct) / 100);
+
+      const urnMatch =
+        offered != null && offered.material === c.preferredUrnMaterial;
+      const urnSale = !serviceFailed && offered ? offered.resaleValue : 0;
+      const urnTasteBonus =
+        !serviceFailed && urnMatch ? Math.round(urnSale * 0.2) : 0;
+
+      const casketMatch =
+        offeredCasket != null &&
+        offeredCasket.material === c.preferredCasketMaterial;
+      const casketSale =
+        !serviceFailed &&
+        chosenDisposition === 'BURIAL' &&
+        offeredCasket
+          ? offeredCasket.resaleValue
+          : 0;
+      const casketTasteBonus =
+        !serviceFailed && casketMatch ? Math.round(casketSale * 0.2) : 0;
+
+      const decayPenalty = Math.round(c.basePayout * (c.decayLevel / 100) * 0.8);
+      if (graceFine > 0 && !alertMsg) {
+        alertMsg = `GRACE WINDOW ($${SERVICE_GRACE_FINE}): The service ran a little late. A small courtesy comes off the fee.`;
+      }
+      if (c.decayLevel >= 40 && !alertMsg) {
+        alertMsg = `FAMILY OUTRAGE: Remains showed advanced decomposition (decay ${Math.round(c.decayLevel)}%).`;
+      }
+
+      const pourTip = serviceFailed
+        ? 0
+        : Math.round((c.urnPourQuality ?? 0) * 1.1);
+      const cremainsTip = serviceFailed
+        ? 0
+        : Math.round((c.cremainsQuality ?? 0) * 1.6);
+      const cremainsRep = serviceFailed
+        ? 0
+        : Math.floor((c.cremainsQuality ?? 0) / 28);
+      const salesMult = Math.max(
+        0.5,
+        state.ownedProperty.salesMult ?? 1
+      );
+
+      const cortege = urnHandoff
+        ? {
+            recovery: null,
+            escort: null,
+            flower: null,
+            coach: null,
+            assigned: {
+              recovery: false,
+              escort: false,
+              flower: false,
+              coach: false,
+            },
+          }
+        : resolveCortege(state.ownedFleetIds, state.fleetAssignment);
+      const memorialService =
+        c.directive === 'BURIAL_VIEWING' ||
+        c.directive === 'VIEWING_THEN_CREMATION' ||
+        c.directive === 'CREMATION_THEN_VIEWING';
+      const coach = cortege.coach;
+      const coachRep = serviceFailed
+        ? 0
+        : (coach?.serviceRep ?? 0) +
+          (memorialService ? (coach?.memorialRep ?? 0) : 0);
+      const coachUpkeep = serviceFailed ? 0 : (coach?.upkeepSaved ?? 0);
+      const coachTip = serviceFailed ? 0 : (coach?.houseTip ?? 0);
+      const coachFee = serviceFailed ? 0 : (coach?.moneyBonus ?? 0);
+      const chapelTip = serviceFailed ? 0 : chapelRewards.tipCash + pourTip;
+      const tipCash = chapelTip + cremainsTip + coachTip;
+      const fleetRep = serviceFailed
+        ? 0
+        : (cortege.recovery?.repBonus ?? 0) + coachRep;
+      const escortCash = serviceFailed ? 0 : (cortege.escort?.moneyBonus ?? 0);
+      const flowerCash = serviceFailed ? 0 : (cortege.flower?.moneyBonus ?? 0);
+      const removalCash = serviceFailed
+        ? 0
+        : recoveryCaseCash(cortege.recovery?.repBonus ?? 0);
+      const coachCash = coachFee + coachUpkeep + coachTip;
+      const fleetCash = escortCash + flowerCash + coachCash;
+      const fleetInterment = serviceFailed
+        ? 0
+        : (cortege.coach?.interment ?? 0);
+      const intermentTotal = state.intermentScore + fleetInterment;
+
+      const burned = !serviceFailed && c.isCremated;
+      const speedPay = burned ? speedCaseBonus(c.retortSpeedTier ?? 0) : 0;
+      const qualityPay = burned ? qualityCaseBonus(c.retortQualityTier ?? 0) : 0;
+      const fuelPlanPay = burned ? fuelPlanBonus(c.retortFuelTier ?? 0) : 0;
+      const preheatPay = burned ? preheatCaseBonus(!!c.retortPreheat) : 0;
+      const queuePay = burned ? queueCaseBonus(!!c.retortQueue) : 0;
+      const bayPay = burned
+        ? retortBayCaseBonus(retortCount(state.facilityLevels))
+        : 0;
+      const fuelMetered = burned
+        ? fuelMemoDollars(c.fuelChargedCost, c.retortFuelTier ?? 0)
+        : 0;
+      const headlineAdjust =
+        c.headlineCase && !serviceFailed
+          ? headlineFeeDelta({
+              baseFee: c.basePayout,
+              failed: serviceFailed,
+              tagged: c.isTagged,
+              nameExpired: c.nameExpired,
+              decay: c.decayLevel,
+              embalmed: c.isEmbalmed,
+              chapelTotal: chapelScore.total,
+              needsEmbalm:
+                c.directive === 'BURIAL_VIEWING' ||
+                c.directive === 'VIEWING_THEN_CREMATION',
+            })
+          : 0;
+      const sealedPay = !serviceFailed && c.isUrnFilled ? 240 : 0;
+      const standing = serviceFailed
+        ? 0
+        : Math.min(480, Math.max(0, state.reputation - 100) * 2);
+      const cremainsPay = cremainsTip + qualityPay;
+
+      const houseRaw =
+        c.basePayout +
+        flowerBonus +
+        chapelTip +
+        urnSale +
+        urnTasteBonus +
+        casketSale +
+        casketTasteBonus +
+        sealedPay +
+        cremainsPay +
+        speedPay +
+        fuelPlanPay +
+        preheatPay +
+        queuePay +
+        bayPay +
+        standing +
+        headlineAdjust -
+        decayPenalty;
+      const housePaid = serviceFailed
+        ? 0
+        : Math.max(0, Math.round(houseRaw * salesMult));
+      const propertyAdjust = serviceFailed ? 0 : housePaid - houseRaw;
+      const netPayout = serviceFailed
+        ? -fine
+        : housePaid + fleetCash + removalCash - graceFine;
+
+      const pushLine = (
+        lines: { label: string; amount: number }[],
+        label: string,
+        amount: number
+      ) => {
+        if (!amount) return;
+        lines.push({ label, amount });
+      };
+      const payoutLines: { label: string; amount: number }[] = [];
+      if (!serviceFailed) {
+        pushLine(payoutLines, 'Service fee', c.basePayout);
+        pushLine(payoutLines, 'Headline', headlineAdjust);
+        pushLine(payoutLines, 'Chapel', flowerBonus);
+        pushLine(payoutLines, 'Tip', chapelTip);
+        pushLine(payoutLines, 'Urn', urnSale + urnTasteBonus);
+        pushLine(payoutLines, 'Casket', casketSale + casketTasteBonus);
+        pushLine(payoutLines, 'Sealed urn', sealedPay);
+        pushLine(payoutLines, 'Cremains', cremainsPay);
+        pushLine(payoutLines, 'Burner', speedPay);
+        pushLine(payoutLines, 'Fuel plan', fuelPlanPay);
+        pushLine(payoutLines, 'Pre-heat', preheatPay);
+        pushLine(payoutLines, 'Queue slot', queuePay);
+        pushLine(payoutLines, 'Extra chamber', bayPay);
+        pushLine(payoutLines, 'Standing', standing);
+        pushLine(payoutLines, 'Decay', -decayPenalty);
+        pushLine(payoutLines, 'Property', propertyAdjust);
+        pushLine(payoutLines, 'Escort', escortCash);
+        pushLine(payoutLines, 'Flower car', flowerCash);
+        pushLine(payoutLines, 'Coach', coachCash);
+        pushLine(payoutLines, 'Removal', removalCash);
+      }
+
+      const remaining = state.cases.filter((x) => x.id !== c.id);
+      const decayRepHit = Math.floor(c.decayLevel / 10);
+      const urnRep =
+        offered && !serviceFailed
+          ? Math.min(12, offered.prestigeBonus + (urnMatch ? 4 : 0))
+          : 0;
+      const casketRep =
+        offeredCasket && !serviceFailed && chosenDisposition === 'BURIAL'
+          ? Math.min(
+              12,
+              offeredCasket.prestigeBonus + (casketMatch ? 4 : 0)
+            )
+          : 0;
+
+      const inventory = { ...state.urnInventory };
+      const casketInv = { ...state.casketInventory };
+      // The case holds one staged unit of each vessel. Failure puts that
+      // unit back. A family choice never took a second one off the shelf.
+      if (serviceFailed && c.offeredUrnId) {
+        inventory[c.offeredUrnId] = (inventory[c.offeredUrnId] ?? 0) + 1;
+      }
+      if (serviceFailed && c.offeredCasketId) {
+        casketInv[c.offeredCasketId] =
+          (casketInv[c.offeredCasketId] ?? 0) + 1;
+      }
+      // Burial without offering: if casket was staged but disposition is cremation, restore
+      if (
+        !serviceFailed &&
+        chosenDisposition === 'CREMATION' &&
+        c.offeredCasketId
+      ) {
+        casketInv[c.offeredCasketId] =
+          (casketInv[c.offeredCasketId] ?? 0) + 1;
+      }
+
+      const { [c.id]: _removedLayout, ...restLayouts } = state.chapelLayouts;
+
+      const serviceLabel =
+        chosenDisposition === 'BURIAL' ? 'Burial service' : 'Cremation service';
+      const file = state.inboxFiles.find((f) => f.id === c.id);
+      const archivedCases = rememberClosedCase(
+        state.archivedCases,
+        toArchivedCase(
+          c,
+          file,
+          serviceFailed ? `Failed — ${serviceLabel}` : serviceLabel,
+          netPayout
+        )
+      );
+
+      const optionalMatches = prefMatches.filter(
+        (m) => m.key !== 'flowers' && m.key !== 'musicTrackId'
+      );
+      const honored = optionalMatches
+        .filter((m) => m.matched)
+        .map((m) => `${m.label}: ${m.preferredName}`);
+      const missed = optionalMatches
+        .filter((m) => !m.matched)
+        .map((m) => `${m.label}: ${m.preferredName}`);
+      const nextReputation = Math.max(
+        0,
+        serviceFailed
+          ? state.reputation - 15 - decayRepHit
+          : state.reputation +
+              chapelRewards.reputationDelta +
+              urnRep +
+              casketRep +
+              fleetRep +
+              cremainsRep -
+              decayRepHit
+      );
+      const career = grantCareer({
+        careerXp: state.careerXp,
+        homesKept: state.homesKept,
+        repMilestonesClaimed: state.repMilestonesClaimed,
+        reputation: nextReputation,
+        gain: serviceCareerXp({
+          failed: serviceFailed,
+          grace: graceFine > 0,
+          urnSold: !serviceFailed && urnSale > 0,
+        }),
+        fanfare: state.rankFanfare,
+      });
 
       return {
         cash: state.cash + netPayout,
-        reputation:
-          fine > 0
-            ? Math.max(0, state.reputation - 15)
-            : state.reputation + Math.min(20, Math.floor(state.serviceRatingBonus / 5)),
+        reputation: nextReputation,
+        careerXp: career.careerXp,
+        homesKept: career.homesKept,
+        repMilestonesClaimed: career.repMilestonesClaimed,
+        rankFanfare: career.rankFanfare,
+        intermentScore: intermentTotal,
+        lastCase: {
+          id: c.id,
+          name: displayCaseName(c),
+          service:
+            chosenDisposition === 'BURIAL' ? 'Burial service' : 'Cremation service',
+          at: gameNow(),
+        },
         legalAlert: alertMsg,
-        currentCase: generateRandomCase(),
+        ...(legendaryVisit
+          ? {
+              legendaryOffer: {
+                spiritId: legendaryVisit.spirit.id,
+                decedentName: c.name,
+                die: legendaryVisit.die,
+                showSecret: legendaryVisit.showSecret,
+                vesselKind: legendaryVisit.spirit.vesselKind,
+                vesselId: legendaryVisit.spirit.vesselId,
+              },
+            }
+          : {}),
+        serviceFeedback: serviceFailed
+          ? null
+          : {
+              decedentName: c.name,
+              kinLabel: c.familyRelation || 'them',
+              honored,
+              missed,
+              prefBonus: prefBonusPts,
+              tipCash,
+              payoutBoostPct: chapelRewards.payoutBoostPct,
+              reputationDelta:
+                chapelRewards.reputationDelta +
+                urnRep +
+                casketRep +
+                fleetRep +
+                cremainsRep,
+              fleetRecovery: cortege.recovery?.name ?? null,
+              fleetEscort: cortege.escort?.name ?? null,
+              fleetFlower: cortege.flower?.name ?? null,
+              fleetCoach: cortege.coach?.name ?? null,
+              fleetRep,
+              fleetCash,
+              fleetFlowerCash: flowerCash,
+              intermentThisService: fleetInterment,
+              intermentTotal,
+              payoutLines,
+              payoutNet: netPayout,
+              fuelMetered,
+              rating,
+              ratingLetter: familyReview?.tier ?? 'F',
+              ratingLines,
+              review: familyReview?.text ?? '',
+              reviewSigner: familyReview
+                ? `${familyReview.signer}, ${familyReview.relation}`
+                : '',
+            },
+        intakeToast: serviceFailed
+          ? `${resolvePlayerName(state.playerName)}, the service for ${c.familyRelation || 'them'} did not go through.`
+          : graceFine > 0
+            ? `Service complete — $${netPayout.toLocaleString()} (includes a $${graceFine} late courtesy)`
+            : `Service complete — $${netPayout.toLocaleString()}`,
+        cases: remaining,
+        inboxFiles: state.inboxFiles.filter((f) => f.id !== c.id),
+        archivedCases,
+        urnInventory: inventory,
+        casketInventory: casketInv,
+        chapelLayouts: restLayouts,
+        activeCaseId: remaining[0]?.id ?? null,
         placedFlowers: [],
         serviceRatingBonus: 0,
         activeStation: 'OVERVIEW',
@@ -310,4 +5095,445 @@ export const useGameStore = create<GameState>((set, get) => ({
     }),
 
   clearLegalAlert: () => set({ legalAlert: null }),
-}));
+  clearServiceFeedback: () => set({ serviceFeedback: null }),
+
+  setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
+  markNotificationPromptSeen: () => set({ notificationPromptSeen: true }),
+
+  damageCremulator: () =>
+    set({
+      cremulatorOwned: false,
+      cremulatorDamaged: true,
+      legalAlert:
+        'CREMULATOR DESTROYED! Metal implants entered the drum. Purchase a replacement before processing more cremains.',
+    }),
+
+  buyReplacementCremulator: () => {
+    const state = get();
+    if (state.cremulatorOwned) return true;
+    if (state.cash < CREMULATOR_REPLACEMENT_COST) return false;
+    set({
+      cash: state.cash - CREMULATOR_REPLACEMENT_COST,
+      cremulatorOwned: true,
+      cremulatorDamaged: false,
+    });
+    return true;
+  },
+}),
+    {
+      name: 'ossuarian-first-urn-v1',
+      version: 6,
+      storage: yieldingSaveStorage,
+      migrate: (persisted, version) => {
+        const p = (persisted ?? {}) as Record<string, unknown>;
+        const rawCases = (p.cases as DecedentCase[] | undefined) ?? [];
+        const cases = rawCases.map((c) => normalizeCase(c));
+        const chapelLayouts = {
+          ...((p.chapelLayouts as Record<string, ChapelServiceLayout>) ?? {}),
+        };
+        for (const key of Object.keys(chapelLayouts)) {
+          const layout = chapelLayouts[key];
+          if (!layout) continue;
+          chapelLayouts[key] = {
+            ...layout,
+            theme: {
+              ...layout.theme,
+              urnPedestalId: layout.theme?.urnPedestalId ?? null,
+            },
+            // The nave grew from 500 to 680 units downward. Saved percents
+            // stay on the same tiles only if they shrink with the floor.
+            pieces:
+              version < 6
+                ? (layout.pieces ?? []).map((piece) => ({
+                    ...piece,
+                    y: piece.y * (500 / 680),
+                  }))
+                : layout.pieces,
+          };
+        }
+        const rawInbox = (p.inboxFiles as CaseInboxFile[] | undefined) ?? [];
+        const inboxFiles = rawInbox.map((f) => {
+          const match = cases.find((c) => c.id === f.id);
+          return {
+            ...f,
+            familyRequestedUrnId:
+              f.familyRequestedUrnId ?? match?.familyRequestedUrnId ?? null,
+            familyRequestedCasketId:
+              f.familyRequestedCasketId ??
+              match?.familyRequestedCasketId ??
+              null,
+            dateOfBirthMs: f.dateOfBirthMs ?? match?.dateOfBirthMs ?? 0,
+            dateOfDeathMs: f.dateOfDeathMs ?? match?.dateOfDeathMs ?? 0,
+            timeOfDeathHour:
+              f.timeOfDeathHour ?? match?.timeOfDeathHour ?? 0,
+            timeOfDeathMinute:
+              f.timeOfDeathMinute ?? match?.timeOfDeathMinute ?? 0,
+            placeOfBirth: f.placeOfBirth ?? match?.placeOfBirth ?? '',
+            cremationPermitStatus:
+              f.cremationPermitStatus ??
+              match?.cremationPermitStatus ??
+              'NOT_REQUIRED',
+            cremationPermitRejectReason:
+              f.cremationPermitRejectReason ??
+              match?.cremationPermitRejectReason ??
+              null,
+          };
+        });
+        const fleets = {
+          ownedFleetIds: Array.isArray(p.ownedFleetIds) ? p.ownedFleetIds : [],
+          fleetAssignment: normalizeFleetAssignment(p.fleetAssignment),
+          intermentScore:
+            typeof p.intermentScore === 'number' ? p.intermentScore : 0,
+        };
+        if (version >= 4) {
+          return {
+            ...p,
+            cases,
+            chapelLayouts,
+            inboxFiles,
+            permitSubmissions: p.permitSubmissions ?? [],
+            permitWrongStreak: p.permitWrongStreak ?? 0,
+            financeLedger: p.financeLedger ?? [],
+            negativeCashSinceMs: p.negativeCashSinceMs ?? null,
+            bankWarningIssued: p.bankWarningIssued ?? false,
+            bankForeclosed: p.bankForeclosed ?? false,
+            ownedProperty: p.ownedProperty ?? ownedFromListing(STARTER_PROPERTY, 0),
+            activeLoans: p.activeLoans ?? [],
+            ...fleets,
+          } as never;
+        }
+        return {
+          ...p,
+          cases,
+          chapelLayouts,
+          inboxFiles,
+          permitSubmissions: p.permitSubmissions ?? [],
+          permitWrongStreak: p.permitWrongStreak ?? 0,
+          financeLedger: p.financeLedger ?? [],
+          negativeCashSinceMs: p.negativeCashSinceMs ?? null,
+          bankWarningIssued: p.bankWarningIssued ?? false,
+          bankForeclosed: p.bankForeclosed ?? false,
+          ownedProperty: ownedFromListing(STARTER_PROPERTY, 0),
+          activeLoans: [],
+          ownedFleetIds: [],
+          fleetAssignment: { ...EMPTY_FLEET_ASSIGNMENT },
+          intermentScore: 0,
+        } as never;
+      },
+      partialize: (state) => ({
+        hasStartedGame: state.hasStartedGame,
+        cash: state.cash,
+        reputation: state.reputation,
+        ossilegiumCommuneGrams: state.ossilegiumCommuneGrams,
+        activeStation: state.activeStation,
+        cases: state.cases,
+        activeCaseId: state.activeCaseId,
+        inboxFiles: state.inboxFiles,
+        archivedCases: state.archivedCases,
+        showroomInventory: state.showroomInventory,
+        urnInventory: state.urnInventory,
+        casketInventory: state.casketInventory,
+        chapelOwnedDecor: state.chapelOwnedDecor,
+        chapelLayouts: state.chapelLayouts,
+        facilityLevels: state.facilityLevels,
+        shopRotation: state.shopRotation,
+        placedFlowers: state.placedFlowers,
+        serviceRatingBonus: state.serviceRatingBonus,
+        cremulatorOwned: state.cremulatorOwned,
+        cremulatorDamaged: state.cremulatorDamaged,
+        cremationBurnActive: state.cremationBurnActive,
+        cremationBurnProgress: state.cremationBurnProgress,
+        cremationHeatNormalized: state.cremationHeatNormalized,
+        cremationDecayArrested: state.cremationDecayArrested,
+        retort: state.retort,
+        retortMachines: state.retortMachines,
+        activeRetortIndex: state.activeRetortIndex,
+        retortBays: state.retortBays,
+        crematoryWardrobe: state.crematoryWardrobe,
+        permitSubmissions: state.permitSubmissions,
+        permitWrongStreak: state.permitWrongStreak,
+        financeLedger: state.financeLedger,
+        negativeCashSinceMs: state.negativeCashSinceMs,
+        overdraftAccruedMs: state.overdraftAccruedMs,
+        bankWarningIssued: state.bankWarningIssued,
+        bankForeclosed: state.bankForeclosed,
+        ownedProperty: state.ownedProperty,
+        activeLoans: state.activeLoans,
+        ownedFleetIds: state.ownedFleetIds,
+        fleetAssignment: state.fleetAssignment,
+        intermentScore: state.intermentScore,
+        lastCase: state.lastCase,
+        newsWire: state.newsWire,
+        newsNextLiveAt: state.newsNextLiveAt,
+        newsCelebGate: state.newsCelebGate,
+        newsRecent: state.newsRecent,
+        intakeDayKey: state.intakeDayKey,
+        intakeSpawnedToday: state.intakeSpawnedToday,
+        nextIntakeAt: state.nextIntakeAt,
+        intakeBootstrapped: state.intakeBootstrapped,
+        phoneDayKey: state.phoneDayKey,
+        phoneCasesToday: state.phoneCasesToday,
+        phoneCooldownUntil: state.phoneCooldownUntil,
+        phoneLastResult: state.phoneLastResult,
+        careerXp: state.careerXp,
+        homesKept: state.homesKept,
+        repMilestonesClaimed: state.repMilestonesClaimed,
+        rankFanfare: state.rankFanfare,
+        playerName: state.playerName,
+        notificationsEnabled: state.notificationsEnabled,
+        notificationPromptSeen: state.notificationPromptSeen,
+        houseMail: state.houseMail,
+        houseClosedAt: state.houseClosedAt,
+        decaySimulatedAt: state.decaySimulatedAt,
+        tutorial: state.tutorial,
+        tutorialStep: state.tutorialStep,
+        tutorialCaseId: state.tutorialCaseId,
+        tutorialSpiritMoved: state.tutorialSpiritMoved,
+        tutorialSpirit: state.tutorialSpirit,
+        tutorialBeat: state.tutorialBeat,
+        legendaryOffer: state.legendaryOffer,
+        legendaryKept: state.legendaryKept,
+      }),
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<GameState>;
+        const cases = (p.cases ?? current.cases).map((c) =>
+          normalizeCase(c as DecedentCase)
+        );
+        const chapelLayouts = { ...(p.chapelLayouts ?? current.chapelLayouts) };
+        for (const key of Object.keys(chapelLayouts)) {
+          const layout = chapelLayouts[key];
+          if (!layout?.theme) continue;
+          chapelLayouts[key] = {
+            ...layout,
+            theme: {
+              ...layout.theme,
+              urnPedestalId: layout.theme.urnPedestalId ?? null,
+            },
+          };
+        }
+        const inboxFiles = (p.inboxFiles ?? current.inboxFiles).map((f) => {
+          const match = cases.find((c) => c.id === f.id);
+          return {
+            ...f,
+            familyRequestedUrnId:
+              f.familyRequestedUrnId ?? match?.familyRequestedUrnId ?? null,
+            familyRequestedCasketId:
+              f.familyRequestedCasketId ??
+              match?.familyRequestedCasketId ??
+              null,
+            dateOfBirthMs: f.dateOfBirthMs ?? match?.dateOfBirthMs ?? 0,
+            dateOfDeathMs: f.dateOfDeathMs ?? match?.dateOfDeathMs ?? 0,
+            timeOfDeathHour:
+              f.timeOfDeathHour ?? match?.timeOfDeathHour ?? 0,
+            timeOfDeathMinute:
+              f.timeOfDeathMinute ?? match?.timeOfDeathMinute ?? 0,
+            placeOfBirth: f.placeOfBirth ?? match?.placeOfBirth ?? '',
+            cremationPermitStatus:
+              f.cremationPermitStatus ??
+              match?.cremationPermitStatus ??
+              'NOT_REQUIRED',
+            cremationPermitRejectReason:
+              f.cremationPermitRejectReason ??
+              match?.cremationPermitRejectReason ??
+              null,
+          };
+        });
+        // Legacy saves may still have EMPORIUM; shop now lives on Computer.
+        const rawStation = (p.activeStation ??
+          current.activeStation) as StationId | 'EMPORIUM';
+        const fromEmporium = rawStation === 'EMPORIUM';
+        const activeStation = fromEmporium
+          ? ('COMPUTER' as const)
+          : (rawStation as StationId);
+        const ownedRaw = (
+          Array.isArray(p.ownedFleetIds)
+            ? p.ownedFleetIds
+            : current.ownedFleetIds ?? []
+        ) as string[];
+        const priorLedger = p.financeLedger ?? current.financeLedger ?? [];
+        let fleetRefund = 0;
+        const fleetRefundNotes: typeof priorLedger = [];
+        const ownedFleetIds = ownedRaw.filter((id) => {
+          const amount = RETIRED_FLEET_REFUNDS[id];
+          if (amount == null) return true;
+          const noteId = `led_fleet_refund_${id}`;
+          if (!priorLedger.some((entry) => entry.id === noteId)) {
+            fleetRefund += amount;
+            fleetRefundNotes.push({
+              id: noteId,
+              at: gameNow(),
+              label: 'Fleet withdrawn — Silent Arrival',
+              amount,
+              kind: 'OTHER',
+            });
+          }
+          return false;
+        });
+        return {
+          ...current,
+          ...p,
+          cases,
+          inboxFiles,
+          chapelLayouts,
+          activeStation,
+          computerOpenApp: fromEmporium
+            ? 'SHOP'
+            : current.computerOpenApp ?? null,
+          urnInventory: p.urnInventory ?? current.urnInventory,
+          notificationsEnabled: p.notificationsEnabled ?? false,
+          notificationPromptSeen: p.notificationPromptSeen === true,
+          houseMail: readHouseMail(p.houseMail),
+          houseClosedAt: typeof p.houseClosedAt === 'number' ? p.houseClosedAt : null,
+          absenceSnap: null,
+          decaySimulatedAt:
+            typeof p.decaySimulatedAt === 'number' ? p.decaySimulatedAt : null,
+          casketInventory: p.casketInventory ?? current.casketInventory,
+          chapelOwnedDecor: p.chapelOwnedDecor ?? current.chapelOwnedDecor,
+          facilityLevels: {
+            ...DEFAULT_FACILITY_LEVELS,
+            ...(p.facilityLevels ?? {}),
+          },
+          retortMachines: alignMachines(
+            Array.isArray(p.retortMachines) ? p.retortMachines : undefined,
+            { ...IDLE_RETORT, ...(p.retort ?? {}) },
+            typeof p.activeRetortIndex === 'number' ? p.activeRetortIndex : 0,
+            retortCount({
+              ...DEFAULT_FACILITY_LEVELS,
+              ...(p.facilityLevels ?? {}),
+            })
+          ).machines,
+          activeRetortIndex: alignMachines(
+            Array.isArray(p.retortMachines) ? p.retortMachines : undefined,
+            { ...IDLE_RETORT, ...(p.retort ?? {}) },
+            typeof p.activeRetortIndex === 'number' ? p.activeRetortIndex : 0,
+            retortCount({
+              ...DEFAULT_FACILITY_LEVELS,
+              ...(p.facilityLevels ?? {}),
+            })
+          ).index,
+          retortBays: alignBays(
+            Array.isArray(p.retortBays) ? p.retortBays : undefined,
+            retortCount({
+              ...DEFAULT_FACILITY_LEVELS,
+              ...(p.facilityLevels ?? {}),
+            })
+          ),
+          crematoryWardrobe: normalizeWardrobe(p.crematoryWardrobe),
+          shopRotation: p.shopRotation ?? current.shopRotation,
+          showroomInventory: p.showroomInventory ?? current.showroomInventory,
+          permitSubmissions: p.permitSubmissions ?? current.permitSubmissions,
+          permitWrongStreak: p.permitWrongStreak ?? current.permitWrongStreak,
+          cash:
+            (typeof p.cash === 'number' ? p.cash : current.cash) + fleetRefund,
+          financeLedger: fleetRefundNotes.length
+            ? [...fleetRefundNotes, ...priorLedger].slice(0, 80)
+            : priorLedger,
+          negativeCashSinceMs:
+            p.negativeCashSinceMs ?? current.negativeCashSinceMs ?? null,
+          overdraftAccruedMs:
+            typeof p.overdraftAccruedMs === 'number' ? p.overdraftAccruedMs : 0,
+          intakeDayKey: p.intakeDayKey ?? '',
+          intakeSpawnedToday:
+            typeof p.intakeSpawnedToday === 'number' ? p.intakeSpawnedToday : 0,
+          nextIntakeAt:
+            typeof p.nextIntakeAt === 'number' ? p.nextIntakeAt : null,
+          intakeBootstrapped: p.intakeBootstrapped === true,
+          phoneDayKey: p.phoneDayKey ?? '',
+          phoneCasesToday:
+            typeof p.phoneCasesToday === 'number' ? p.phoneCasesToday : 0,
+          phoneCooldownUntil: p.phoneCooldownUntil ?? {},
+          phoneLastResult: p.phoneLastResult ?? null,
+          careerXp: typeof p.careerXp === 'number' ? p.careerXp : 0,
+          homesKept:
+            typeof p.homesKept === 'number'
+              ? p.homesKept
+              : p.ownedProperty &&
+                  p.ownedProperty.listingId !== STARTER_PROPERTY.id
+                ? 2
+                : 1,
+          repMilestonesClaimed: Array.isArray(p.repMilestonesClaimed)
+            ? p.repMilestonesClaimed.filter((n) => typeof n === 'number')
+            : [],
+          rankFanfare:
+            p.rankFanfare &&
+            typeof p.rankFanfare.fromIndex === 'number' &&
+            typeof p.rankFanfare.toIndex === 'number'
+              ? p.rankFanfare
+              : null,
+          bankWarningIssued:
+            p.bankWarningIssued ?? current.bankWarningIssued ?? false,
+          bankForeclosed: p.bankForeclosed ?? current.bankForeclosed ?? false,
+          ownedProperty:
+            p.ownedProperty ??
+            current.ownedProperty ??
+            ownedFromListing(STARTER_PROPERTY, 0),
+          activeLoans: p.activeLoans ?? current.activeLoans ?? [],
+          ownedFleetIds,
+          fleetAssignment: normalizeFleetAssignment(
+            p.fleetAssignment ?? current.fleetAssignment
+          ),
+          intermentScore:
+            typeof p.intermentScore === 'number'
+              ? p.intermentScore
+              : current.intermentScore ?? 0,
+          lastCase: normalizeLastCase(p.lastCase) ?? current.lastCase ?? null,
+          archivedCases: normalizeArchives(p.archivedCases),
+          playerName: resolvePlayerName(
+            typeof p.playerName === 'string' ? p.playerName : ''
+          ),
+          tutorial:
+            p.tutorial === 'new' ||
+            p.tutorial === 'offer' ||
+            p.tutorial === 'active' ||
+            p.tutorial === 'done'
+              ? p.tutorial
+              : p.hasStartedGame
+                ? 'done'
+                : 'new',
+          tutorialStep:
+            typeof p.tutorialStep === 'number' ? p.tutorialStep : 0,
+          tutorialCaseId:
+            typeof p.tutorialCaseId === 'string' ? p.tutorialCaseId : null,
+          tutorialSpiritMoved: p.tutorialSpiritMoved === true,
+          tutorialBeat:
+            typeof p.tutorialBeat === 'string' ? p.tutorialBeat : null,
+          tutorialSpirit: readTutorialBell(
+            p.tutorialSpirit ??
+              (p as { tutorialBell?: unknown }).tutorialBell
+          ),
+          legendaryOffer:
+            p.legendaryOffer &&
+            typeof p.legendaryOffer.spiritId === 'string' &&
+            (p.legendaryOffer.vesselKind === 'urn' ||
+              p.legendaryOffer.vesselKind === 'casket')
+              ? p.legendaryOffer
+              : null,
+          legendaryKept: Array.isArray(p.legendaryKept)
+            ? p.legendaryKept.filter(
+                (row) => row && typeof row.spiritId === 'string'
+              )
+            : [],
+          filesPanelOpen: false,
+          archivesPanelOpen: false,
+          tutorialFileRead: false,
+          tutorialSawRejection: false,
+          settingsOpen: false,
+          titleGate: true,
+          intakeToast:
+            fleetRefund > 0
+              ? `Silent Arrival left the line. $${fleetRefund.toLocaleString()} returned.`
+              : null,
+          legalAlert: null,
+          serviceFeedback: null,
+          bankOpenTab: null,
+        };
+      },
+    }
+  )
+);
+
+setNotificationGate(() => useGameStore.getState().notificationsEnabled);
+
+if (import.meta.env.DEV) {
+  Object.assign(globalThis, { __ossuarian: useGameStore });
+}

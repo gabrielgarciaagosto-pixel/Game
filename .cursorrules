@@ -1,34 +1,41 @@
-# Cursor Rules: Death is my Business (Android Isometric Mortuary Game)
+# Cursor Rules: Ossuarian: First Urn (Android Portrait Mortuary Game)
 
 ## Tech Stack
-- React 18 + TypeScript + Vite
-- Three.js via @react-three/fiber and @react-three/drei (Orthographic isometric camera at [18, 18, 18], zoom 45)
-- Low-poly aesthetic: Always use standard procedural geometries (boxGeometry, cylinderGeometry, coneGeometry) with `<meshStandardMaterial flatShading />`
-- State management: Zustand (`useGameStore.ts`)
-- Target Platform: Android Mobile (Landscape lock, touch pointer events `onPointerDown`, `onPointerMove`, `onPointerUp`, zero hover-only interactions)
+- React 19 + TypeScript + Vite
+- State management: Zustand (`useGameStore.ts`) with `persist` to localStorage (`ossuarian-first-urn-v1`)
+- Capacitor 8 Android WebView (portrait, safe-area insets, touch `onPointerDown` / `onPointerMove` / `onPointerUp`)
+- Optional Three.js only if a screen explicitly needs it — hub routing is **not** a free-roam 3D lobby
 
 ## Core Mortuary Mechanics & Math Rules
 1. **Embalming Math**:
    - Total Tank Volume (oz) = `(weightLbs / 50) * 128`
    - Target Formaldehyde (20-Index at 2.0% target) = `0.10 * totalVolumeOz`
-   - Target Softener/Humectant = `(weightLbs / 50) * 4 * dehydrationFactor` (where dehydrationFactor is 0.5 for Edematous, 1.0 for Normal, 2.0 for Dehydrated)
+   - Target Softener/Humectant = `(weightLbs / 50) * 4 * dehydrationFactor` (0.5 Edematous, 1.0 Normal, 2.0 Dehydrated)
    - Target Water = `totalVolumeOz - (targetFormaldehyde + targetSoftener)`
-   - Pour Proximity Physics: Distance `d` normalized `[0.0, 1.0]` from shelf to tank rim. Tilt angle `15 + 75 * (d ^ 1.5)`. Flow rate `Q_max * (d ^ 2)` with an 8% sinusoidal glug oscillation when `d > 0.85`.
    - Rank Tiers: S+ (<=1.5% error), S (<=4%), A (<=8%), B (<=15%), C (<=30%), F (>30%).
 
-2. **Cremation & Retort Math**:
-   - Baseline 160 lb case burns at 1,600°F for 3.0 game minutes (180 seconds).
-   - Target Burn Time (minutes) = `3.0 + ((weightLbs - 160) / 60)`
-   - Heavy cases (>200 lbs) MUST step through 3 temperature intervals to avoid Thermal Runaway (EPA Fine):
-     - 0% to 25% progress: Max 1,200°F
-     - 25% to 60% progress: Max 1,400°F
-     - 60% to 100% progress: 1,600°F
-   - Required Stir Count = `Math.floor(weightLbs / 75)`
-   - Post-Cremation Sweep: 3 tools pulled from back of retort (`y = 0`) to front hopper (`y = 100`) in strict order:
-     1. Iron Rake (Large bone fragments)
-     2. Iron Bristle Brush (Medium fragments)
-     3. Hand Brush (Fine ash + Ossilegium Commune collection)
+2. **Cremation & Retort Math (Millennium)**:
+   - Typical adult burns ~**5 minutes** wall-clock when heat is held: `targetDurationSec = round((5.0 + (weightLbs - 160) / 80) * 60)`
+   - Operator set points are adjustable on the Honeywell dial (`primarySetPoint` / `secondarySetPoint`)
+   - Heavy cases (>200 lbs) step through temperature ceilings to avoid Thermal Runaway
+   - Required Stir Count = `Math.max(2, Math.floor(weightLbs / 70))`
+   - Door hold-to-jog vents heat; stirring needs door >16% open
+   - Post-cremation sweep (top→bottom strokes): Iron Rake → Iron Brush → Hand Brush
+   - Decay slows with heat and **arrests at 15% burn progress**
+   - Retort keeps simulating after Back (global `useRetortEngine`)
 
 3. **Compliance & Lawsuits**:
-   - Every decedent has a binding contract (`BURIAL_VIEWING` vs `CREMATION_DIRECT` vs `VIEWING_THEN_CREMATION`).
-   - Cremating a `BURIAL_VIEWING` case triggers an immediate Wrongful Cremation Lawsuit ($2,500 fine and -40 Reputation).
+   - Binding contracts: `BURIAL_VIEWING` | `CREMATION_DIRECT` | `VIEWING_THEN_CREMATION`
+   - Wrongful cremation / missed prep / late service levy cash and reputation penalties
+
+4. **Urns & Emporium**:
+   - Merchandise lives in **Funerary Emporium** (`EMPORIUM`), not inside Chapel
+   - Catalog vessels (`src/data/urnCatalog.ts`) are bought into `urnInventory`, inspected up close, shown in Urn Vault collection, and offered to families at Chapel
+   - Matching `preferredUrnMaterial` boosts payout and reputation on finalize
+
+## Navigation, Cooler Intake & Tagging Rules
+- **Boot Flow**: `UrnStartScreen` while `hasStartedGame` is false → START animation → `MainHubMenu`
+- **Main Screen**: Portrait hub tile grid (`MainHubMenu.tsx`): Cooler, Embalming, Crematory, Urn Processing, Chapel, **Funerary Emporium**, Urn Vault. Do **not** restore a free-roam 3D lobby for room routing.
+- **Intake Spawner**: New decedents every 180–300s into Cooler + Case Files dossier + intake bell
+- **60-Second Tagging Window**: Tap name badge or lose identity forever (`UNIDENTIFIED REMAINS`)
+- **Bottom-Right FILES**: Always reserve bottom clearance via `.safe-screen` / `.safe-hub` so station actions are not covered

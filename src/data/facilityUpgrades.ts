@@ -1,0 +1,418 @@
+/**
+ * Permanent tiered facility upgrades. The Emporium sells the house lines
+ * that are not a vendor's: embalming and the urn vault.
+ * Cremulator, retort efficiency, and extra retorts are Craigmile only.
+ * Cooler bays are Cool Composure only.
+ *
+ * Collection gates are OWNERSHIP-ONLY: required urns/caskets must be in the
+ * player's collection (count ≥ 1). Buying an upgrade NEVER consumes them.
+ */
+
+export type FacilityUpgradeId =
+  | 'cooler_bays'
+  | 'cremulator'
+  | 'crematory'
+  | 'embalming'
+  | 'vault'
+  | 'retort_bay';
+
+export type CollectionReq =
+  | { kind: 'urn'; id: string; label: string }
+  | { kind: 'casket'; id: string; label: string };
+
+export interface FacilityTier {
+  tier: number;
+  cost: number;
+  /** Facility floor space consumed when this tier is owned */
+  space: number;
+  label: string;
+  effect: string;
+  /** Must own these — not consumed on purchase */
+  requires: CollectionReq[];
+}
+
+export interface FacilityUpgradeDef {
+  id: FacilityUpgradeId;
+  name: string;
+  blurb: string;
+  tiers: FacilityTier[];
+}
+
+/**
+ * Sold only at Craigmile Crematory. Owned levels stay on the save and
+ * still spend facility space. The Emporium does not list them.
+ */
+export const CRAIGMILE_ONLY_UPGRADES: readonly FacilityUpgradeId[] = [
+  'cremulator',
+  'crematory',
+  'retort_bay',
+];
+
+/** Sold only at Cool Composure. Owned bay levels stay on the save. */
+export const COOL_COMPOSURE_UPGRADES: readonly FacilityUpgradeId[] = [
+  'cooler_bays',
+];
+
+export function emporiumFacilityUpgrades(): FacilityUpgradeDef[] {
+  return FACILITY_UPGRADES.filter(
+    (def) =>
+      !CRAIGMILE_ONLY_UPGRADES.includes(def.id) &&
+      !COOL_COMPOSURE_UPGRADES.includes(def.id)
+  );
+}
+
+export function coolComposureUpgrades(): FacilityUpgradeDef[] {
+  return FACILITY_UPGRADES.filter((def) =>
+    COOL_COMPOSURE_UPGRADES.includes(def.id)
+  );
+}
+
+export const FACILITY_UPGRADES: FacilityUpgradeDef[] = [
+  {
+    id: 'cooler_bays',
+    name: 'Cooler Expansion',
+    blurb: 'Add refrigeration bays beyond the starter six.',
+    tiers: [
+      {
+        tier: 1,
+        cost: 450,
+        space: 2,
+        label: 'Bay +2',
+        effect: '8 cooler bays',
+        requires: [],
+      },
+      {
+        tier: 2,
+        cost: 900,
+        space: 4,
+        label: 'Bay +4',
+        effect: '10 cooler bays',
+        requires: [],
+      },
+      {
+        tier: 3,
+        cost: 1600,
+        space: 8,
+        label: 'Bay +6',
+        effect: '12 cooler bays',
+        requires: [],
+      },
+    ],
+  },
+  {
+    id: 'cremulator',
+    name: 'Cremulator Refit',
+    blurb: 'Faster processing and tougher against implant strikes.',
+    tiers: [
+      {
+        tier: 1,
+        cost: 500,
+        space: 2,
+        label: 'Hardened Drum',
+        effect: '50% less damage chance',
+        requires: [
+          { kind: 'urn', id: 'urn_carrara_classic', label: 'Carrara Classic' },
+        ],
+      },
+      {
+        tier: 2,
+        cost: 1100,
+        space: 6,
+        label: 'Dual Mill',
+        effect: '+25% fill speed, rare damage',
+        requires: [
+          { kind: 'urn', id: 'urn_bronze_laurel', label: 'Bronze Laurel' },
+          { kind: 'urn', id: 'urn_carrara_classic', label: 'Carrara Classic' },
+        ],
+      },
+      {
+        tier: 3,
+        cost: 2000,
+        space: 8,
+        label: 'Industrial Mill',
+        effect: '+50% fill speed, near-immune',
+        requires: [
+          { kind: 'urn', id: 'urn_gunmetal_tower', label: 'Gunmetal Tower' },
+          { kind: 'urn', id: 'urn_rose_bronze_vase', label: 'Rose Bronze Vase' },
+          {
+            kind: 'urn',
+            id: 'urn_porcelain_night',
+            label: 'Porcelain Night',
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'crematory',
+    name: 'Retort Efficiency',
+    blurb: 'Shorter burns on the Millennium retort.',
+    tiers: [
+      {
+        tier: 1,
+        cost: 550,
+        space: 3,
+        label: 'Tuned Jets',
+        effect: 'Burns ~12% faster',
+        requires: [
+          { kind: 'urn', id: 'urn_walnut_pillar', label: 'Walnut Pillar' },
+        ],
+      },
+      {
+        tier: 2,
+        cost: 1200,
+        space: 6,
+        label: 'Recirc Stack',
+        effect: 'Burns ~22% faster',
+        requires: [
+          { kind: 'urn', id: 'urn_bronze_laurel', label: 'Bronze Laurel' },
+          { kind: 'urn', id: 'urn_nero_marquina', label: 'Nero Marquina' },
+        ],
+      },
+      {
+        tier: 3,
+        cost: 2200,
+        space: 8,
+        label: 'Afterburner Kit',
+        effect: 'Burns ~35% faster',
+        requires: [
+          { kind: 'urn', id: 'urn_amber_glass', label: 'Amber Glass' },
+          { kind: 'urn', id: 'urn_slate_temple', label: 'Slate Temple' },
+          {
+            kind: 'urn',
+            id: 'urn_verdigris_tear',
+            label: 'Verdigris Tear',
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'embalming',
+    name: 'Embalming Bench',
+    blurb: 'Better tools nudge grade outcomes upward.',
+    tiers: [
+      {
+        tier: 1,
+        cost: 400,
+        space: 2,
+        label: 'Precision Needles',
+        effect: '+8% grade weight',
+        requires: [
+          {
+            kind: 'casket',
+            id: 'gabriel-pine-orthodox-raw-blonde-pine',
+            label: 'Eastern White Pine Orthodox',
+          },
+        ],
+      },
+      {
+        tier: 2,
+        cost: 950,
+        space: 5,
+        label: 'Arterial Pump Mk II',
+        effect: '+16% grade weight',
+        requires: [
+          {
+            kind: 'casket',
+            id: 'gabriel-maple-colonial-honey-maple',
+            label: 'Hard Rock Maple Colonial',
+          },
+          {
+            kind: 'casket',
+            id: 'gabriel-pecan-southern-natural-pecan',
+            label: 'Solid Pecan Southern',
+          },
+        ],
+      },
+      {
+        tier: 3,
+        cost: 1750,
+        space: 8,
+        label: 'Full Prep Suite',
+        effect: '+25% grade weight',
+        requires: [
+          {
+            kind: 'casket',
+            id: 'gabriel-mahogany-round-red-mahogany',
+            label: 'Solid Mahogany Round',
+          },
+          {
+            kind: 'casket',
+            id: 'gabriel-bronze-square-venetian-bronze',
+            label: 'Bronze Square',
+          },
+          {
+            kind: 'casket',
+            id: 'gabriel-pecan-southern-dark-hickory',
+            label: 'Solid Pecan Southern, Dark Hickory',
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'vault',
+    name: 'Urn Vault Galleries',
+    blurb: 'More display niches for finished vessels.',
+    tiers: [
+      {
+        tier: 1,
+        cost: 350,
+        space: 2,
+        label: 'Side Niche',
+        effect: 'Vault slots 8',
+        requires: [],
+      },
+      {
+        tier: 2,
+        cost: 800,
+        space: 4,
+        label: 'Double Gallery',
+        effect: 'Vault slots 12',
+        requires: [
+          { kind: 'urn', id: 'urn_celadon_vase', label: 'Celadon Vase' },
+        ],
+      },
+      {
+        tier: 3,
+        cost: 1500,
+        space: 8,
+        label: 'Grand Columbarium',
+        effect: 'Vault slots 18',
+        requires: [
+          { kind: 'urn', id: 'urn_porcelain_lotus', label: 'Porcelain Lotus' },
+          { kind: 'urn', id: 'urn_smoke_glass_tear', label: 'Smoke Glass Tear' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'retort_bay',
+    name: 'Extra retort',
+    blurb: 'A second chamber, then a third. Each one burns on its own clock.',
+    tiers: [
+      {
+        tier: 1,
+        cost: 4800,
+        space: 8,
+        label: 'Twin bay',
+        effect: '2 retorts',
+        requires: [],
+      },
+      {
+        tier: 2,
+        cost: 9200,
+        space: 12,
+        label: 'Third chamber',
+        effect: '3 retorts',
+        requires: [],
+      },
+    ],
+  },
+];
+
+export type FacilityUpgradeLevels = Record<FacilityUpgradeId, number>;
+
+export const DEFAULT_FACILITY_LEVELS: FacilityUpgradeLevels = {
+  cooler_bays: 0,
+  cremulator: 0,
+  crematory: 0,
+  embalming: 0,
+  vault: 0,
+  retort_bay: 0,
+};
+
+export function coolerBayCapacity(level: number): number {
+  return 6 + level * 2;
+}
+
+export function vaultSlotCapacity(level: number): number {
+  if (level <= 0) return 5;
+  if (level === 1) return 8;
+  if (level === 2) return 12;
+  return 18;
+}
+
+export function crematoryBurnSpeed(level: number): number {
+  if (level <= 0) return 1;
+  if (level === 1) return 1.12;
+  if (level === 2) return 1.22;
+  return 1.35;
+}
+
+export function cremulatorSpeed(level: number): number {
+  if (level <= 0) return 1;
+  if (level === 1) return 1.1;
+  if (level === 2) return 1.25;
+  return 1.5;
+}
+
+/** Unupgraded mill, real time. Each run rolls inside this window. */
+export const CREMULATOR_RUN_MIN_MS = 2 * 60 * 1000;
+export const CREMULATOR_RUN_MAX_MS = 3 * 60 * 1000;
+
+/** Wall-clock length of one engage. `roll` is 0–1. Facility speed still shortens it. */
+export function cremulatorRunMs(level: number, roll = Math.random()): number {
+  const t = Math.min(1, Math.max(0, roll));
+  const base =
+    CREMULATOR_RUN_MIN_MS + t * (CREMULATOR_RUN_MAX_MS - CREMULATOR_RUN_MIN_MS);
+  return base / cremulatorSpeed(level);
+}
+
+export function cremulatorDamageChance(level: number): number {
+  if (level <= 0) return 0.35;
+  if (level === 1) return 0.18;
+  if (level === 2) return 0.08;
+  return 0.02;
+}
+
+export function embalmingGradeBoost(level: number): number {
+  if (level <= 0) return 0;
+  if (level === 1) return 0.08;
+  if (level === 2) return 0.16;
+  return 0.25;
+}
+
+export function nextFacilityTier(
+  id: FacilityUpgradeId,
+  currentLevel: number
+): FacilityTier | null {
+  const def = FACILITY_UPGRADES.find((u) => u.id === id);
+  if (!def) return null;
+  return def.tiers.find((t) => t.tier === currentLevel + 1) ?? null;
+}
+
+/** Space consumed by owned tiers of one upgrade line. */
+export function spaceForUpgradeLevel(
+  id: FacilityUpgradeId,
+  level: number
+): number {
+  const def = FACILITY_UPGRADES.find((u) => u.id === id);
+  if (!def || level <= 0) return 0;
+  return def.tiers
+    .filter((t) => t.tier <= level)
+    .reduce((sum, t) => sum + t.space, 0);
+}
+
+/** Total facility space used by current upgrade levels. */
+export function totalFacilitySpaceUsed(
+  levels: FacilityUpgradeLevels
+): number {
+  return (Object.keys(levels) as FacilityUpgradeId[]).reduce(
+    (sum, id) => sum + spaceForUpgradeLevel(id, levels[id] ?? 0),
+    0
+  );
+}
+
+/** Ownership check — never consumes inventory. */
+export function missingCollectionReqs(
+  requires: CollectionReq[],
+  urnInventory: Record<string, number>,
+  casketInventory: Record<string, number>
+): CollectionReq[] {
+  return requires.filter((r) => {
+    if (r.kind === 'urn') return (urnInventory[r.id] ?? 0) < 1;
+    return (casketInventory[r.id] ?? 0) < 1;
+  });
+}

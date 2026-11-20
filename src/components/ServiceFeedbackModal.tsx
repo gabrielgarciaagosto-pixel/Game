@@ -1,0 +1,169 @@
+import React from 'react';
+import { resolvePlayerName } from '../data/playerName';
+import { useGameStore } from '../store/useGameStore';
+
+export const ServiceFeedbackModal: React.FC = () => {
+  const feedback = useGameStore((s) => s.serviceFeedback);
+  const playerName = useGameStore((s) => s.playerName);
+  const clear = useGameStore((s) => s.clearServiceFeedback);
+
+  if (!feedback) return null;
+
+  return (
+    <div className="house-sheet-overlay z-[11000] bg-black/70 select-none">
+      <div className="house-sheet overflow-y-auto rounded-2xl border border-emerald-700/60 bg-slate-950 p-5 shadow-xl space-y-3">
+        <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-400/80">
+          Family feedback
+        </p>
+        <h3 className="text-lg font-bold text-emerald-100">
+          {feedback.decedentName}
+        </h3>
+        <div
+          data-house-rating
+          className="rounded-lg border border-amber-700/60 bg-amber-950/40 px-3 py-2 space-y-1"
+        >
+          <div className="flex items-baseline justify-between gap-3">
+            <div className="text-[10px] uppercase tracking-wider text-amber-300/80">
+              House rating
+            </div>
+            <div className="text-lg font-bold text-amber-50">
+              {feedback.ratingLetter} · {feedback.rating}
+            </div>
+          </div>
+          {feedback.ratingLines.length > 0 && (
+            <ul data-rating-lines className="text-sm text-amber-50 space-y-0.5">
+              {feedback.ratingLines.map((line) => (
+                <li key={line.label} className="flex justify-between gap-3">
+                  <span>{line.label}</span>
+                  <span className="font-mono tabular-nums">
+                    {line.delta > 0 ? '+' : '−'}
+                    {Math.abs(line.delta)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        {feedback.review ? (
+          <blockquote
+            data-family-review
+            className="rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2"
+          >
+            <p className="text-sm leading-relaxed text-slate-100">
+              {feedback.review}
+            </p>
+            <p className="mt-2 text-[11px] text-slate-400">
+              — {feedback.reviewSigner}
+            </p>
+          </blockquote>
+        ) : null}
+        <p className="text-sm text-emerald-50">
+          Thank you, {resolvePlayerName(playerName)}, for caring for{' '}
+          {feedback.kinLabel}.
+        </p>
+        <div className="rounded-lg border border-emerald-800/50 bg-emerald-950/40 px-3 py-2 space-y-1">
+          <div className="text-[10px] uppercase tracking-wider text-emerald-300/80">
+            Payout
+          </div>
+          <ul className="text-sm text-emerald-50">
+            {feedback.payoutLines.map((line) => (
+              <li key={line.label} className="flex justify-between gap-3">
+                <span>{line.label}</span>
+                <span className="font-mono tabular-nums">
+                  {line.amount < 0 ? '−' : '+'}$
+                  {Math.abs(line.amount).toLocaleString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="flex justify-between gap-3 border-t border-emerald-800/60 pt-1 text-sm font-bold text-emerald-100">
+            <span>Posted</span>
+            <span className="font-mono tabular-nums">
+              ${feedback.payoutNet.toLocaleString()}
+            </span>
+          </p>
+          {feedback.fuelMetered > 0 && (
+            <p className="text-[11px] text-emerald-200/70">
+              Fuel ${feedback.fuelMetered.toLocaleString()} was metered when the
+              retort fired. It is already off the balance.
+            </p>
+          )}
+        </div>
+        <div className="rounded-lg border border-amber-800/50 bg-amber-950/40 px-3 py-2 space-y-1">
+          <div className="text-[10px] uppercase tracking-wider text-amber-300/80">
+            Cortege
+          </div>
+          <ul className="text-sm text-amber-50 space-y-0.5">
+            <li>
+              Recovery:{' '}
+              {feedback.fleetRecovery
+                ? `${feedback.fleetRecovery} · +${feedback.fleetRep} reputation`
+                : 'none'}
+            </li>
+            <li>
+              Escort:{' '}
+              {feedback.fleetEscort ? feedback.fleetEscort : 'none'}
+            </li>
+            <li>
+              Flower car:{' '}
+              {feedback.fleetFlower
+                ? `${feedback.fleetFlower} · +$${feedback.fleetFlowerCash.toLocaleString()}`
+                : 'none'}
+            </li>
+            <li>
+              Coach:{' '}
+              {feedback.fleetCoach
+                ? `${feedback.fleetCoach} · Interment +${feedback.intermentThisService}`
+                : 'none'}
+            </li>
+          </ul>
+          <p className="text-[12px] text-amber-200/90">
+            House interment {feedback.intermentTotal}
+          </p>
+        </div>
+        <p className="text-sm text-slate-300">
+          Boost +{feedback.payoutBoostPct}% · tip ${feedback.tipCash} · rep +
+          {feedback.reputationDelta}
+          {feedback.prefBonus > 0
+            ? ` · preference bonus ${feedback.prefBonus} pts`
+            : ''}
+        </p>
+        {feedback.honored.length > 0 ? (
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-emerald-400/70 mb-1">
+              Honored
+            </div>
+            <ul className="text-sm text-emerald-100 space-y-0.5">
+              {feedback.honored.map((h) => (
+                <li key={h}>✓ {h}</li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-400">
+            No chapel preferences matched — still no penalty.
+          </p>
+        )}
+        {feedback.missed.length > 0 && (
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+              Not matched (optional — no penalty)
+            </div>
+            <ul className="text-sm text-slate-400 space-y-0.5">
+              {feedback.missed.map((m) => (
+                <li key={m}>· {m}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <button
+          type="button"
+          onPointerDown={() => clear()}
+          className="w-full min-h-11 rounded-lg bg-emerald-800 active:bg-emerald-700 font-bold text-sm"
+        >
+          Continue
+        </button>
+      </div>
+    </div>
+  );
+};

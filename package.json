@@ -1,11 +1,13 @@
 {
-  "name": "death-is-my-business",
+  "name": "ossuarian-first-urn",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:player": "tsc -b && vite build",
+    "build:public": "tsc -b && VITE_PUBLIC_DEMO=1 vite build",
     "lint": "oxlint",
     "preview": "vite preview"
   },
@@ -14,6 +16,7 @@
     "@capacitor/cli": "^8.6.2",
     "@capacitor/core": "^8.6.2",
     "@capacitor/haptics": "^8.0.2",
+    "@capacitor/local-notifications": "^8.3.1",
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.2",
     "react": "^19.3.1",
