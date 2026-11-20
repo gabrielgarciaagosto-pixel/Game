@@ -119,7 +119,7 @@ export const LiveCountChip: React.FC = () => {
         data-dm-chip
         data-live-count={report ? String(report.live) : ''}
         onClick={() => setOpen(true)}
-        className="inline-flex min-h-11 items-center whitespace-nowrap rounded-lg border border-emerald-900/70 bg-slate-950/80 px-2.5 font-mono text-[12px] text-slate-200"
+        className="inline-flex min-h-11 items-center whitespace-nowrap rounded-lg border border-emerald-900/70 bg-slate-950/80 px-1.5 font-mono text-[12px] text-slate-200"
       >
         {report ? (
           <>

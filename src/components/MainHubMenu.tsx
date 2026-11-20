@@ -254,7 +254,9 @@ function StatChip({
       {...tap}
       aria-expanded={active}
       data-stat-chip={id}
-      className={`inline-flex min-h-11 items-center bg-slate-950/80 px-2.5 rounded-lg border font-mono text-[12px] ${className} ${
+      className={`inline-flex min-h-11 items-center bg-slate-950/80 rounded-lg border font-mono text-[12px] ${
+        __OSSUARIAN_ROLE__ === 'master' ? 'px-1.5' : 'px-2.5'
+      } ${className} ${
         active ? 'ring-1 ring-amber-300/70' : ''
       }`}
     >
@@ -489,7 +491,10 @@ export const MainHubMenu: React.FC = () => {
           <span className="text-amber-300 font-semibold">{lastCaseLine(lastCase, cases)}</span>
         </p>
 
-        <div className="flex flex-wrap gap-1.5">
+        <div
+          className={`flex flex-wrap ${__OSSUARIAN_ROLE__ === 'master' ? 'gap-1' : 'gap-1.5'}`}
+          data-hub-stats
+        >
           <StatChip
             id="cash"
             active={openStat === 'cash'}
