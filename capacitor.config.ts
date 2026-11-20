@@ -5,6 +5,7 @@ const config: CapacitorConfig = {
   appName: 'Ossuarian: First Urn',
   webDir: 'dist',
   android: {
+    flavor: 'player',
     allowMixedContent: false,
     backgroundColor: '#0f172a',
   },

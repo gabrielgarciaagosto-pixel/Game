@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:master": "vite --mode master",
     "build": "tsc -b && vite build",
+    "build:player": "tsc -b && vite build",
+    "build:master": "tsc -b && vite build --mode master",
     "build:public": "tsc -b && VITE_PUBLIC_DEMO=1 vite build",
     "lint": "oxlint",
     "preview": "vite preview"

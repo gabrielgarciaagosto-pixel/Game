@@ -19,6 +19,7 @@ import { TAG_WINDOW_MS, useGameStore, type LastCaseNote } from '../store/useGame
 import { HubAtmosphere } from './hub/HubAtmosphere';
 import { titleProgress } from '../data/rankProgression';
 import { noteUrnsTap } from '../dev/devSummon';
+import { MasterSlot } from '../presence/MasterSlot';
 import { DeskCalendar } from './hub/DeskCalendar';
 import { NewsTicker } from './hub/NewsTicker';
 import type { DecedentCase } from '../types/game';
@@ -535,6 +536,7 @@ export const MainHubMenu: React.FC = () => {
           >
             URNS <span className="text-amber-300 font-bold">{urnOwned}</span>
           </StatChip>
+          <MasterSlot />
         </div>
 
         {open && (

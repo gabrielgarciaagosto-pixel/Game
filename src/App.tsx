@@ -165,6 +165,20 @@ function App() {
     return () => window.clearTimeout(id);
   }, [intakeToast]);
 
+  useEffect(() => {
+    if (__OSSUARIAN_ROLE__ === 'master') return;
+    let stop = () => {};
+    let cancelled = false;
+    void import('./presence/playerPresence').then((mod) => {
+      if (cancelled) return;
+      stop = mod.startPlayerPresence();
+    });
+    return () => {
+      cancelled = true;
+      stop();
+    };
+  }, []);
+
   const onTitle = titleGate || !hasStartedGame;
   const onHub = hasStartedGame && !titleGate && activeStation === 'OVERVIEW';
   const fullStation =

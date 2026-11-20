@@ -12,6 +12,7 @@ import {
   requestHouseNotificationPermission,
   scheduleHouseTestNotification,
 } from '../utils/houseNotifications';
+import { setSharePlayCount, sharePlayCount } from '../presence/sharePref';
 import { useSheetOpen } from './useSheetOpen';
 
 export const HouseSettings: React.FC = () => {
@@ -288,6 +289,8 @@ export const HouseSettings: React.FC = () => {
               </div>
             </div>
 
+            {__OSSUARIAN_ROLE__ === 'master' ? null : <PlayCountRow />}
+
             <div className="mt-4 border-t border-[#3a3228] pt-4">
               <p className="text-[10px] uppercase tracking-[0.22em] text-[#c4a574]">
                 Coming soon
@@ -420,6 +423,39 @@ function VolumeRow({
         onPointerUp={onRelease}
         className="mt-1 w-full accent-[#c4a574]"
       />
+    </div>
+  );
+}
+
+function PlayCountRow() {
+  const [shareCount, setShareCount] = useState(sharePlayCount);
+  return (
+    <div className="mt-4 border-t border-[#3a3228] pt-4" data-play-count-row>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] text-[#b7aa98]">Share anonymous play count</p>
+          <p className="mt-1 text-[11px] leading-snug text-[#6e675c]">
+            Sends an anonymous ping while the game is open, so the parlor can count players. No name and no save.
+          </p>
+        </div>
+        <button
+          type="button"
+          data-play-count-toggle
+          aria-pressed={shareCount}
+          onClick={() => {
+            const next = !shareCount;
+            setShareCount(next);
+            setSharePlayCount(next);
+          }}
+          className={`inline-flex min-h-11 shrink-0 items-center rounded-full px-3 text-[11px] font-bold ${
+            shareCount
+              ? 'bg-[#c4a574] text-[#1a140e]'
+              : 'border border-[#3a3228] text-[#d9cbb8]'
+          }`}
+        >
+          {shareCount ? 'On' : 'Off'}
+        </button>
+      </div>
     </div>
   );
 }
