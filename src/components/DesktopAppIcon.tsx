@@ -10,6 +10,7 @@ export type DesktopIconKind =
   | 'CRAIGMILE'
   | 'COOL'
   | 'PHONE'
+  | 'MAIL'
   | 'SETTINGS';
 
 const META: Record<
@@ -24,6 +25,7 @@ const META: Record<
   CRAIGMILE: { label: 'Craigmile Crematory', short: 'Craigmile' },
   COOL: { label: 'Cool Composure', short: 'Cooler' },
   PHONE: { label: 'Desk Phone', short: 'Phone' },
+  MAIL: { label: 'Mail', short: 'Mail' },
   SETTINGS: { label: 'Settings', short: 'Settings' },
 };
 
@@ -31,7 +33,8 @@ const META: Record<
 export const DesktopAppIcon: React.FC<{
   kind: DesktopIconKind;
   onOpen: () => void;
-}> = ({ kind, onOpen }) => {
+  marked?: boolean;
+}> = ({ kind, onOpen, marked = false }) => {
   const meta = META[kind];
   return (
     <button
@@ -47,6 +50,12 @@ export const DesktopAppIcon: React.FC<{
       <div className="desktop-icon-face relative w-[4.35rem] h-[4.35rem] rounded-[0.4rem] border border-white/30 shadow-[0_0_14px_rgba(120,255,180,0.22),inset_0_1px_0_rgba(255,255,255,0.28)] overflow-hidden">
         <IconArt kind={kind} />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/15 to-transparent" />
+        {marked ? (
+          <span
+            data-mail-unread
+            className="absolute top-1 right-1 h-3 w-3 rounded-full border border-[#f3ead7] bg-[#7a2e2a]"
+          />
+        ) : null}
       </div>
       <span className="desktop-icon-label text-center text-[13px] font-semibold leading-[1.15] max-w-[9.2rem] text-[#e9ffef] drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)] group-active:text-white">
         {meta.label}
@@ -173,6 +182,16 @@ function IconArt({ kind }: { kind: DesktopIconKind }) {
           <rect x="34" y="16" width="3" height="3" rx="0.5" fill="#12323c" />
           <rect x="34" y="26" width="3" height="3" rx="0.5" fill="#12323c" />
           <rect x="34" y="36" width="3" height="3" rx="0.5" fill="#12323c" />
+        </svg>
+      );
+    case 'MAIL':
+      return (
+        <svg viewBox="0 0 56 56" className="w-full h-full" aria-hidden>
+          <rect width="56" height="56" fill="#2a2118" />
+          <rect x="8" y="14" width="40" height="28" rx="2" fill="#e7d7b8" />
+          <path d="M8 16 L28 32 L48 16" fill="none" stroke="#6b5344" strokeWidth="2" />
+          <path d="M8 42 L22 28" fill="none" stroke="#6b5344" strokeWidth="1.4" />
+          <path d="M48 42 L34 28" fill="none" stroke="#6b5344" strokeWidth="1.4" />
         </svg>
       );
     case 'PHONE':

@@ -283,7 +283,9 @@ export const MainHubMenu: React.FC = () => {
     bankForeclosed,
     careerXp,
     coolerCapacity,
+    houseMail,
   } = useGameStore();
+  const unreadMail = houseMail.reduce((count, letter) => count + (letter.read ? 0 : 1), 0);
 
   const coolerCases = cases.filter((c) => c.location === 'COOLER');
   const vaultCount = cases.filter((c) => c.location === 'URN_VAULT').length;
@@ -388,7 +390,12 @@ export const MainHubMenu: React.FC = () => {
     {
       id: 'COMPUTER',
       title: 'COMPUTER',
-      subtitle: 'Desktop · Shop · Fleets · Craigmile · Settings',
+      subtitle:
+        unreadMail > 0
+          ? 'Night desk mail is waiting'
+          : 'Desktop · Shop · Fleets · Craigmile · Settings',
+      badge: unreadMail > 0 ? 'MAIL' : undefined,
+      badgeTone: unreadMail > 0 ? 'alert' : undefined,
       color: 'from-teal-950/75 via-slate-950/60 to-slate-950/78 border-teal-500/45',
     },
   ];

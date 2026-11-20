@@ -260,6 +260,7 @@ export function useIntakeSpawner() {
         }
         running = false;
         pushAlarms();
+        useGameStore.getState().sealAbsenceMail();
       };
       window.setTimeout(step, 0);
     };

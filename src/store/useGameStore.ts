@@ -214,6 +214,16 @@ import {
   setNotificationGate,
 } from '../utils/houseNotifications';
 import { gameNow } from '../utils/gameNow';
+import {
+  ABSENCE_MAIL_MIN_MS,
+  composeAbsenceLetter,
+  readHouseMail,
+  takeAbsenceSnap,
+  wireWeight,
+  type AbsenceSnap,
+  type HouseLetter,
+} from '../office/absenceMail';
+import { headlineById, renderHeadline } from '../data/newsHeadlines';
 import { readIntakeDevOptions } from '../dev/intakeOptions';
 import {
   COOLER_RIVAL_NOTE,
@@ -308,7 +318,17 @@ interface GameState {
    * Which Computer desktop app to open (null = desktop).
    * EMPORIUM redirects here with 'SHOP'. Not persisted.
    */
-  computerOpenApp: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS' | 'CRAIGMILE' | 'COOL' | 'PHONE' | null;
+  computerOpenApp:
+    | 'VR441'
+    | 'SHOP'
+    | 'BANK'
+    | 'REALTY'
+    | 'FLEETS'
+    | 'CRAIGMILE'
+    | 'COOL'
+    | 'PHONE'
+    | 'MAIL'
+    | null;
   /** Optional deep-link tab when opening BANK (not persisted) */
   bankOpenTab: 'overview' | 'loans' | 'listings' | null;
   cases: DecedentCase[];
@@ -324,6 +344,14 @@ interface GameState {
    * Older saves omit it, so a finished tutorial is asked on the next launch.
    */
   notificationPromptSeen: boolean;
+  /** Night desk letters. Newest first. */
+  houseMail: HouseLetter[];
+  /** Wall clock when the house was last open. Null until the first played minute. */
+  houseClosedAt: number | null;
+  /** Runtime snapshot of a closed stretch. Not saved. */
+  absenceSnap: AbsenceSnap | null;
+  sealAbsenceMail: () => void;
+  markHouseLetterRead: (id: string) => void;
   /**
    * gameNow() of the last decay step.
    * Null on an older save, so the first tick does not invent decay for an unknown gap.
@@ -491,7 +519,17 @@ interface GameState {
   hardResetGameState: (toast?: string | null) => void;
   setActiveStation: (station: StationId) => void;
   setComputerOpenApp: (
-    app: 'VR441' | 'SHOP' | 'BANK' | 'REALTY' | 'FLEETS' | 'CRAIGMILE' | 'COOL' | 'PHONE' | null
+    app:
+      | 'VR441'
+      | 'SHOP'
+      | 'BANK'
+      | 'REALTY'
+      | 'FLEETS'
+      | 'CRAIGMILE'
+      | 'COOL'
+      | 'PHONE'
+      | 'MAIL'
+      | null
   ) => void;
   buyFleetVehicle: (id: string) => { ok: boolean; message: string };
   assignFleetVehicle: (fleetClass: FleetClass, id: string | null) => void;
@@ -1226,6 +1264,8 @@ export function freshPersistedGameFields() {
     intermentScore: 0,
     notificationsEnabled: false,
     notificationPromptSeen: false,
+    houseMail: [] as HouseLetter[],
+    houseClosedAt: null as number | null,
     decaySimulatedAt: null as number | null,
     lastCase: null as LastCaseNote | null,
     newsWire: [] as NewsWireItem[],
@@ -1698,6 +1738,41 @@ function readTutorialBell(value: unknown): { x: number; y: number } | null {
 /** One notice per time the cooler fills, not once a second. */
 /** One reminder per loan due-time, so the parlor tick does not repeat it. */
 const bankReminded = new Set<string>();
+const HOUSE_OPEN_HEARTBEAT_MS = 60_000;
+
+function absenceReady(state: {
+  hasStartedGame: boolean;
+  titleGate: boolean;
+  tutorial: string;
+  bankForeclosed: boolean;
+}): boolean {
+  return (
+    state.hasStartedGame &&
+    !state.titleGate &&
+    state.tutorial === 'done' &&
+    !state.bankForeclosed
+  );
+}
+
+function ensureAbsenceSnap(
+  state: {
+    hasStartedGame: boolean;
+    titleGate: boolean;
+    tutorial: string;
+    bankForeclosed: boolean;
+    houseClosedAt: number | null;
+    absenceSnap: AbsenceSnap | null;
+    cases: DecedentCase[];
+    newsWire: { headlineId: string }[];
+  },
+  now: number
+): AbsenceSnap | null {
+  if (state.absenceSnap) return state.absenceSnap;
+  if (!absenceReady(state) || state.houseClosedAt == null) return null;
+  if (now - state.houseClosedAt < ABSENCE_MAIL_MIN_MS) return null;
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return null;
+  return takeAbsenceSnap(state.cases, state.newsWire.map((item) => item.headlineId), state.houseClosedAt);
+}
 
 export const useGameStore = create<GameState>()(
   persist(
@@ -1705,6 +1780,7 @@ export const useGameStore = create<GameState>()(
   ...freshPersistedGameFields(),
   titleGate: true,
   parlorHiddenAt: null,
+  absenceSnap: null,
   filesPanelOpen: false,
   archivesPanelOpen: false,
   tutorialFileRead: false,
@@ -1826,11 +1902,94 @@ export const useGameStore = create<GameState>()(
       if (state.tutorial !== 'active' || state.tutorialSawRejection) return state;
       return { tutorialSawRejection: true };
     }),
-  noteParlorHidden: () => set({ parlorHiddenAt: gameNow() }),
+  noteParlorHidden: () => {
+    const now = gameNow();
+    const state = get();
+    if (!absenceReady(state)) {
+      set({ parlorHiddenAt: now });
+      return;
+    }
+    set({
+      parlorHiddenAt: now,
+      houseClosedAt: state.absenceSnap ? state.houseClosedAt : now,
+      absenceSnap:
+        state.absenceSnap ??
+        takeAbsenceSnap(
+          state.cases,
+          state.newsWire.map((item) => item.headlineId),
+          now
+        ),
+    });
+  },
   noteParlorShown: () => {
     if (get().parlorHiddenAt == null) return;
     set({ parlorHiddenAt: null });
   },
+  sealAbsenceMail: () => {
+    const state = get();
+    if (!absenceReady(state)) return;
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    const now = gameNow();
+    const snap = state.absenceSnap;
+    if (!snap) {
+      if (state.houseClosedAt == null || now - state.houseClosedAt >= HOUSE_OPEN_HEARTBEAT_MS) {
+        set({ houseClosedAt: now });
+      }
+      return;
+    }
+    const arrivedNames = state.cases
+      .filter((item) => !snap.caseIds.includes(item.id))
+      .map((item) => displayCaseName(item));
+    const wire = state.newsWire
+      .filter((item) => !snap.newsIds.includes(item.headlineId))
+      .map((item) => {
+        const headline = headlineById(item.headlineId);
+        if (!headline) return null;
+        return {
+          id: item.headlineId,
+          text: renderHeadline(headline.text, item.homeLabel),
+          weight: wireWeight(headline.category, headline.group),
+        };
+      })
+      .filter((item): item is { id: string; text: string; weight: number } => item != null);
+    const letter = composeAbsenceLetter({
+      snap,
+      until: now,
+      playerName: resolvePlayerName(state.playerName),
+      arrivedNames,
+      wire,
+      cases: state.cases.map((item) => ({
+        id: item.id,
+        name: displayCaseName(item),
+        serviceDateMs: item.serviceDateMs ?? null,
+        urnId: item.familyRequestedUrnId ?? null,
+        casketId: item.familyRequestedCasketId ?? null,
+        urnName: item.familyRequestedUrnId
+          ? (getUrnById(item.familyRequestedUrnId)?.name ?? null)
+          : null,
+        casketName: item.familyRequestedCasketId
+          ? (getCasketById(item.familyRequestedCasketId)?.name ?? null)
+          : null,
+        needsUrn: directiveNeedsUrn(item.directive) && !item.familyRequestedUrnId,
+        needsCasket: directiveNeedsCasket(item.directive) && !item.familyRequestedCasketId,
+      })),
+    });
+    if (!letter) {
+      set({ absenceSnap: null, houseClosedAt: now });
+      return;
+    }
+    set({
+      absenceSnap: null,
+      houseClosedAt: now,
+      houseMail: [letter, ...state.houseMail].slice(0, 40),
+    });
+  },
+  markHouseLetterRead: (id) =>
+    set((state) => ({
+      houseMail: state.houseMail.map((letter) =>
+        letter.id === id ? { ...letter, read: true } : letter
+      ),
+    })),
   keepLegendarySpirit: () => {
     const offer = get().legendaryOffer;
     if (!offer) return;
@@ -1901,6 +2060,7 @@ export const useGameStore = create<GameState>()(
       tutorialSawRejection: false,
       settingsOpen: false,
       computerOpenApp: null,
+      absenceSnap: null,
       bankOpenTab: null,
       intakeToast:
         toast === undefined
@@ -2093,6 +2253,7 @@ export const useGameStore = create<GameState>()(
         ? { sci: false, pause: false }
         : readIntakeDevOptions();
     const now = gameNow();
+    let snap = ensureAbsenceSnap(state, now);
     const coolerCount = state.cases.filter((c) => c.location === 'COOLER').length;
     const cap = coolerBayCapacity(state.facilityLevels.cooler_bays || 0);
     const flow =
@@ -2139,13 +2300,20 @@ export const useGameStore = create<GameState>()(
       nextSchedule.nextIntakeAt === state.nextIntakeAt &&
       nextSchedule.intakeBootstrapped === state.intakeBootstrapped &&
       !phoneReset;
-    if (same && made === 0 && lostToRival === 0) return;
+    if (snap && lostToRival > 0) {
+      snap = { ...snap, lostCalls: snap.lostCalls + lostToRival };
+    }
+    if (same && made === 0 && lostToRival === 0) {
+      if (snap && snap !== state.absenceSnap) set({ absenceSnap: snap });
+      return;
+    }
     if (lostToRival > 0 && document.visibilityState === 'hidden') {
       notifyHouse('Another house', COOLER_RIVAL_NOTE);
     }
     set({
       ...nextSchedule,
       ...(lostToRival > 0 ? { intakeToast: COOLER_RIVAL_NOTE } : {}),
+      ...(snap ? { absenceSnap: snap } : {}),
     });
   },
 
@@ -5049,6 +5217,8 @@ export const useGameStore = create<GameState>()(
         playerName: state.playerName,
         notificationsEnabled: state.notificationsEnabled,
         notificationPromptSeen: state.notificationPromptSeen,
+        houseMail: state.houseMail,
+        houseClosedAt: state.houseClosedAt,
         decaySimulatedAt: state.decaySimulatedAt,
         tutorial: state.tutorial,
         tutorialStep: state.tutorialStep,
@@ -5147,6 +5317,9 @@ export const useGameStore = create<GameState>()(
           urnInventory: p.urnInventory ?? current.urnInventory,
           notificationsEnabled: p.notificationsEnabled ?? false,
           notificationPromptSeen: p.notificationPromptSeen === true,
+          houseMail: readHouseMail(p.houseMail),
+          houseClosedAt: typeof p.houseClosedAt === 'number' ? p.houseClosedAt : null,
+          absenceSnap: null,
           decaySimulatedAt:
             typeof p.decaySimulatedAt === 'number' ? p.decaySimulatedAt : null,
           casketInventory: p.casketInventory ?? current.casketInventory,

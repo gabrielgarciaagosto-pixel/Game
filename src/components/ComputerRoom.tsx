@@ -24,6 +24,7 @@ import { RealtyBrowser } from './RealtyBrowser';
 import { CrematoryCatalog } from './crematory/CrematoryCatalog';
 import { CoolComposureCatalog } from './cooler/CoolComposureCatalog';
 import { PhoneDesk } from './PhoneDesk';
+import { HouseMail } from './HouseMail';
 
 type DesktopApp =
   | 'DESKTOP'
@@ -34,7 +35,8 @@ type DesktopApp =
   | 'FLEETS'
   | 'CRAIGMILE'
   | 'COOL'
-  | 'PHONE';
+  | 'PHONE'
+  | 'MAIL';
 
 const BROWSER_APPS: DesktopApp[] = [
   'SHOP',
@@ -62,11 +64,13 @@ export const ComputerRoom: React.FC = () => {
     permitWrongStreak,
     financeLedger,
     playerName,
+    houseMail,
   } = useGameStore();
+  const unreadMail = houseMail.reduce((count, letter) => count + (letter.read ? 0 : 1), 0);
 
   const [app, setApp] = useState<DesktopApp>(() =>
-    computerOpenApp === 'PHONE'
-      ? 'PHONE'
+    computerOpenApp === 'PHONE' || computerOpenApp === 'MAIL'
+      ? computerOpenApp
       : computerOpenApp && BROWSER_APPS.includes(computerOpenApp)
         ? computerOpenApp
         : 'DESKTOP'
@@ -78,8 +82,8 @@ export const ComputerRoom: React.FC = () => {
   const [filingFee, setFilingFee] = useState(() => rollPermitFilingFee());
 
   useEffect(() => {
-    if (computerOpenApp === 'PHONE') {
-      setApp('PHONE');
+    if (computerOpenApp === 'PHONE' || computerOpenApp === 'MAIL') {
+      setApp(computerOpenApp);
       return;
     }
     if (computerOpenApp && BROWSER_APPS.includes(computerOpenApp)) {
@@ -185,6 +189,11 @@ export const ComputerRoom: React.FC = () => {
           <DesktopAppIcon kind="CRAIGMILE" onOpen={() => openApp('CRAIGMILE')} />
           <DesktopAppIcon kind="COOL" onOpen={() => openApp('COOL')} />
           <DesktopAppIcon kind="PHONE" onOpen={() => openApp('PHONE')} />
+          <DesktopAppIcon
+            kind="MAIL"
+            marked={unreadMail > 0}
+            onOpen={() => openApp('MAIL')}
+          />
           <DesktopAppIcon kind="SETTINGS" onOpen={() => setSettingsOpen(true)} />
         </div>
 
@@ -197,6 +206,18 @@ export const ComputerRoom: React.FC = () => {
           >
             Start
           </button>
+          <button
+            type="button"
+            data-house-mail-task
+            onClick={() => openApp('MAIL')}
+            className={`px-2 py-1 rounded-sm border text-[10px] font-bold ${
+              unreadMail > 0
+                ? 'border-[#e7d7b8] bg-[#7a2e2a] text-[#f4ecd9]'
+                : 'border-[#7dffb2]/35 bg-[#1a3328] text-[#d7ffe8]'
+            }`}
+          >
+            {unreadMail > 0 ? `Mail ${unreadMail}` : 'Mail'}
+          </button>
           <div
             className="font-mono text-[11px] text-[#9eecc0] crt-phosphor-glow"
             data-device-clock
@@ -207,6 +228,7 @@ export const ComputerRoom: React.FC = () => {
       </div>
 
       {app === 'PHONE' ? <PhoneDesk onClose={goDesktop} /> : null}
+      {app === 'MAIL' ? <HouseMail onClose={goDesktop} /> : null}
 
       {/* VR-441 always mounted so draft survives shop / FILES */}
       <div
