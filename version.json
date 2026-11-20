@@ -1,6 +1,6 @@
 {
-  "versionName": "0.9.82-demo",
-  "versionCode": 100,
-  "apkUrl": "https://github.com/gabrielgarciaagosto-pixel/Game/raw/217d9a118e1d4cec863085070b404f3dffe60b17/demo/Ossuarian-FirstUrn-v0.9.82-demo.apk",
-  "notes": "Anonymous play count is on. Settings can turn it off."
+  "versionName": "0.9.83-demo",
+  "versionCode": 101,
+  "apkUrl": "https://github.com/gabrielgarciaagosto-pixel/Game/raw/811aff607c0abc07cbec3cd8c5d9e2ff65febea8/demo/Ossuarian-FirstUrn-v0.9.83-demo.apk",
+  "notes": "Dungeon Master gifts and house news."
 }
