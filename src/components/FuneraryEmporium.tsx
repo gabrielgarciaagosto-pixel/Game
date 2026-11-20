@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   CASKET_CATALOG,
@@ -127,7 +127,7 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
 
   const [tab, setTab] = useState<ShopTab>('URNS');
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.dataset.shopOpen = '1';
     return () => {
       delete document.documentElement.dataset.shopOpen;
@@ -370,7 +370,7 @@ export const FuneraryEmporium: React.FC<EmporiumProps> = ({
       className={`${
         embedded
           ? 'files-overlap-clear absolute inset-0'
-          : 'safe-screen fixed inset-0 z-50'
+          : 'safe-screen fixed inset-0 z-[60]'
       } bg-[#140f0c] text-amber-50 flex flex-col select-none overflow-hidden`}
     >
       <div

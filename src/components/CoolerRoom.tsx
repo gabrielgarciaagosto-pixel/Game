@@ -27,7 +27,7 @@ export const CoolerRoom: React.FC = () => {
   const face = coolerFace(bayCount);
 
   return (
-    <div className="safe-screen fixed inset-0 z-40 bg-slate-950 text-slate-100 flex flex-col select-none overflow-hidden">
+    <div className="safe-screen fixed inset-0 z-[60] bg-slate-950 text-slate-100 flex flex-col select-none overflow-hidden">
       <div className="shrink-0 flex justify-between items-start border-b border-cyan-900/60 pb-2 gap-2 px-1">
         <div className="min-w-0">
           <h2 className="text-base font-bold text-cyan-400">

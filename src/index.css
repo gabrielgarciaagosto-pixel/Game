@@ -135,12 +135,9 @@ body {
   padding-bottom: var(--sheet-air);
 }
 
-/* FILES (and PHONE, which shares the anchor) hide for the life of a bottom sheet. */
-.files-fab-anchor,
-.dev-summon-fab,
-.dev-summon-panel {
-  transition: opacity 180ms ease, visibility 180ms ease;
-}
+/* FILES and PHONE leave the screen at once. A fade kept them painted
+   above station controls, because the anchor sits at z-index 52 and the
+   rooms sit lower. display:none cannot cover a gauge or a satisfaction line. */
 html[data-sheet-open] .files-fab-anchor,
 html[data-sheet-open] .dev-summon-fab,
 html[data-sheet-open] .dev-summon-panel,
@@ -151,9 +148,16 @@ html[data-cover-fab] .dev-summon-panel,
 html[data-station-fab='hide'] .files-fab-anchor,
 html[data-station-fab='hide'] .dev-summon-fab,
 html[data-station-fab='hide'] .dev-summon-panel {
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transition: none !important;
+}
+
+/* Stations no longer reserve a band for buttons that are not on screen. */
+html[data-station-fab='hide'] .safe-screen {
+  padding-bottom: calc(var(--safe-bottom) + 0.75rem);
 }
 
 /* Sheets stay inside the screen. The card scrolls. Close stays reachable. */

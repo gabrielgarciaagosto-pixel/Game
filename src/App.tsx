@@ -147,6 +147,7 @@ function App() {
     cases,
     activeCaseId,
     activeStation,
+    computerOpenApp,
     legalAlert,
     intakeToast,
     clearLegalAlert,
@@ -166,20 +167,29 @@ function App() {
 
   const onTitle = titleGate || !hasStartedGame;
   const onHub = hasStartedGame && !titleGate && activeStation === 'OVERVIEW';
+  const fullStation =
+    hasStartedGame &&
+    !titleGate &&
+    activeStation !== 'OVERVIEW' &&
+    activeStation !== 'COMPUTER';
+  const coveredDesk =
+    activeStation === 'COMPUTER' &&
+    (computerOpenApp === 'MAIL' ||
+      computerOpenApp === 'PHONE' ||
+      computerOpenApp === 'SHOP');
+  const showHubFabs = hasStartedGame && !titleGate && !fullStation && !coveredDesk;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = document.documentElement;
-    const room =
-      hasStartedGame &&
-      !titleGate &&
-      activeStation !== 'OVERVIEW' &&
-      activeStation !== 'COMPUTER';
-    if (room) root.dataset.stationFab = 'hide';
+    if (fullStation) root.dataset.stationFab = 'hide';
     else delete root.dataset.stationFab;
+    if (fullStation || coveredDesk) root.dataset.coverFab = '1';
+    else delete root.dataset.coverFab;
     return () => {
       delete root.dataset.stationFab;
+      delete root.dataset.coverFab;
     };
-  }, [activeStation, hasStartedGame, titleGate]);
+  }, [fullStation, coveredDesk]);
   const [hubToastTop, setHubToastTop] = useState<number | null>(null);
   useLayoutEffect(() => {
     if (!intakeToast || !onHub) {
@@ -238,6 +248,8 @@ function App() {
       ) : null}
       {activeStation === 'OVERVIEW' ? (
         <MainHubMenu />
+      ) : fullStation ? (
+        <main className="relative flex-1 min-h-0" />
       ) : (
         <>
           <header
@@ -304,7 +316,7 @@ function App() {
       {activeStation === 'URN_VAULT' && <UrnVaultRoom />}
       {activeStation === 'COMPUTER' && <ComputerRoom />}
 
-      <CaseInboxWidget />
+      {showHubFabs ? <CaseInboxWidget /> : null}
       {hasStartedGame ? <BankDebtHud /> : null}
       {hasStartedGame ? <RankFanfare /> : null}
 

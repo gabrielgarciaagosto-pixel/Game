@@ -237,7 +237,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
     return (
       <div
         data-chapel-empty
-        className="safe-screen fixed inset-0 z-50 bg-violet-950/95 text-violet-50 flex flex-col select-none overflow-hidden"
+        className="safe-screen fixed inset-0 z-[60] bg-violet-950 text-violet-50 flex flex-col select-none overflow-hidden"
       >
         <div className="flex justify-between items-start border-b border-violet-800 pb-3 gap-3">
           <div className="min-w-0">
@@ -320,7 +320,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
     );
 
   return (
-    <div className="safe-screen fixed inset-0 z-50 bg-violet-950/95 text-violet-50 flex flex-col select-none overflow-hidden">
+    <div className="safe-screen fixed inset-0 z-[60] bg-violet-950 text-violet-50 flex flex-col select-none overflow-hidden">
       <div className="flex justify-between items-start border-b border-violet-800 pb-3 gap-3">
         <div className="min-w-0">
           <h2 className="text-lg font-bold text-violet-300">

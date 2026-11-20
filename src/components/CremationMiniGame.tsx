@@ -918,7 +918,7 @@ export const CremationMiniGame: React.FC = () => {
   if (!currentCase || !targets) {
     return (
       <div
-        className="fixed inset-0 z-50 bg-stone-950/95 text-stone-100 flex flex-col items-center justify-center gap-4 p-6 pb-28"
+        className="fixed inset-0 z-[60] bg-stone-950 text-stone-100 flex flex-col items-center justify-center gap-4 p-6 pb-28"
         onPointerDownCapture={playControlClick}
       >
         <p className="text-center max-w-sm text-sm">
@@ -940,7 +940,7 @@ export const CremationMiniGame: React.FC = () => {
   if (currentCase.isCremated || phase === 'DONE') {
     return (
       <div
-        className="safe-screen fixed inset-0 z-50 bg-stone-950/95 text-stone-100 flex flex-col select-none"
+        className="safe-screen fixed inset-0 z-[60] bg-stone-950 text-stone-100 flex flex-col select-none"
         onPointerDownCapture={playControlClick}
       >
         <div className="flex justify-between border-b border-stone-800 pb-3 gap-2">
@@ -1218,7 +1218,7 @@ export const CremationMiniGame: React.FC = () => {
   return (
     <ButtonLookContext.Provider value={bay.buttons}>
     <div
-      className="safe-screen fixed inset-0 z-50 bg-[#1a2e1a] text-stone-100 flex flex-col select-none overflow-hidden"
+      className="safe-screen fixed inset-0 z-[60] bg-[#1a2e1a] text-stone-100 flex flex-col select-none overflow-hidden"
       onPointerDownCapture={playControlClick}
     >
       <div className="shrink-0 px-1 pb-2 border-b border-stone-800/80">

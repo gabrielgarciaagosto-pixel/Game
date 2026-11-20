@@ -664,7 +664,7 @@ export const UrnFillingMiniGame: React.FC = () => {
 
   if (!currentCase) {
     return (
-      <div className="fixed inset-0 z-50 bg-zinc-950/95 text-zinc-100 flex flex-col items-center justify-center gap-4 p-6 pb-28">
+      <div className="fixed inset-0 z-[60] bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-4 p-6 pb-28">
         <p className="text-center text-sm max-w-sm">
           No cremains on the tray yet. Finish a cremation, then open the processor.
         </p>
@@ -693,7 +693,7 @@ export const UrnFillingMiniGame: React.FC = () => {
     const direct = currentCase.directive === 'CREMATION_DIRECT';
     const sealed = getUrnById(currentCase.offeredUrnId);
     return (
-      <div className="safe-screen fixed inset-0 z-50 bg-zinc-950/95 text-zinc-100 flex flex-col select-none">
+      <div className="safe-screen fixed inset-0 z-[60] bg-zinc-950 text-zinc-100 flex flex-col select-none">
         <div className="flex justify-between items-center border-b border-zinc-800 pb-3">
           <h2 className="text-base font-bold text-amber-300">
             URN SEALED — {displayCaseName(currentCase)}
@@ -754,7 +754,7 @@ export const UrnFillingMiniGame: React.FC = () => {
 
   if (!cremulatorOwned || cremulatorDamaged) {
     return (
-      <div className="safe-screen fixed inset-0 z-50 bg-zinc-950/95 text-zinc-100 flex flex-col items-center justify-center gap-4 text-center">
+      <div className="safe-screen fixed inset-0 z-[60] bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-4 text-center">
         <h2 className="text-lg font-bold text-red-400">Cremulator Offline</h2>
         <p className="text-sm text-zinc-400 max-w-sm">
           Metal implants wrecked the drum. Buy a replacement (
@@ -793,7 +793,7 @@ export const UrnFillingMiniGame: React.FC = () => {
   }
 
   return (
-    <div className="safe-screen fixed inset-0 z-50 bg-zinc-950/95 text-zinc-100 flex flex-col select-none overflow-hidden">
+    <div className="safe-screen fixed inset-0 z-[60] bg-zinc-950 text-zinc-100 flex flex-col select-none overflow-hidden">
       <div className="flex justify-between items-start border-b border-zinc-800 pb-2 gap-2 shrink-0">
         <div className="min-w-0">
           <h2 className="text-sm font-bold text-amber-300 truncate">

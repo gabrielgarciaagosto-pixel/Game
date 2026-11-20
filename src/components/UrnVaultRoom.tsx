@@ -72,7 +72,7 @@ export const UrnVaultRoom: React.FC = () => {
   const niches = vaultCapacity();
 
   return (
-    <div className="safe-screen fixed inset-0 z-40 bg-stone-950 text-stone-100 flex flex-col select-none overflow-hidden">
+    <div className="safe-screen fixed inset-0 z-[60] bg-stone-950 text-stone-100 flex flex-col select-none overflow-hidden">
       <div className="shrink-0 flex justify-between items-start border-b border-stone-700 pb-3 gap-3">
         <div className="min-w-0">
           <h2 className="text-lg font-bold text-amber-400">
