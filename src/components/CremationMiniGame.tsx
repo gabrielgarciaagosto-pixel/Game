@@ -1,221 +1,1597 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { audioManager } from '../utils/audioManager';
+import {
+  brandLabel,
+  defaultRetortBay,
+  doorFace,
+  panelChrome,
+  purgeMsFor,
+  type RetortButtonStyleId,
+} from '../data/crematoryCatalog';
+import { CaseTransferBar } from './CaseTransferBar';
+import { directiveNeedsCremationPermit } from '../data/cremationPermits';
+import { permitStatusLabel } from '../data/decedentVitals';
+import type { Rank, SweepTool } from '../types/game';
+import { displayCaseName } from '../types/game';
 import { useGameStore } from '../store/useGameStore';
-import type { SweepTool } from '../types/game';
-import { hapticIronRake } from '../utils/haptics';
+import { crematoryToolSfx } from '../audio/crematoryToolSfx';
+import {
+  fallClipFor,
+  hearthHasBones,
+  latchToolMoving,
+  sweepClipFor,
+} from '../audio/crematoryToolSfxPolicy';
+import { hapticBoneContact, hapticIronRake } from '../utils/haptics';
 import { getCremationTargets } from '../utils/mortuaryMath';
+import {
+  PRIMARY_SP_MAX,
+  PRIMARY_SP_MIN,
+  SECONDARY_SP_MAX,
+  SECONDARY_SP_MIN,
+  STIR_DOOR_MIN,
+  randomPurgeMs,
+  retortProgress,
+} from '../retort/retortTypes';
+import {
+  HearthCharge,
+  type BoneContact,
+} from './crematory/HearthCharge';
+import { ToolArt } from './crematory/crematoryArt';
+import { SetPointDial } from './crematory/SetPointDial';
+import { ToolDrawer } from './crematory/ToolDrawer';
+import {
+  createCircularStirState,
+  feedCircularStir,
+  nearRemains,
+  resetCircularStir,
+} from './crematory/stirGesture';
+
+type BonePhase = 'INTACT' | 'CHARRING' | 'CALCINING' | 'FRAGMENTING' | 'ASH';
+
+function bonePhaseFromProgress(p: number): BonePhase {
+  if (p < 0.15) return 'INTACT';
+  if (p < 0.35) return 'CHARRING';
+  if (p < 0.6) return 'CALCINING';
+  if (p < 0.85) return 'FRAGMENTING';
+  return 'ASH';
+}
+
+function HoneywellReadout({
+  label,
+  pv,
+  sp,
+  compact,
+}: {
+  label: string;
+  pv: number;
+  sp: number;
+  compact?: boolean;
+}) {
+  if (compact) {
+    return (
+      <div className="w-full mb-1 bg-black border border-zinc-500 rounded px-1 py-0.5 font-mono text-left">
+        <div className="text-[6px] uppercase tracking-wide text-zinc-400 leading-none truncate">
+          {label}
+        </div>
+        <div className="mt-0.5 flex items-end justify-between gap-1">
+          <div className="min-w-0">
+            <div className="text-[6px] text-sky-400 leading-none">PV</div>
+            <div className="text-[12px] text-sky-300 leading-none tabular-nums">
+              {Math.round(pv)}
+            </div>
+          </div>
+          <div className="min-w-0 text-right">
+            <div className="text-[6px] text-amber-300 leading-none">SP</div>
+            <div className="text-[11px] text-amber-200 leading-none tabular-nums">
+              {Math.round(sp)}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="bg-zinc-950 border border-zinc-600 rounded p-2 font-mono">
+      <div className="text-[9px] uppercase tracking-wider text-zinc-500 mb-1">
+        {label}
+      </div>
+      <div className="flex items-end gap-2">
+        <div>
+          <div className="text-[8px] text-sky-400">PV</div>
+          <div className="text-3xl text-sky-300 leading-none tabular-nums">
+            {Math.round(pv)}
+          </div>
+        </div>
+        <div className="pb-0.5">
+          <div className="text-[8px] text-amber-400">SP</div>
+          <div className="text-sm text-amber-300 tabular-nums">
+            {Math.round(sp)}
+          </div>
+        </div>
+      </div>
+      <div className="text-[8px] text-zinc-600 mt-1">Honeywell · Millennium</div>
+    </div>
+  );
+}
+
+function DoorPlate({ title, subtitle }: { title: string; subtitle: string }) {
+  const words = title.split(' ');
+  const stacked = title.length > 12 && words.length > 1;
+  return (
+    <div className="absolute left-1/2 top-[15%] -translate-x-1/2 w-[min(10.75rem,86%)] px-2.5 py-1.5 rounded-md border border-zinc-200/40 bg-zinc-900/55 flex flex-col items-center justify-center text-center overflow-hidden">
+      {stacked ? (
+        words.map((word) => (
+          <span
+            key={word}
+            className="block max-w-full text-[8px] font-black tracking-[0.08em] text-zinc-100 leading-tight"
+          >
+            {word}
+          </span>
+        ))
+      ) : (
+        <span className="block max-w-full text-[8px] font-black tracking-[0.12em] text-zinc-100 leading-tight">
+          {title}
+        </span>
+      )}
+      <span className="text-[7px] text-zinc-300 tracking-[0.14em] mt-0.5">
+        {subtitle}
+      </span>
+    </div>
+  );
+}
+
+function PanelHeading({
+  zoomed,
+  children,
+}: {
+  zoomed: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`text-center font-black uppercase leading-tight text-current ${
+        zoomed
+          ? 'text-[11px] tracking-[0.14em] mb-2'
+          : 'text-[7px] tracking-[0.04em] mb-0.5'
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
+
+const ButtonLookContext = React.createContext<RetortButtonStyleId>('millennium');
+
+function buttonShell(
+  color: 'green' | 'red' | 'silver',
+  size: 'sm' | 'md'
+) {
+  const bg =
+    color === 'green'
+      ? 'bg-emerald-500 border-emerald-300 shadow-emerald-900/50'
+      : color === 'red'
+        ? 'bg-red-600 border-red-300 shadow-red-950/50'
+        : 'bg-zinc-300 border-zinc-100 text-zinc-900 shadow-zinc-900/40';
+  const dim = size === 'sm' ? 'w-10 h-10 text-[8px]' : 'w-14 h-14 text-[10px]';
+  return `${dim} rounded-full border-4 ${bg} shadow-inner font-black leading-tight active:scale-95 disabled:opacity-35 disabled:active:scale-100`;
+}
+
+function buttonLookShell(
+  color: 'green' | 'red' | 'silver',
+  size: 'sm' | 'md',
+  look: RetortButtonStyleId
+) {
+  if (look === 'millennium') return buttonShell(color, size);
+  const dim = size === 'sm' ? 'w-10 h-10 text-[8px]' : 'w-14 h-14 text-[10px]';
+  if (look === 'brass') {
+    const bg =
+      color === 'green'
+        ? 'bg-[#c4a574] text-[#1a140c]'
+        : color === 'red'
+          ? 'bg-[#8a3b16] text-[#f6e7c1]'
+          : 'bg-[#e6d3a1] text-[#1a140c]';
+    return `${dim} rounded-sm border-2 border-[#5c4318] ${bg} font-black shadow-[inset_0_2px_0_rgba(255,255,255,0.45)] active:translate-y-px`;
+  }
+  if (look === 'touch') {
+    const bg =
+      color === 'green'
+        ? 'bg-emerald-400 text-slate-950'
+        : color === 'red'
+          ? 'bg-rose-500 text-white'
+          : 'bg-slate-100 text-slate-900';
+    return `${dim} rounded-md border border-cyan-200/50 ${bg} font-semibold tracking-wide shadow-[inset_0_0_12px_rgba(255,255,255,0.25)]`;
+  }
+  return `${dim} rounded-full border-[5px] border-[#1a120c] bg-[#f3e6c8] text-[#1a120c] font-black shadow-[inset_0_0_0_3px_#8a7048]`;
+}
+
+function PushButton({
+  color,
+  label,
+  onPress,
+  disabled,
+  size = 'md',
+  tutorialTarget,
+}: {
+  color: 'green' | 'red' | 'silver';
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  size?: 'sm' | 'md';
+  tutorialTarget?: string;
+}) {
+  const look = React.useContext(ButtonLookContext);
+  return (
+    <button
+      type="button"
+      data-tutorial-target={tutorialTarget}
+      disabled={disabled}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        onPress();
+      }}
+      className={buttonLookShell(color, size, look)}
+    >
+      {label}
+    </button>
+  );
+}
+
+/** Hold to jog the refractory door — releases stop travel mid-stroke */
+function HoldButton({
+  color,
+  label,
+  onHoldStart,
+  onHoldEnd,
+  disabled,
+  size = 'md',
+  tutorialTarget,
+}: {
+  color: 'green' | 'red' | 'silver';
+  label: string;
+  onHoldStart: () => void;
+  onHoldEnd: () => void;
+  disabled?: boolean;
+  size?: 'sm' | 'md';
+  tutorialTarget?: string;
+}) {
+  const look = React.useContext(ButtonLookContext);
+  const startRef = useRef(onHoldStart);
+  const endRef = useRef(onHoldEnd);
+  startRef.current = onHoldStart;
+  endRef.current = onHoldEnd;
+
+  return (
+    <button
+      type="button"
+      data-tutorial-target={tutorialTarget}
+      disabled={disabled}
+      onPointerDown={(e) => {
+        if (disabled) return;
+        e.stopPropagation();
+        e.preventDefault();
+        try {
+          (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+        } catch {
+          /* automation and some WebViews reject capture; window listeners still end the jog */
+        }
+        startRef.current();
+        const pointerId = e.pointerId;
+        const end = (ev: PointerEvent) => {
+          if (ev.pointerId !== pointerId) return;
+          endRef.current();
+          window.removeEventListener('pointerup', end);
+          window.removeEventListener('pointercancel', end);
+        };
+        window.addEventListener('pointerup', end);
+        window.addEventListener('pointercancel', end);
+      }}
+      className={buttonLookShell(color, size, look)}
+    >
+      {label}
+    </button>
+  );
+}
+
+function lampInk(look: RetortButtonStyleId): string {
+  if (look === 'touch') return 'text-cyan-50';
+  if (look === 'dial') return 'text-[#f6efe2]';
+  if (look === 'brass') return 'text-[#1a1208]';
+  return 'text-zinc-800';
+}
+
+function StatusLamp({
+  on,
+  color,
+  label,
+  compact,
+  tutorialTarget,
+}: {
+  on: boolean;
+  color: 'white' | 'amber' | 'green' | 'red';
+  label: string;
+  compact?: boolean;
+  tutorialTarget?: string;
+}) {
+  const look = React.useContext(ButtonLookContext);
+  const lit =
+    color === 'amber'
+      ? 'bg-amber-400 shadow-[0_0_12px_#fbbf24]'
+      : color === 'green'
+        ? 'bg-emerald-400 shadow-[0_0_12px_#34d399]'
+        : color === 'red'
+          ? 'bg-red-500 shadow-[0_0_12px_#ef4444]'
+          : 'bg-zinc-100 shadow-[0_0_10px_#f4f4f5]';
+  return (
+    <div
+      className="flex flex-col items-center gap-0.5 min-w-0 w-full"
+      data-tutorial-target={tutorialTarget}
+    >
+      <div
+        className={`w-4 h-4 rounded-full border border-zinc-700 transition-all shrink-0 ${
+          on ? lit : 'bg-zinc-800'
+        } ${on && (color === 'amber' || color === 'red') ? 'animate-pulse' : ''}`}
+      />
+      <span
+        className={`block w-full text-center font-bold uppercase leading-tight whitespace-normal ${lampInk(look)} ${
+          compact ? 'text-[7px]' : 'text-[10px]'
+        }`}
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function playControlClick(e: React.PointerEvent) {
+  const btn = (e.target as HTMLElement | null)?.closest?.('button');
+  if (!btn || (btn as HTMLButtonElement).disabled) return;
+  audioManager.playUiClick(
+    btn.getAttribute('data-click') === 'tick' ? 'tick' : 'clunk'
+  );
+}
 
 export const CremationMiniGame: React.FC = () => {
-  const { currentCase, completeCremation, setActiveStation } = useGameStore();
-  const targets = getCremationTargets(currentCase.weightLbs);
+  const {
+    cases,
+    activeCaseId,
+    completeCremation,
+    setActiveStation,
+    takeCaseToStation,
+    focusCase,
+    retort,
+    retortMachines,
+    activeRetortIndex,
+    retortBays,
+    patchRetort,
+    ensureRetortForCase,
+    selectRetort,
+    chargeRetortFuel,
+    queueCaseOnRetort,
+  } = useGameStore();
 
-  const [phase, setPhase] = useState<'BURNING' | 'SWEEPING'>('BURNING');
-  const [tempF, setTempF] = useState(1100);
-  const [elapsedSec, setElapsedSec] = useState(0);
-  const [stirCount, setStirCount] = useState(0);
-  const [thermalWarnings, setThermalWarnings] = useState(0);
+  const bayCount = Math.max(1, retortMachines.length || 1);
+  const bayIndex = Math.max(0, Math.min(bayCount - 1, activeRetortIndex || 0));
+  const bay = retortBays[bayIndex] ?? defaultRetortBay();
+  const swipeRef = useRef<{ x: number; y: number } | null>(null);
 
-  const [activeTool, setActiveTool] = useState<SweepTool>('IRON_RAKE');
-  const [largeBonesLeft, setLargeBonesLeft] = useState(100);
-  const [mediumBonesLeft, setMediumBonesLeft] = useState(100);
-  const [fineAshLeft, setFineAshLeft] = useState(100);
-
-  const progress = Math.min(1, elapsedSec / targets.targetDurationSec);
-  const maxSafeTemp = targets.getMaxSafeTempF(progress);
+  const otherCaseIds = new Set(
+    retortMachines
+      .filter((_, i) => i !== bayIndex)
+      .map((m) => m.caseId)
+      .filter((id): id is string => !!id)
+  );
+  const retortBoundCase =
+    retort.caseId != null
+      ? (cases.find(
+          (c) => c.id === retort.caseId && c.location === 'CREMATION'
+        ) ?? null)
+      : null;
+  const currentCase =
+    retortBoundCase ??
+    (retort.caseId == null || retort.phase === 'IDLE' || retort.phase === 'DONE'
+      ? (cases.find(
+          (c) => c.location === 'CREMATION' && !otherCaseIds.has(c.id)
+        ) ?? null)
+      : null);
 
   useEffect(() => {
-    if (phase !== 'BURNING') return;
-    const timer = setInterval(() => {
-      setElapsedSec((prev) => {
-        const burnRate = tempF / 1400;
-        return prev + burnRate * 3;
-      });
+    if (currentCase && currentCase.id !== activeCaseId) {
+      focusCase(currentCase.id);
+    }
+  }, [currentCase, activeCaseId, focusCase]);
 
-      if (tempF > maxSafeTemp) {
-        setThermalWarnings((w) => w + 1);
-      }
-    }, 300);
+  useEffect(() => {
+    if (!currentCase) return;
+    // Only bind a new session when the chamber is free
+    if (
+      retort.caseId == null ||
+      retort.phase === 'IDLE' ||
+      retort.phase === 'DONE' ||
+      retort.caseId === currentCase.id
+    ) {
+      ensureRetortForCase(currentCase.id);
+    }
+  }, [currentCase, ensureRetortForCase, retort.caseId, retort.phase]);
 
-    return () => clearInterval(timer);
-  }, [phase, tempF, maxSafeTemp]);
+  const targets = currentCase
+    ? getCremationTargets(currentCase.weightLbs)
+    : null;
 
-  const handleStir = () => {
-    setStirCount((s) => s + 1);
-    setTempF((t) => Math.max(1000, t - 120));
+  const [panelZoomed, setPanelZoomed] = useState(false);
+  const [toolMenuOpen, setToolMenuOpen] = useState(false);
+  const [toolHeld, setToolHeld] = useState(false);
+  const [toolPos, setToolPos] = useState(() =>
+    useGameStore.getState().retort.activeTool === 'BRISTLE_BRUSH'
+      ? { x: 52, y: 86 }
+      : { x: 52, y: 40 }
+  );
+  const [brushFlex, setBrushFlex] = useState({ lean: 0, push: 0 });
+  const [toolGlide, setToolGlide] = useState(false);
+  const [boneNudge, setBoneNudge] = useState(0);
+  const [boneContact, setBoneContact] = useState<BoneContact | null>(null);
+  const [contactHot, setContactHot] = useState(false);
+  const [hearthHint, setHearthHint] = useState<string | null>(null);
+  const [dialChamber, setDialChamber] = useState<'PRIMARY' | 'SECONDARY'>(
+    'PRIMARY'
+  );
+  const [dust, setDust] = useState<
+    {
+      id: number;
+      x: number;
+      y: number;
+      dx: number;
+      dy: number;
+      size: number;
+      tone: string;
+    }[]
+  >([]);
+  const [scrape, setScrape] = useState<{ id: number; x: number; y: number } | null>(
+    null
+  );
+
+  const chamberRef = useRef<HTMLDivElement>(null);
+  const lastHaptic = useRef(0);
+  const lastStirAt = useRef(0);
+  const lastContactFx = useRef(0);
+  const dustSeq = useRef(1);
+  const prevToolPoint = useRef<{ x: number; y: number } | null>(null);
+  const strokeRef = useRef({ minY: 100, accum: 0, credited: false });
+  const circularStirRef = useRef(createCircularStirState());
+  const contactHotTimer = useRef<number | null>(null);
+
+  const {
+    blowerOn,
+    purging,
+    heated,
+    purgeEndsAt,
+    secondaryOn,
+    primaryOn,
+    secondaryTemp,
+    primaryTemp,
+    doorOpen,
+    doorMoving,
+    elapsedSec,
+    stirCount,
+    earlyPrimaryStarts,
+    thermalWarnings,
+    phase,
+    largeBonesLeft,
+    mediumBonesLeft,
+    fineAshLeft,
+    activeTool,
+    primarySetPoint,
+    secondarySetPoint,
+  } = retort;
+
+  const secondarySp = secondarySetPoint;
+  const primarySp = primarySetPoint;
+
+  const progress =
+    targets != null
+      ? retortProgress(elapsedSec, targets.targetDurationSec)
+      : 0;
+  const bonePhase = bonePhaseFromProgress(progress);
+  const canStartPrimary =
+    secondaryOn && secondaryTemp >= 800 && !purging;
+
+  const startBlower = () => {
+    if (blowerOn) return;
+    patchRetort({
+      blowerOn: true,
+      purging: true,
+      heated: false,
+      purgeEndsAt: Date.now() + purgeMsFor(randomPurgeMs(), bay.preheat),
+      phase: phase === 'IDLE' ? 'LOAD' : phase,
+    });
   };
 
-  const handleSweepPull = () => {
-    if (activeTool === 'IRON_RAKE') {
-      setLargeBonesLeft((v) => {
-        const next = Math.max(0, v - 25);
-        if (next < v) void hapticIronRake();
-        return next;
+  const stopBlower = () => {
+    patchRetort({
+      blowerOn: false,
+      purging: false,
+      heated: false,
+      purgeEndsAt: null,
+      secondaryOn: false,
+      primaryOn: false,
+      audioMode: 'OFF',
+    });
+  };
+
+  const startSecondary = () => {
+    if (!heated) return;
+    patchRetort({
+      secondaryOn: true,
+      phase:
+        (phase === 'LOAD' || phase === 'IDLE') && doorOpen < 0.2
+          ? 'BURN'
+          : phase === 'IDLE'
+            ? 'LOAD'
+            : phase,
+    });
+  };
+
+  const startPrimary = () => {
+    if (!canStartPrimary) return;
+    if (!retort.fuelCharged) chargeRetortFuel();
+    patchRetort({
+      primaryOn: true,
+      earlyPrimaryStarts:
+        secondaryTemp < 850
+          ? earlyPrimaryStarts + 1
+          : earlyPrimaryStarts,
+      phase: phase === 'LOAD' || phase === 'IDLE' ? 'BURN' : phase,
+      audioMode: retort.audioMode === 'OFF' ? 'START' : retort.audioMode,
+    });
+  };
+
+  const sweepArmed = useRef(false);
+  const audioMovingRef = useRef(false);
+  useEffect(() => {
+    void crematoryToolSfx.preload();
+    return () => crematoryToolSfx.stopAll();
+  }, []);
+  useEffect(() => {
+    if (progress < 1 || phase !== 'BURN' || sweepArmed.current) return;
+    sweepArmed.current = true;
+    const door = useGameStore.getState().retort.doorOpen;
+    patchRetort({
+      primaryOn: false,
+      secondaryOn: false,
+      audioMode: 'OFF',
+      phase: 'SWEEP',
+      doorMoving: door < 0.72 ? 'UP' : null,
+      largeBonesLeft: 100,
+      mediumBonesLeft: 100,
+      fineAshLeft: 100,
+    });
+    setHearthHint(
+      'Calcination finished. Open Tools — sweep; contact nudges bones.'
+    );
+  }, [progress, phase, patchRetort]);
+
+  const hintAt = useRef(0);
+  const toolHeldRef = useRef(false);
+  const showHint = (text: string) => {
+    if (Date.now() - hintAt.current < 1100) return;
+    hintAt.current = Date.now();
+    setHearthHint(text);
+    window.setTimeout(() => {
+      setHearthHint((current) => (current === text ? null : current));
+    }, 1600);
+  };
+
+  const spawnDust = (
+    x: number,
+    y: number,
+    kind: 'ash' | 'char' | 'ember'
+  ) => {
+    const count = kind === 'ember' ? 10 : kind === 'ash' ? 14 : 7;
+    const motes = Array.from({ length: count }).map((_, i) => {
+      const id = dustSeq.current++;
+      const angle = -Math.PI / 2 + (i / 12) * Math.PI - 0.4;
+      const dist = 18 + (i % 5) * 10;
+      return {
+        id,
+        x,
+        y,
+        dx: Math.cos(angle) * dist,
+        dy: Math.sin(angle) * dist - 10,
+        size:
+          kind === 'ember'
+            ? 4 + (i % 3) * 2
+            : kind === 'ash'
+              ? 7 + (i % 4) * 3
+              : 5 + (i % 3) * 2,
+        tone:
+          kind === 'ember' ? 'ember' : kind === 'ash' ? '0.95' : '0.55',
+      };
+    });
+    setDust((prev) => [...prev.slice(-28), ...motes]);
+    window.setTimeout(() => {
+      const ids = new Set(motes.map((m) => m.id));
+      setDust((prev) => prev.filter((m) => !ids.has(m.id)));
+    }, 980);
+    setScrape({ id: dustSeq.current++, x, y });
+  };
+
+  /** Shared contact FX for every cremation tool over remains. */
+  const applyToolContact = (
+    x: number,
+    y: number,
+    moving: boolean
+  ) => {
+    if (!moving || !nearRemains(x, y)) return false;
+    const now = Date.now();
+    setBoneNudge((n) => n + 1);
+    setBoneContact((prev) => ({ x, y, n: (prev?.n ?? 0) + 1 }));
+    setContactHot(true);
+    if (contactHotTimer.current != null) {
+      window.clearTimeout(contactHotTimer.current);
+    }
+    contactHotTimer.current = window.setTimeout(
+      () => setContactHot(false),
+      220
+    );
+    if (now - lastContactFx.current > 90) {
+      lastContactFx.current = now;
+      spawnDust(x, y, phase === 'SWEEP' ? 'char' : 'ember');
+    }
+    if (now - lastHaptic.current > 140) {
+      lastHaptic.current = now;
+      void hapticBoneContact();
+    }
+    return true;
+  };
+
+  const pointInChamber = (clientX: number, clientY: number) => {
+    const rect = chamberRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const x = Math.min(96, Math.max(4, ((clientX - rect.left) / rect.width) * 100));
+    const y = Math.min(94, Math.max(6, ((clientY - rect.top) / rect.height) * 100));
+    return { x, y };
+  };
+
+  const applyDownstroke = (tool: SweepTool, x: number, y: number) => {
+    const live = useGameStore.getState().retort;
+    if (live.phase !== 'SWEEP') {
+      showHint('The charge is still calcining.');
+      return;
+    }
+    if (live.doorOpen < 0.35) {
+      showHint('Open the door to reach the hearth.');
+      return;
+    }
+    if (tool === 'IRON_RAKE') {
+      if (live.largeBonesLeft <= 0) {
+        showHint('Large bones are clear. Take the fragment brush.');
+        return;
+      }
+      let fall: ReturnType<typeof fallClipFor> = null;
+      useGameStore.setState((s) => {
+        const largeBefore = s.retort.largeBonesLeft;
+        const largeAfter = Math.max(0, largeBefore - 20);
+        fall = fallClipFor({
+          tool,
+          largeBefore,
+          largeAfter,
+          mediumBefore: s.retort.mediumBonesLeft,
+          mediumAfter: s.retort.mediumBonesLeft,
+        });
+        return {
+          retort: {
+            ...s.retort,
+            largeBonesLeft: largeAfter,
+          },
+        };
       });
-    } else if (activeTool === 'BRISTLE_BRUSH' && largeBonesLeft === 0) {
-      setMediumBonesLeft((v) => Math.max(0, v - 25));
-    } else if (activeTool === 'HAND_BRUSH' && mediumBonesLeft === 0) {
-      setFineAshLeft((v) => Math.max(0, v - 25));
+      if (fall) crematoryToolSfx.playFall(fall);
+      spawnDust(x, y, 'char');
+      void hapticIronRake();
+    } else if (tool === 'HAND_BRUSH') {
+      if (live.largeBonesLeft > 0) {
+        showHint('Rake the large bones first.');
+        return;
+      }
+      if (live.mediumBonesLeft <= 0) {
+        showHint('Fragments are clear. Take the hand brush.');
+        return;
+      }
+      let fall: ReturnType<typeof fallClipFor> = null;
+      useGameStore.setState((s) => {
+        const mediumBefore = s.retort.mediumBonesLeft;
+        const mediumAfter = Math.max(0, mediumBefore - 22);
+        fall = fallClipFor({
+          tool,
+          largeBefore: s.retort.largeBonesLeft,
+          largeAfter: s.retort.largeBonesLeft,
+          mediumBefore,
+          mediumAfter,
+        });
+        return {
+          retort: {
+            ...s.retort,
+            mediumBonesLeft: mediumAfter,
+          },
+        };
+      });
+      if (fall) crematoryToolSfx.playFall(fall);
+      spawnDust(x, y, 'char');
+      void hapticIronRake();
+    } else if (tool === 'BRISTLE_BRUSH') {
+      if (live.mediumBonesLeft > 0 || live.largeBonesLeft > 0) {
+        showHint('Clear bones and fragments before the ash.');
+        return;
+      }
+      if (live.fineAshLeft <= 0) return;
+      useGameStore.setState((s) => ({
+        retort: {
+          ...s.retort,
+          fineAshLeft: Math.max(0, s.retort.fineAshLeft - 25),
+        },
+      }));
+      spawnDust(x, y, 'ash');
+    }
+    setBoneNudge((n) => n + 1);
+  };
+
+  const selectTool = (tool: SweepTool) => {
+    crematoryToolSfx.setSweep(null);
+    audioMovingRef.current = false;
+    setBrushFlex({ lean: 0, push: 0 });
+    patchRetort({ activeTool: tool });
+    setToolMenuOpen(false);
+    setPanelZoomed(false);
+    setToolHeld(false);
+    setToolGlide(true);
+    setToolPos({ x: 18, y: 86 });
+    window.setTimeout(
+      () =>
+        setToolPos(
+          tool === 'BRISTLE_BRUSH' ? { x: 52, y: 86 } : { x: 54, y: 70 }
+        ),
+      40
+    );
+    window.setTimeout(() => setToolGlide(false), 520);
+  };
+
+  const moveHeldTool = (clientX: number, clientY: number) => {
+    const point = pointInChamber(clientX, clientY);
+    if (!point || !activeTool) return;
+    const prev = prevToolPoint.current ?? point;
+    prevToolPoint.current = point;
+    setToolPos(point);
+
+    const dist = Math.hypot(point.x - prev.x, point.y - prev.y);
+    const moving = dist > 1.2;
+    const dy = point.y - prev.y;
+    const overHearth =
+      point.x > 10 && point.x < 92 && point.y > 48 && point.y < 98;
+    const audioMoving = latchToolMoving(audioMovingRef.current, dist);
+    audioMovingRef.current = audioMoving;
+    const liveTool = useGameStore.getState().retort;
+    crematoryToolSfx.setSweep(
+      sweepClipFor({
+        tool: liveTool.activeTool,
+        moving: audioMoving,
+        onHearth: overHearth,
+        touchingBones:
+          overHearth &&
+          nearRemains(point.x, point.y) &&
+          hearthHasBones(liveTool.largeBonesLeft, liveTool.mediumBonesLeft),
+        phase: liveTool.phase,
+      })
+    );
+    const isBrush =
+      liveTool.activeTool === 'BRISTLE_BRUSH' ||
+      liveTool.activeTool === 'HAND_BRUSH';
+    const sweepingAsh =
+      isBrush && liveTool.phase === 'SWEEP' && overHearth && audioMoving;
+    if (sweepingAsh) {
+      setBrushFlex({
+        lean: Math.max(-1, Math.min(1, (prev.x - point.x) / 2.2)),
+        push: Math.max(0, Math.min(1, (point.y - prev.y) / 2.4)),
+      });
+    } else if (isBrush) {
+      setBrushFlex((cur) =>
+        cur.lean === 0 && cur.push === 0 ? cur : { lean: 0, push: 0 }
+      );
+    }
+
+    // Contact feedback for ALL tools (rod, rake, brushes)
+    applyToolContact(point.x, point.y, moving);
+
+    if (activeTool === 'STIRRING_ROD') {
+      const live = useGameStore.getState().retort;
+      if (live.doorOpen <= STIR_DOOR_MIN) {
+        if (dist > 5) showHint('Open the door past 16% to stir.');
+        resetCircularStir(circularStirRef.current);
+        return;
+      }
+      if (live.phase !== 'BURN' || !live.primaryOn) {
+        if (dist > 6) showHint('Primary must be firing to stir.');
+        resetCircularStir(circularStirRef.current);
+        return;
+      }
+      if (!nearRemains(point.x, point.y)) {
+        // Linear wanders outside the charge don't build stir credit
+        return;
+      }
+      const credited = feedCircularStir(circularStirRef.current, point);
+      if (credited && Date.now() - lastStirAt.current > 280) {
+        lastStirAt.current = Date.now();
+        useGameStore.setState((s) => ({
+          retort: {
+            ...s.retort,
+            stirCount: s.retort.stirCount + 1,
+            primaryTemp: Math.max(
+              850,
+              s.retort.primaryTemp - 55 - s.retort.doorOpen * 40
+            ),
+          },
+        }));
+        spawnDust(point.x, point.y, 'ember');
+        if (Date.now() - lastHaptic.current > 100) {
+          lastHaptic.current = Date.now();
+          void hapticIronRake();
+        }
+        showHint('Circular stir — keep orbiting the charge.');
+      }
+      return;
+    }
+
+    // Sweep tools: downstroke still clears piles; contact already nudged bones
+    if (dy < -1.5) {
+      strokeRef.current = { minY: point.y, accum: 0, credited: false };
+      return;
+    }
+    if (point.y < strokeRef.current.minY) strokeRef.current.minY = point.y;
+    if (dy > 0 && overHearth) {
+      strokeRef.current.accum += dy;
+      const traveled = point.y - strokeRef.current.minY;
+      if (
+        !strokeRef.current.credited &&
+        strokeRef.current.accum >= 11 &&
+        traveled >= 11
+      ) {
+        strokeRef.current.credited = true;
+        applyDownstroke(activeTool, point.x, point.y);
+      }
     }
   };
 
   const finishRetortProcess = () => {
+    if (!currentCase || !targets) return;
     const stirDiff = Math.abs(stirCount - targets.requiredStirs);
-    const rank =
-      thermalWarnings === 0 && stirDiff === 0
+    let rank: Rank =
+      thermalWarnings === 0 && stirDiff === 0 && earlyPrimaryStarts === 0
         ? 'S+'
-        : thermalWarnings <= 2 && stirDiff <= 1
-          ? 'A'
-          : 'C';
-    completeCremation(rank, currentCase.weightLbs * 15);
+        : thermalWarnings <= 1 && stirDiff <= 1 && earlyPrimaryStarts === 0
+          ? 'S'
+          : thermalWarnings <= 3 && stirDiff <= 2
+            ? 'A'
+            : earlyPrimaryStarts > 0 || thermalWarnings > 5
+              ? 'C'
+              : 'B';
+    if (earlyPrimaryStarts > 1) {
+      rank = rank === 'S+' || rank === 'S' ? 'B' : rank === 'A' ? 'C' : 'F';
+    }
+    completeCremation(rank, currentCase.weightLbs * 15, currentCase.id);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 bg-stone-950/95 text-stone-100 p-4 md:p-6 flex flex-col justify-between select-none">
-      <div className="flex justify-between items-center border-b border-stone-800 pb-3 gap-3">
-        <div>
-          <h2 className="text-lg md:text-xl font-bold text-orange-400">
-            RETORT CHAMBER — {currentCase.name} ({currentCase.weightLbs} lbs)
-          </h2>
-          <p className="text-xs text-stone-400">
-            Directive:{' '}
-            <span className="text-amber-300 font-mono">
-              {currentCase.directive}
-            </span>{' '}
-            | Hint: Heavy cases (&gt;200 lbs) require stepped intervals (1,200°F
-            → 1,400°F → 1,600°F) | Required stirs: {targets.requiredStirs}
-          </p>
+  const pager =
+    bayCount < 2 ? null : (
+      <div className="shrink-0 flex items-center justify-center gap-4 py-2">
+        <button
+          type="button"
+          aria-label="Previous retort"
+          onPointerDown={() =>
+            selectRetort((bayIndex + bayCount - 1) % bayCount)
+          }
+          className="w-10 h-10 rounded-full border border-stone-500 text-lg leading-none"
+        >
+          ‹
+        </button>
+        <div className="flex items-center gap-2">
+          {Array.from({ length: bayCount }).map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              aria-label={`Retort ${String.fromCharCode(65 + i)}`}
+              onPointerDown={() => selectRetort(i)}
+              className={`w-2.5 h-2.5 rounded-full ${
+                i === bayIndex ? 'bg-orange-300' : 'bg-stone-600'
+              }`}
+            />
+          ))}
         </div>
         <button
           type="button"
-          onPointerDown={() => setActiveStation('OVERVIEW')}
-          className="px-4 py-2 bg-stone-800 rounded text-sm active:bg-stone-700"
+          aria-label="Next retort"
+          onPointerDown={() => selectRetort((bayIndex + 1) % bayCount)}
+          className="w-10 h-10 rounded-full border border-stone-500 text-lg leading-none"
         >
-          Abort
+          ›
         </button>
       </div>
+    );
 
-      {phase === 'BURNING' ? (
-        <div className="flex-1 flex flex-col justify-around my-4 gap-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-stone-900 p-4 rounded border border-stone-800">
-              <div className="text-xs text-stone-400">CHAMBER TEMPERATURE</div>
-              <div
-                className={`text-3xl font-mono ${
-                  tempF > maxSafeTemp
-                    ? 'text-red-500 animate-bounce'
-                    : 'text-orange-400'
-                }`}
-              >
-                {tempF}°F
-              </div>
-              <div className="text-xs text-stone-500 mt-1">
-                Safe Ceiling at current stage: {maxSafeTemp}°F
-              </div>
-            </div>
+  if (!currentCase || !targets) {
+    return (
+      <div
+        className="fixed inset-0 z-[60] bg-stone-950 text-stone-100 flex flex-col items-center justify-center gap-4 p-6 pb-28"
+        onPointerDownCapture={playControlClick}
+      >
+        <p className="text-center max-w-sm text-sm">
+          No case loaded in the crematory. Move remains here from the Cooler
+          (Cremate).
+        </p>
+        <button
+          type="button"
+          onPointerDown={() => setActiveStation('COOLER')}
+          className="px-4 py-2 bg-cyan-700 rounded font-semibold"
+        >
+          Open Cooler
+        </button>
+        {pager}
+      </div>
+    );
+  }
 
-            <div className="bg-stone-900 p-4 rounded border border-stone-800">
-              <div className="text-xs text-stone-400">CALCINATION PROGRESS</div>
-              <div className="text-3xl font-mono text-amber-300">
-                {Math.round(progress * 100)}%
-              </div>
-              <div className="text-xs text-stone-500 mt-1">
-                Stirs: {stirCount}/{targets.requiredStirs} | Thermal Runaways:{' '}
-                {thermalWarnings}
-              </div>
-            </div>
-
-            <div className="bg-stone-900 p-4 rounded border border-stone-800 flex flex-col justify-between gap-2">
-              <span className="text-xs text-stone-400">RETORT RAKE STIRRING</span>
-              <button
-                type="button"
-                onPointerDown={handleStir}
-                className="py-2 bg-amber-700 active:bg-amber-600 rounded font-bold text-sm"
-              >
-                Open Sight-Door & Stir Mass (-120°F)
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-stone-900 p-4 rounded border border-stone-800">
-            <label className="text-sm font-semibold block mb-2">
-              Adjust Burner Valve (1,000°F – 1,600°F):
-            </label>
-            <input
-              type="range"
-              min={1000}
-              max={1600}
-              step={50}
-              value={tempF}
-              onChange={(e) => setTempF(Number(e.target.value))}
-              className="w-full accent-orange-500"
-            />
-          </div>
-
-          {progress >= 1 && (
-            <button
-              type="button"
-              onPointerDown={() => setPhase('SWEEPING')}
-              className="w-full py-3 bg-emerald-600 active:bg-emerald-500 font-bold rounded text-lg"
-            >
-              Cool Chamber & Begin 3-Tool Retort Sweep →
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="flex-1 flex flex-col justify-between my-4 gap-3">
-          <div className="flex gap-2 md:gap-3 flex-wrap">
-            <button
-              type="button"
-              onPointerDown={() => setActiveTool('IRON_RAKE')}
-              className={`flex-1 min-w-[140px] py-2 rounded font-bold ${
-                activeTool === 'IRON_RAKE' ? 'bg-orange-600' : 'bg-stone-800'
-              }`}
-            >
-              1. Iron Rake (Large Bones: {largeBonesLeft}%)
-            </button>
-            <button
-              type="button"
-              onPointerDown={() => setActiveTool('BRISTLE_BRUSH')}
-              className={`flex-1 min-w-[140px] py-2 rounded font-bold ${
-                activeTool === 'BRISTLE_BRUSH' ? 'bg-orange-600' : 'bg-stone-800'
-              }`}
-            >
-              2. Iron Bristle Brush (Medium: {mediumBonesLeft}%)
-            </button>
-            <button
-              type="button"
-              onPointerDown={() => setActiveTool('HAND_BRUSH')}
-              className={`flex-1 min-w-[140px] py-2 rounded font-bold ${
-                activeTool === 'HAND_BRUSH' ? 'bg-orange-600' : 'bg-stone-800'
-              }`}
-            >
-              3. Hand Brush (Fine Ash: {fineAshLeft}%)
-            </button>
-          </div>
-
-          <div
-            onPointerDown={handleSweepPull}
-            className="flex-1 my-2 bg-stone-900 border-2 border-stone-700 rounded-xl flex flex-col items-center justify-center active:bg-stone-800 touch-none"
+  if (currentCase.isCremated || phase === 'DONE') {
+    return (
+      <div
+        className="safe-screen fixed inset-0 z-[60] bg-stone-950 text-stone-100 flex flex-col select-none"
+        onPointerDownCapture={playControlClick}
+      >
+        <div className="flex justify-between border-b border-stone-800 pb-3 gap-2">
+          <h2 className="text-base font-bold text-orange-400">
+            CREMATION COMPLETE — {displayCaseName(currentCase)}
+          </h2>
+          <button
+            type="button"
+            data-tutorial-target="back"
+            onPointerDown={() => setActiveStation('OVERVIEW')}
+            className="min-h-11 px-3 bg-stone-800 rounded text-xs shrink-0"
           >
-            <p className="text-base md:text-lg font-bold text-amber-300 text-center px-4">
-              TAP / SWIPE TO PULL REMAINS FROM BACK OF RETORT TOWARD HOPPER
-            </p>
-            <p className="text-xs text-stone-400 mt-1 text-center px-4">
-              Clear Large Bone pieces first, then Medium, then Fine Ash into the
-              cooling tray & Ossilegium Commune.
-            </p>
-          </div>
+            Back
+          </button>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center">
+          <p className="text-3xl font-black text-amber-300">
+            Retort {currentCase.cremationRank ?? '—'}
+          </p>
+          <button
+            type="button"
+            onPointerDown={() =>
+              takeCaseToStation(currentCase.id, 'URN_FILLING')
+            }
+            className="px-6 py-3 bg-amber-500 text-stone-950 font-bold rounded"
+          >
+            Open Urn Processor →
+          </button>
+          <CaseTransferBar currentCase={currentCase} />
+        </div>
+        {pager}
+      </div>
+    );
+  }
 
-          {fineAshLeft === 0 && (
-            <button
-              type="button"
-              onPointerDown={finishRetortProcess}
-              className="w-full py-3 bg-amber-500 text-stone-950 font-bold rounded text-lg active:bg-amber-400"
-            >
-              Transfer Tray to Urn Processor →
-            </button>
-          )}
+  const purgeSecLeft =
+    purging && purgeEndsAt
+      ? Math.max(0, Math.ceil((purgeEndsAt - Date.now()) / 1000))
+      : 0;
+
+  const stockPanel =
+    bay.buttons === 'millennium'
+      ? 'bg-gradient-to-b from-zinc-300 via-zinc-400 to-zinc-500 border-2 border-zinc-600 shadow-xl text-zinc-900'
+      : (panelChrome(bay.buttons) ??
+        'bg-gradient-to-b from-zinc-300 via-zinc-400 to-zinc-500 border-2 border-zinc-600 shadow-xl text-zinc-900');
+  const controlPanel = (zoomed: boolean) => (
+    <div
+      className={`${stockPanel} overflow-y-auto ${
+        zoomed ? 'flex-1 p-4 rounded-xl' : 'w-[38%] max-w-[152px] p-1 rounded-lg'
+      }`}
+      onPointerDown={(e) => {
+        if (!zoomed) {
+          e.stopPropagation();
+          setPanelZoomed(true);
+        }
+      }}
+    >
+      {zoomed && (
+        <button
+          type="button"
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            setPanelZoomed(false);
+          }}
+          className="mb-3 w-full py-2 bg-zinc-800 text-zinc-100 rounded font-bold text-xs"
+        >
+          ← Back to Retort View
+        </button>
+      )}
+      {!zoomed && (
+        <div className="text-[7px] font-black text-center text-current mb-1 leading-tight">
+          TAP TO OPERATE
         </div>
       )}
+
+      <PanelHeading zoomed={zoomed}>Blower</PanelHeading>
+      <div className={`flex justify-center ${zoomed ? 'gap-4 mb-2' : 'gap-1 mb-1'}`}>
+        <PushButton
+          color="green"
+          label="START"
+          onPress={startBlower}
+          size={zoomed ? 'md' : 'sm'}
+          tutorialTarget="blower-start"
+        />
+        <PushButton
+          color="red"
+          label="STOP"
+          onPress={stopBlower}
+          size={zoomed ? 'md' : 'sm'}
+        />
+      </div>
+      <div
+        className={`grid grid-cols-3 w-full ${zoomed ? 'gap-3 mb-3 px-2' : 'gap-1 mb-1'}`}
+      >
+        <StatusLamp
+          compact={!zoomed}
+          on={blowerOn && !purging}
+          color="white"
+          label="Ready"
+        />
+        <StatusLamp
+          compact={!zoomed}
+          on={purging}
+          color="amber"
+          label={purging ? `Purging ${purgeSecLeft}s` : 'Purging'}
+        />
+        <StatusLamp
+          compact={!zoomed}
+          on={heated && !purging}
+          color="green"
+          label="Heated"
+          tutorialTarget="heated"
+        />
+      </div>
+
+      {zoomed && <div className="h-px bg-zinc-600/50 my-2" />}
+
+      <PanelHeading zoomed={zoomed}>Secondary Chamber</PanelHeading>
+      <div className={`flex justify-center ${zoomed ? 'gap-3 mb-1' : 'gap-1 mb-1'}`}>
+        <PushButton
+          color="green"
+          label="START"
+          onPress={startSecondary}
+          disabled={!heated}
+          size={zoomed ? 'md' : 'sm'}
+          tutorialTarget="secondary-start"
+        />
+        <PushButton
+          color="red"
+          label="STOP"
+          onPress={() => {
+            patchRetort({
+              secondaryOn: false,
+              primaryOn: false,
+              audioMode: 'OFF',
+            });
+          }}
+          size={zoomed ? 'md' : 'sm'}
+        />
+      </div>
+      <HoneywellReadout
+        compact={!zoomed}
+        label="Afterburner"
+        pv={secondaryTemp}
+        sp={secondarySp}
+      />
+      {zoomed && (
+        <p className="text-[8px] text-center text-current mt-1 mb-2">
+          Reach ~800°F before primary. Ideal ≥850°F.
+        </p>
+      )}
+
+      {zoomed && <div className="h-px bg-zinc-600/50 my-2" />}
+
+      <PanelHeading zoomed={zoomed}>Primary Chamber</PanelHeading>
+      <div className={`flex justify-center ${zoomed ? 'gap-3 mb-1' : 'gap-1 mb-1'}`}>
+        <PushButton
+          color="green"
+          label="START"
+          onPress={startPrimary}
+          disabled={!canStartPrimary}
+          size={zoomed ? 'md' : 'sm'}
+          tutorialTarget="primary-start"
+        />
+        <PushButton
+          color="red"
+          label="STOP"
+          onPress={() =>
+            patchRetort({ primaryOn: false, audioMode: 'OFF' })
+          }
+          size={zoomed ? 'md' : 'sm'}
+        />
+      </div>
+      <HoneywellReadout
+        compact={!zoomed}
+        label="Main Chamber"
+        pv={primaryTemp}
+        sp={primarySp}
+      />
+      {zoomed && (
+        <p className="text-[8px] text-center text-current mt-1 mb-2">
+          Dial at the foot of the retort sets this SP. Stirs {stirCount}/
+          {targets.requiredStirs} · Runaways {thermalWarnings}
+          {secondaryTemp < 850 && secondaryOn && (
+            <span className="block font-bold">Below 850°F — quality risk</span>
+          )}
+        </p>
+      )}
+
+      {zoomed && <div className="h-px bg-zinc-600/50 my-2" />}
+
+      <PanelHeading zoomed={zoomed}>Door</PanelHeading>
+      <div className={`flex justify-center ${zoomed ? 'gap-4 mb-1' : 'gap-1 mb-1'}`}>
+        <HoldButton
+          color="silver"
+          label="UP"
+          onHoldStart={() => patchRetort({ doorMoving: 'UP' })}
+          onHoldEnd={() => patchRetort({ doorMoving: null })}
+          size={zoomed ? 'md' : 'sm'}
+          tutorialTarget="door-up"
+        />
+        <HoldButton
+          color="silver"
+          label="DOWN"
+          onHoldStart={() => patchRetort({ doorMoving: 'DOWN' })}
+          onHoldEnd={() => patchRetort({ doorMoving: null })}
+          size={zoomed ? 'md' : 'sm'}
+        />
+      </div>
+      {zoomed && (
+        <p className="text-[8px] text-center text-zinc-700 mb-2">
+          Hold to jog · Door {Math.round(doorOpen * 100)}%
+          {doorOpen > 0 ? ' · heat venting' : ''}
+          <br />
+          Stirring needs door &gt;16% open
+        </p>
+      )}
+
+      {zoomed && (
+        <div className="text-[7px] text-center text-zinc-700 leading-tight border-t border-zinc-600/40 pt-2">
+          CREMATORY MANUFACTURING AND SERVICE, INC.
+          <br />
+          TULSA, OKLAHOMA · MILLENNIUM
+        </div>
+      )}
+
+      {zoomed && progress >= 1 && phase === 'BURN' && (
+        <button
+          type="button"
+          onPointerDown={() => {
+            patchRetort({
+              primaryOn: false,
+              secondaryOn: false,
+              doorMoving: 'UP',
+              phase: 'SWEEP',
+              audioMode: 'OFF',
+              activeTool: 'IRON_RAKE',
+              largeBonesLeft: 100,
+              mediumBonesLeft: 100,
+              fineAshLeft: 100,
+            });
+            setPanelZoomed(false);
+          }}
+          data-tutorial-target="begin-sweep"
+          className="mt-3 w-full py-2.5 bg-emerald-700 text-white font-bold rounded text-xs"
+        >
+          Cool & Begin 3-Tool Sweep →
+        </button>
+      )}
+
+      {zoomed && phase === 'SWEEP' && fineAshLeft === 0 && (
+        <button
+          type="button"
+          onPointerDown={finishRetortProcess}
+          data-tutorial-target="transfer-tray"
+          className="mt-3 w-full py-2.5 bg-amber-500 text-zinc-950 font-bold rounded text-xs"
+        >
+          Transfer Tray to Urn Processor →
+        </button>
+      )}
     </div>
+  );
+
+  const queuedName = bay.queueCaseId
+    ? cases.find((c) => c.id === bay.queueCaseId)?.name
+    : null;
+  const queueChoices = cases.filter(
+    (c) =>
+      c.location === 'COOLER' &&
+      (c.directive === 'CREMATION_DIRECT' ||
+        c.directive === 'VIEWING_THEN_CREMATION' ||
+        c.directive === 'CREMATION_THEN_VIEWING')
+  );
+
+  return (
+    <ButtonLookContext.Provider value={bay.buttons}>
+    <div
+      className="safe-screen fixed inset-0 z-[60] bg-[#1a2e1a] text-stone-100 flex flex-col select-none overflow-hidden"
+      onPointerDownCapture={playControlClick}
+    >
+      <div className="shrink-0 px-1 pb-2 border-b border-stone-800/80">
+        <div className="flex justify-between items-start gap-2">
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold text-orange-300 tracking-wide truncate">
+              {bay.brand === 'millennium'
+                ? 'MILLENNIUM'
+                : brandLabel(bay.brand).toUpperCase()}{' '}
+              — {displayCaseName(currentCase)}
+            </h2>
+            <p className="text-[10px] text-stone-400">
+              {Math.round(progress * 100)}% · {bonePhase} · Door{' '}
+              {Math.round(doorOpen * 100)}% · Stirs {stirCount}/
+              {targets.requiredStirs}
+              {progress >= 0.15 && (primaryOn || secondaryOn)
+                ? ' · Decay arrested'
+                : ''}
+            </p>
+            <CaseTransferBar currentCase={currentCase} />
+          </div>
+          <div className="flex flex-col gap-1 shrink-0">
+            <button
+              type="button"
+              data-tutorial-target="back"
+              onPointerDown={() => setActiveStation('OVERVIEW')}
+              className="min-h-11 px-3 bg-stone-800 rounded text-xs"
+            >
+              Back
+            </button>
+          </div>
+        </div>
+        {bay.queueSlot && (
+          <div className="mt-1 flex items-center gap-1 overflow-x-auto text-[10px]">
+            <span className="text-stone-400 shrink-0">
+              {queuedName ? `Next: ${queuedName}` : 'Queue'}
+            </span>
+            {!bay.queueCaseId &&
+              queueChoices.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  data-click="tick"
+                  onPointerDown={() => queueCaseOnRetort(c.id)}
+                  className="px-2 py-1 rounded bg-stone-800 shrink-0"
+                >
+                  {displayCaseName(c)}
+                </button>
+              ))}
+          </div>
+        )}
+        {directiveNeedsCremationPermit(currentCase.directive) &&
+          currentCase.cremationPermitStatus !== 'APPROVED' && (
+            <div className="mt-2 px-2 py-1.5 rounded border border-amber-700/70 bg-amber-950/50 text-[10px] text-amber-100 leading-snug">
+              Cremation permit:{' '}
+              <strong>{permitStatusLabel(currentCase.cremationPermitStatus)}</strong>
+              . You can fire the retort now, but the State Board will fine an
+              unpermitted cremation. File VR-441 on the Computer.
+            </div>
+          )}
+      </div>
+
+      {panelZoomed ? (
+        <div className="flex-1 min-h-0 p-3 flex flex-col animate-[fadeIn_0.25s_ease]">
+          {controlPanel(true)}
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0 flex flex-col gap-2 p-2">
+          <div className="flex-1 min-h-0 flex gap-2">
+            {controlPanel(false)}
+
+            <div
+              ref={chamberRef}
+              className="retort-brick relative flex-1 min-w-0 rounded-lg border-4 border-zinc-600 shadow-[inset_0_0_40px_rgba(0,0,0,0.65)] overflow-hidden"
+              onPointerDown={(e) => {
+                swipeRef.current = { x: e.clientX, y: e.clientY };
+              }}
+              onPointerUp={(e) => {
+                const start = swipeRef.current;
+                swipeRef.current = null;
+                if (!start || bayCount < 2) return;
+                const dx = e.clientX - start.x;
+                const dy = e.clientY - start.y;
+                if (Math.abs(dx) < 56 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+                selectRetort(
+                  (bayIndex + (dx < 0 ? 1 : bayCount - 1)) % bayCount
+                );
+              }}
+            >
+              <div className="absolute top-1 left-2 z-20 text-[8px] tracking-[0.22em] text-zinc-400 font-black pointer-events-none">
+                HEARTH
+              </div>
+
+              <div
+                className="absolute inset-x-0 top-0 z-30 border-b-4 border-zinc-950 shadow-2xl pointer-events-none overflow-hidden"
+                style={{
+                  height: `${Math.max(0, (1 - doorOpen) * 100)}%`,
+                  transition: doorMoving ? 'none' : 'height 0.05s linear',
+                  background:
+                    doorFace(bay.door) ??
+                    'linear-gradient(90deg, #3f3f46 0%, #a1a1aa 8%, #d4d4d8 18%, #71717a 46%, #e4e4e7 52%, #52525b 78%, #27272a 100%)',
+                }}
+              >
+                <div
+                  className="absolute inset-0 opacity-70"
+                  style={{
+                    background:
+                      'repeating-linear-gradient(to bottom, rgba(0,0,0,0.28) 0 2px, transparent 2px 22px)',
+                  }}
+                />
+                <div className="absolute left-2 top-2 bottom-2 w-1.5 rounded-full bg-black/40" />
+                <div className="absolute right-2 top-2 bottom-2 w-1.5 rounded-full bg-black/40" />
+                <DoorPlate
+                  title={
+                    bay.brand === 'millennium'
+                      ? 'MILLENNIUM'
+                      : brandLabel(bay.brand).toUpperCase()
+                  }
+                  subtitle={bay.brand === 'millennium' ? 'REFRACTORY' : 'PLATE'}
+                />
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="absolute w-2 h-2 rounded-full bg-zinc-900 border border-zinc-300"
+                    style={{
+                      left: i < 2 ? 14 : undefined,
+                      right: i >= 2 ? 14 : undefined,
+                      top: i % 2 === 0 ? 18 : undefined,
+                      bottom: i % 2 === 1 ? 28 : undefined,
+                    }}
+                  />
+                ))}
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[9px] font-mono text-zinc-100 tracking-widest whitespace-nowrap drop-shadow">
+                  DOOR {Math.round(doorOpen * 100)}%
+                </div>
+              </div>
+
+              {(primaryOn || secondaryOn) && (
+                <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="absolute bottom-0 w-7 rounded-t-full opacity-80 animate-pulse"
+                      style={{
+                        left: `${10 + i * 14}%`,
+                        height: `${28 + (i % 3) * 16 + (primaryOn ? 18 : 0)}%`,
+                        background:
+                          'linear-gradient(to top, #ea580c, #fbbf24, transparent)',
+                        animationDelay: `${i * 0.12}s`,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+
+              <HearthCharge
+                mode={phase === 'SWEEP' ? 'SWEEP' : 'BURN'}
+                bonePhase={bonePhase}
+                progress={progress}
+                nudge={boneNudge}
+                contact={boneContact}
+                contactHot={contactHot}
+                largeBonesLeft={largeBonesLeft}
+                mediumBonesLeft={mediumBonesLeft}
+                fineAshLeft={fineAshLeft}
+              />
+
+              {dust.map((mote) => {
+                const ember = mote.tone === 'ember';
+                return (
+                  <span
+                    key={mote.id}
+                    className="ash-mote"
+                    style={{
+                      left: `${mote.x}%`,
+                      top: `${mote.y}%`,
+                      width: mote.size,
+                      height: mote.size,
+                      opacity: ember ? 0.95 : Number(mote.tone) || 0.8,
+                      background: ember
+                        ? 'radial-gradient(circle, #fdba74 0%, #ea580c 55%, transparent 75%)'
+                        : undefined,
+                      boxShadow: ember
+                        ? '0 0 8px rgba(249,115,22,0.85)'
+                        : undefined,
+                      ['--dx' as string]: `${mote.dx}px`,
+                      ['--dy' as string]: `${mote.dy}px`,
+                    }}
+                  />
+                );
+              })}
+              {scrape && (
+                <span
+                  key={scrape.id}
+                  className="hearth-scrape"
+                  style={{
+                    left: `${scrape.x}%`,
+                    top: `${scrape.y - 8}%`,
+                    height: '18%',
+                  }}
+                />
+              )}
+
+              {hearthHint && (
+                <div className="absolute top-6 left-2 right-2 z-40 text-center text-[10px] text-amber-100 bg-black/60 rounded px-2 py-1 pointer-events-none">
+                  {hearthHint}
+                </div>
+              )}
+
+              {phase === 'SWEEP' && (
+                <div className="absolute top-5 left-2 z-20 text-[9px] font-mono text-stone-200/90 bg-black/50 rounded px-1.5 py-1 pointer-events-none leading-tight">
+                  Bone {largeBonesLeft}% · Frag {mediumBonesLeft}% · Ash {fineAshLeft}%
+                </div>
+              )}
+
+              {activeTool && (
+                <div
+                  className={`absolute z-50 touch-none ${
+                    toolHeld || toolGlide
+                      ? ''
+                      : activeTool === 'BRISTLE_BRUSH'
+                        ? 'tool-bob-brush'
+                        : 'tool-bob'
+                  }`}
+                  style={{
+                    left: `${toolPos.x}%`,
+                    top: `${toolPos.y}%`,
+                    // Other tools flip so the working end points up into the
+                    // chamber. The hand brush stays as in the photo: handle
+                    // up, bristles down on the ash, tips at the finger.
+                    transform:
+                      toolHeld || toolGlide
+                        ? activeTool === 'BRISTLE_BRUSH'
+                          ? 'translate(-50%, -100%)'
+                          : 'translate(-50%, -18%) rotate(180deg)'
+                        : undefined,
+                    transition: toolHeld
+                      ? 'none'
+                      : 'left 0.45s cubic-bezier(.2,.8,.2,1), top 0.45s cubic-bezier(.2,.8,.2,1)',
+                    filter: 'drop-shadow(0 12px 8px rgba(0,0,0,0.6))',
+                  }}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    toolHeldRef.current = true;
+                    setToolHeld(true);
+                    setToolGlide(false);
+                    const point = pointInChamber(e.clientX, e.clientY);
+                    prevToolPoint.current = point;
+                    strokeRef.current = {
+                      minY: point?.y ?? 40,
+                      accum: 0,
+                      credited: false,
+                    };
+                    resetCircularStir(circularStirRef.current);
+                    try {
+                      (e.currentTarget as HTMLElement).setPointerCapture?.(
+                        e.pointerId
+                      );
+                    } catch {
+                      /* capture can throw on some WebViews; window listeners keep the drag alive */
+                    }
+                    const pointerId = e.pointerId;
+                    const move = (ev: PointerEvent) => {
+                      if (ev.pointerId !== pointerId || !toolHeldRef.current)
+                        return;
+                      moveHeldTool(ev.clientX, ev.clientY);
+                    };
+                    const end = (ev: PointerEvent) => {
+                      if (ev.pointerId !== pointerId) return;
+                      toolHeldRef.current = false;
+                      setToolHeld(false);
+                      audioMovingRef.current = false;
+                      crematoryToolSfx.setSweep(null);
+                      setBrushFlex({ lean: 0, push: 0 });
+                      prevToolPoint.current = null;
+                      resetCircularStir(circularStirRef.current);
+                      window.removeEventListener('pointermove', move);
+                      window.removeEventListener('pointerup', end);
+                      window.removeEventListener('pointercancel', end);
+                    };
+                    window.addEventListener('pointermove', move);
+                    window.addEventListener('pointerup', end);
+                    window.addEventListener('pointercancel', end);
+                  }}
+                >
+                  <ToolArt
+                    tool={activeTool}
+                    className={
+                      activeTool === 'BRISTLE_BRUSH'
+                        ? 'h-44 w-auto max-w-[12rem] pointer-events-none'
+                        : 'h-48 w-auto max-w-[11rem] pointer-events-none'
+                    }
+                    flex={
+                      activeTool === 'BRISTLE_BRUSH' || activeTool === 'HAND_BRUSH'
+                        ? brushFlex
+                        : undefined
+                    }
+                  />
+                </div>
+              )}
+
+              {!activeTool && (
+                <div className="absolute bottom-2 left-2 right-2 z-20 text-center text-[10px] text-amber-100/90 bg-black/50 rounded px-2 py-1 pointer-events-none">
+                  {phase === 'BURN'
+                    ? 'Open Tools — stir with circular orbits over the charge'
+                    : 'Open Tools — sweep remains; tools nudge bones on contact'}
+                </div>
+              )}
+
+              {phase === 'SWEEP' && fineAshLeft === 0 && (
+                <button
+                  type="button"
+                  data-tutorial-target="transfer-tray"
+                  onPointerDown={finishRetortProcess}
+                  className="absolute bottom-2 left-2 right-2 z-[60] py-2 bg-amber-500 text-stone-950 font-bold rounded text-[11px]"
+                >
+                  To Urn Processor →
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="shrink-0 px-2 pt-1 flex items-end justify-between gap-2">
+        <ToolDrawer
+          open={toolMenuOpen}
+          activeTool={activeTool}
+          attention={phase === 'SWEEP' && !activeTool}
+          onToggle={() => setToolMenuOpen((open) => !open)}
+          onSelect={selectTool}
+        />
+        <div className="flex items-end gap-2 pb-0.5">
+          <div className="flex flex-col gap-1 mb-6">
+            {(
+              [
+                ['PRIMARY', 'PRI'],
+                ['SECONDARY', 'SEC'],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onPointerDown={() => setDialChamber(id)}
+                className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded px-2 text-[11px] font-black tracking-wide ${
+                  dialChamber === id
+                    ? 'bg-amber-500 text-stone-950'
+                    : 'bg-zinc-800 text-zinc-300'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <SetPointDial
+            size="sm"
+            label={dialChamber === 'PRIMARY' ? 'PRIMARY SP' : 'AFTERBURNER SP'}
+            min={dialChamber === 'PRIMARY' ? PRIMARY_SP_MIN : SECONDARY_SP_MIN}
+            max={dialChamber === 'PRIMARY' ? PRIMARY_SP_MAX : SECONDARY_SP_MAX}
+            value={dialChamber === 'PRIMARY' ? primarySetPoint : secondarySetPoint}
+            onChange={(next) =>
+              patchRetort(
+                dialChamber === 'PRIMARY'
+                  ? { primarySetPoint: next }
+                  : { secondarySetPoint: next }
+              )
+            }
+          />
+        </div>
+      </div>
+      {pager}
+    </div>
+    </ButtonLookContext.Provider>
   );
 };

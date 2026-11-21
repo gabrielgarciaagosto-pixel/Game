@@ -1,5 +1,72 @@
 @import 'tailwindcss';
 
+:root {
+  /*
+    Android draws the WebView under the status bar. env() and the Capacitor
+    inset vars are often 0, which left the browser tab under the clock.
+    The floor is a full status-bar height so hub, computer, and station
+    controls stay tappable even before those vars arrive. A reported notch
+    larger than the floor still wins.
+  */
+  --safe-area-inset-top: 0px;
+  --safe-area-inset-right: 0px;
+  --safe-area-inset-bottom: 0px;
+  --safe-area-inset-left: 0px;
+  --safe-top-floor: 3rem;
+  --safe-bottom-floor: 0.75rem;
+  --safe-x-floor: 0.75rem;
+  --safe-top: var(--safe-top-floor);
+  --safe-bottom: var(--safe-bottom-floor);
+  --safe-left: var(--safe-x-floor);
+  --safe-right: var(--safe-x-floor);
+}
+
+@supports (top: env(safe-area-inset-top)) {
+  :root {
+    --safe-top: max(
+      var(--safe-top-floor),
+      env(safe-area-inset-top, 0px),
+      var(--safe-area-inset-top)
+    );
+    --safe-bottom: max(
+      var(--safe-bottom-floor),
+      env(safe-area-inset-bottom, 0px),
+      var(--safe-area-inset-bottom)
+    );
+    --safe-left: max(
+      var(--safe-x-floor),
+      env(safe-area-inset-left, 0px),
+      var(--safe-area-inset-left)
+    );
+    --safe-right: max(
+      var(--safe-x-floor),
+      env(safe-area-inset-right, 0px),
+      var(--safe-area-inset-right)
+    );
+  }
+}
+
+:root {
+
+  /* FILES FAB geometry — station shells pad to clear this control.
+     PHONE stacks above FILES at the same size. safe-bottom still tracks the nav bar. */
+  --files-fab-height: 3rem;
+  --phone-fab-height: 3rem;
+  --fab-gap: 0.4rem;
+  --fab-stack-height: calc(
+    var(--files-fab-height) + var(--fab-gap) + var(--phone-fab-height)
+  );
+  /* High enough that the stack clears bottom-sheet actions and the
+     shop card in the lower right. */
+  --files-fab-bottom: calc(var(--safe-bottom) + 7.25rem);
+  --files-panel-bottom: calc(
+    var(--files-fab-bottom) + var(--fab-stack-height) + 0.55rem
+  );
+  --files-clearance: calc(
+    var(--files-fab-bottom) + var(--fab-stack-height) + 0.7rem
+  );
+}
+
 html,
 body,
 #root {
@@ -7,16 +74,1612 @@ body,
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #0f172a;
   user-select: none;
   -webkit-user-select: none;
 }
 
 body {
   font-family: 'Segoe UI', system-ui, sans-serif;
+  background:
+    radial-gradient(120% 70% at 50% 0%, #1e293b, #020617 58%);
+}
+
+/* Portrait column. transform makes fixed station screens stay inside it. */
+#root {
+  max-width: 480px;
+  margin: 0 auto;
+  position: relative;
+  transform: translateZ(0);
+  background: #0f172a;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 0 70px rgba(0, 0, 0, 0.55);
+}
+
+/* Full-screen station shells — clear status bar + FILES FAB */
+.safe-screen {
+  padding-top: var(--safe-top);
+  padding-bottom: var(--files-clearance);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
+.safe-hub {
+  padding-top: var(--safe-top);
+  padding-bottom: var(--files-clearance);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
+/*
+  Bottom sheets are pinned to the viewport, which is drawn under the
+  system navigation bar. Pad past that inset so the last control sits
+  well above gesture nav and the 3-button bar.
+  .sheet-safe-inset is for a sheet whose parent already consumed
+  --safe-bottom (the in-game browser). Adding the inset again would
+  lift it twice. --sheet-air is the empty band under the card.
+*/
+.sheet-safe {
+  --sheet-air: 3.5rem;
+  padding-top: 1rem;
+  padding-left: max(1rem, var(--safe-left));
+  padding-right: max(1rem, var(--safe-right));
+  padding-bottom: calc(var(--safe-bottom) + var(--sheet-air));
+}
+
+.sheet-safe-inset {
+  --sheet-air: 3.5rem;
+  padding-top: 1rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  padding-bottom: var(--sheet-air);
+}
+
+/* FILES and PHONE leave the screen at once. A fade kept them painted
+   above station controls, because the anchor sits at z-index 52 and the
+   rooms sit lower. display:none cannot cover a gauge or a satisfaction line. */
+html[data-sheet-open] .files-fab-anchor,
+html[data-sheet-open] .dev-summon-fab,
+html[data-sheet-open] .dev-summon-panel,
+html[data-shop-open] .files-fab-anchor,
+html[data-cover-fab] .files-fab-anchor,
+html[data-cover-fab] .dev-summon-fab,
+html[data-cover-fab] .dev-summon-panel,
+html[data-station-fab='hide'] .files-fab-anchor,
+html[data-station-fab='hide'] .dev-summon-fab,
+html[data-station-fab='hide'] .dev-summon-panel {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transition: none !important;
+}
+
+/* Stations no longer reserve a band for buttons that are not on screen. */
+html[data-station-fab='hide'] .safe-screen {
+  padding-bottom: calc(var(--safe-bottom) + 0.75rem);
+}
+
+/* Sheets stay inside the screen. The card scrolls. Close stays reachable. */
+.house-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: safe center;
+  align-items: center;
+  overflow: auto;
+  padding-top: var(--safe-top);
+  padding-right: var(--safe-right);
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
+}
+
+.house-sheet {
+  box-sizing: border-box;
+  width: min(100%, 24rem);
+  min-height: 0;
+  max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 1rem);
+}
+
+/* Short phones and landscape: the raised FAB stack ate the screen. */
+@media (max-height: 700px) {
+  :root {
+    --files-fab-bottom: calc(var(--safe-bottom) + 0.65rem);
+  }
+}
+
+@media (max-height: 520px) {
+  :root {
+    --safe-top-floor: 0.35rem;
+    --files-fab-height: 2.75rem;
+    --phone-fab-height: 2.75rem;
+  }
+}
+
+@media (max-height: 480px) {
+  .safe-hub [data-hub-news],
+  .safe-hub [data-hub-last-case] {
+    display: none;
+  }
+
+  /* Rooms scroll inside the band above the calendar and the buttons. */
+  [data-hub-grid] {
+    overflow-y: auto;
+    grid-template-rows: repeat(4, minmax(5.5rem, auto));
+  }
+
+  [data-hub-grid] button {
+    padding: 0.35rem 0.5rem;
+  }
+}
+
+/* The shop used to reserve a black band for FILES and PHONE. */
+html[data-shop-open] .files-overlap-clear {
+  padding-bottom: 0;
+}
+
+/* Phone and files sheets sit above the FAB stack. The height cap keeps
+   Close under the status-bar inset on short phones. */
+.hub-fab-sheet {
+  left: var(--safe-left);
+  right: var(--safe-right);
+  bottom: var(--files-panel-bottom);
+  height: min(
+    62vh,
+    26rem,
+    calc(100dvh - var(--files-panel-bottom) - var(--safe-top) - 0.75rem)
+  );
+}
+
+/* Shop inside the computer already ends at the nav inset. This extra
+   pad ends the card grid above the FILES button. */
+.files-overlap-clear {
+  padding-bottom: calc(
+    var(--files-fab-bottom) + var(--fab-stack-height) - var(--safe-bottom) + 0.5rem
+  );
+}
+
+/* Absolute computer apps ignore the shell pad, so the last row clears PHONE/FILES. */
+.fab-scroll-pad {
+  padding-bottom: calc(
+    var(--files-fab-bottom) + var(--fab-stack-height) - var(--safe-bottom) + 0.85rem
+  ) !important;
+}
+
+@keyframes toast-rise {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.toast-rise {
+  animation: toast-rise 220ms ease-out;
+}
+
+@keyframes own-bump {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+.own-bump {
+  display: inline-block;
+  animation: own-bump 0.55s ease;
+  color: #fde68a;
+  font-weight: 800;
+}
+
+@keyframes tag-nudge {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+.cooler-tag {
+  animation: tag-nudge 1.15s ease-in-out infinite;
 }
 
 /* Keep touch gestures on the WebGL canvas only — not global UI buttons */
 canvas {
   touch-action: none;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes tool-bob {
+  0%,
+  100% {
+    transform: translate(-50%, -18%) rotate(180deg) translateY(0);
+  }
+  50% {
+    transform: translate(-50%, -18%) rotate(180deg) translateY(7px);
+  }
+}
+
+@keyframes ash-drift {
+  0% {
+    opacity: 0.9;
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) scale(1.7);
+  }
+}
+
+@keyframes scrape-fade {
+  0% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes chapel-mourner-breathe {
+  /* Dark enough to read on the wood. They still settle. */
+  0%,
+  100% {
+    opacity: 0.88;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.chapel-mourner {
+  translate: -50% -100%;
+  animation: chapel-mourner-breathe var(--breathe-dur, 5.6s) ease-in-out var(--breathe-delay, 0s) infinite both;
+}
+
+/* Painted sprites stay solid. The breathe fade was for the old drawn busts. */
+.chapel-mourner-sprite {
+  animation: none;
+  opacity: 1;
+}
+
+.chapel-mourner-settle {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 100%;
+  animation: chapel-mourner-settle var(--settle-dur, 8s) ease-in-out var(--settle-delay, 0s) infinite;
+}
+
+.chapel-mourner-core {
+  width: 100%;
+  height: 100%;
+}
+
+.chapel-mourner-core svg {
+  filter: none;
+}
+
+.chapel-mourner-head {
+  transform-box: fill-box;
+  transform-origin: center 82%;
+  animation: chapel-mourner-tilt var(--head-dur, 8s) ease-in-out var(--head-delay, 0s) infinite;
+}
+
+@keyframes chapel-mourner-settle {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  32% {
+    transform: translate3d(var(--drift, 1px), -1.1px, 0) rotate(var(--lean, 1.2deg));
+  }
+  61% {
+    transform: translate3d(calc(var(--drift, 1px) * -0.65), 0.4px, 0) rotate(calc(var(--lean, 1.2deg) * -0.8));
+  }
+  82% {
+    transform: translate3d(calc(var(--drift, 1px) * 0.3), -0.7px, 0) rotate(calc(var(--lean, 1.2deg) * 0.35));
+  }
+}
+
+@keyframes chapel-mourner-tilt {
+  0%,
+  22%,
+  100% {
+    transform: rotate(0deg);
+  }
+  46% {
+    transform: rotate(var(--turn, 4deg));
+  }
+  74% {
+    transform: rotate(calc(var(--turn, 4deg) * -0.4));
+  }
+}
+
+.chapel-service-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 1.5px rgba(253, 230, 138, 0.42),
+    inset 0 0 26px rgba(251, 191, 36, 0.16);
+  animation: chapel-service-glow 3.4s ease-in-out infinite;
+}
+
+.chapel-service-label {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  z-index: 20;
+  translate: -50% 0;
+  pointer-events: none;
+  padding: 2px 8px;
+  border: 1px solid rgba(253, 230, 138, 0.32);
+  border-radius: 999px;
+  background: rgba(28, 16, 40, 0.4);
+  color: rgba(254, 243, 199, 0.92);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  line-height: 1.4;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.65);
+}
+
+.hub-chapel-live-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 28px rgba(253, 230, 138, 0.34),
+    inset 0 0 0 1px rgba(252, 211, 77, 0.35);
+  animation: chapel-service-glow 2.8s ease-in-out infinite;
+}
+
+@keyframes chapel-service-glow {
+  0%,
+  100% {
+    opacity: 0.62;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.tool-bob {
+  animation: tool-bob 2.8s ease-in-out infinite;
+}
+
+@keyframes tool-bob-brush {
+  0%,
+  100% {
+    transform: translate(-50%, -100%) translateY(0);
+  }
+  50% {
+    transform: translate(-50%, -100%) translateY(6px);
+  }
+}
+
+.tool-bob-brush {
+  animation: tool-bob-brush 2.8s ease-in-out infinite;
+}
+
+.ash-mote {
+  position: absolute;
+  border-radius: 999px;
+  pointer-events: none;
+  background: radial-gradient(circle, #f5f5f4 0%, #a8a29e 45%, transparent 72%);
+  animation: ash-drift 0.95s ease-out forwards;
+  z-index: 46;
+}
+
+.hearth-scrape {
+  position: absolute;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(to bottom, transparent, #f5f5f4, transparent);
+  animation: scrape-fade 0.45s ease-out forwards;
+  pointer-events: none;
+  z-index: 45;
+}
+
+.retort-brick {
+  background-color: #1a120e;
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.28) 1px, transparent 1px),
+    radial-gradient(80% 55% at 50% 100%, rgba(234, 88, 12, 0.28), transparent 62%);
+  background-size: 100% 14px, 22px 100%, auto;
+}
+
+/* Embalming pour visuals (cosmetic only — physics unchanged) */
+@keyframes embalm-glug {
+  0%,
+  100% {
+    transform: rotate(0deg) translateX(0);
+  }
+  25% {
+    transform: rotate(2.4deg) translateX(1px);
+  }
+  75% {
+    transform: rotate(-1.8deg) translateX(-1px);
+  }
+}
+
+@keyframes embalm-splash {
+  0% {
+    transform: translate(-50%, -50%) scale(0.55);
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.55);
+    opacity: 0;
+  }
+}
+
+@keyframes embalm-stream-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes embalm-stream-wobble {
+  0%,
+  100% {
+    stroke-width: 1.7;
+  }
+  50% {
+    stroke-width: 2.6;
+  }
+}
+
+@keyframes embalm-tank-ripple {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.08);
+  }
+}
+
+.embalm-glug {
+  animation: embalm-glug 0.28s ease-in-out infinite;
+}
+
+.embalm-splash-ring {
+  animation: embalm-splash 0.9s ease-out infinite;
+}
+
+.embalm-splash-ring-delay {
+  animation: embalm-splash 0.9s ease-out 0.28s infinite;
+}
+
+.embalm-stream-pulse {
+  animation: embalm-stream-pulse 0.45s ease-in-out infinite;
+}
+
+.embalm-stream-wobble {
+  animation: embalm-stream-wobble 0.22s ease-in-out infinite;
+}
+
+.embalm-tank-ripple {
+  animation: embalm-tank-ripple 0.55s ease-in-out infinite;
+}
+
+/* ——— CRT office desktop (Computer room) ——— */
+.crt-desktop {
+  --crt-green: #7dffb2;
+  --crt-dim: #1a3d2c;
+  background: #050806;
+  isolation: isolate;
+}
+
+.crt-bezel {
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 3px #1a1f1c,
+    inset 0 0 0 6px #0a0c0b,
+    inset 0 0 48px rgba(0, 0, 0, 0.65);
+  border-radius: 0.65rem;
+  background:
+    radial-gradient(120% 90% at 50% 40%, #163528 0%, #0a1610 55%, #050a08 100%);
+  z-index: 0;
+}
+
+/* Full-viewport phosphor overlay (scanlines + vignette) above content */
+.crt-overlay {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  border-radius: 0.4rem;
+  overflow: hidden;
+}
+
+.crt-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.14) 0px,
+    rgba(0, 0, 0, 0.14) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  opacity: 0.4;
+  mix-blend-mode: multiply;
+}
+
+.crt-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 48%,
+    rgba(0, 0, 0, 0.42) 100%
+  );
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.35);
+}
+
+.crt-phosphor-glow {
+  text-shadow: 0 0 6px rgba(125, 255, 178, 0.35);
+}
+
+.crt-flicker {
+  animation: crt-flicker 7s steps(2, end) infinite;
+}
+
+@keyframes crt-flicker {
+  0%,
+  92%,
+  100% {
+    opacity: 1;
+  }
+  93% {
+    opacity: 0.94;
+  }
+  94% {
+    opacity: 1;
+  }
+  96% {
+    opacity: 0.97;
+  }
+}
+
+.crt-taskbar {
+  background: linear-gradient(180deg, #1c3a2c 0%, #0e1c16 100%);
+  border-top: 1px solid rgba(125, 255, 178, 0.25);
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.4);
+  font-family: ui-monospace, 'Cascadia Mono', monospace;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crt-flicker {
+    animation: none;
+  }
+  .crt-overlay::before {
+    opacity: 0.22;
+  }
+}
+
+/* Android / coarse pointers: lighter CRT so UI stays readable */
+/* Hub: independent room bob, tap bursts, room-state wash, spirits */
+@keyframes hub-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.hub-bob {
+  animation: hub-bob var(--bob-dur, 4.8s) ease-in-out infinite;
+  animation-delay: var(--bob-delay, 0s);
+}
+
+.hub-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.hub-fx i {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+}
+
+.hub-fx-flame {
+  background: radial-gradient(60% 70% at 50% 110%, rgba(251, 146, 60, 0.55), transparent 70%);
+}
+.hub-fx-flame i {
+  bottom: -6px;
+  width: 16px;
+  height: 28px;
+  border-radius: 50% 50% 45% 45%;
+  background: radial-gradient(circle at 50% 80%, #fff7d6, #fb923c 45%, transparent 72%);
+  animation: hub-flame 0.42s ease-in-out infinite;
+}
+.hub-fx-flame i:nth-child(1) { left: 18%; }
+.hub-fx-flame i:nth-child(2) { left: 38%; animation-delay: 0.08s; height: 36px; }
+.hub-fx-flame i:nth-child(3) { left: 56%; animation-delay: 0.14s; }
+.hub-fx-flame i:nth-child(4) { left: 72%; width: 8px; height: 8px; border-radius: 50%; bottom: 20px; animation: hub-ember 0.7s linear infinite; }
+.hub-fx-flame i:nth-child(5) { left: 28%; width: 6px; height: 6px; border-radius: 50%; bottom: 16px; animation: hub-ember 0.8s linear infinite; }
+
+.hub-fx-dust i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #e7e5e4;
+  opacity: 0.8;
+  animation: hub-dust 0.9s ease-out infinite;
+}
+.hub-fx-dust i:nth-child(1) { left: 20%; top: 60%; }
+.hub-fx-dust i:nth-child(2) { left: 40%; top: 70%; animation-delay: 0.1s; }
+.hub-fx-dust i:nth-child(3) { left: 58%; top: 55%; animation-delay: 0.2s; }
+.hub-fx-dust i:nth-child(4) { left: 72%; top: 68%; animation-delay: 0.05s; }
+.hub-fx-dust i:nth-child(5) { left: 32%; top: 40%; animation-delay: 0.18s; width: 3px; height: 3px; }
+.hub-fx-dust i:nth-child(6) { left: 64%; top: 36%; animation-delay: 0.28s; width: 3px; height: 3px; }
+
+.hub-fx-frost {
+  background: linear-gradient(180deg, rgba(224, 242, 254, 0.2), transparent 55%);
+}
+.hub-fx-frost i {
+  width: 7px;
+  height: 7px;
+  border: 1px solid rgba(224, 242, 254, 0.8);
+  transform: rotate(45deg);
+  animation: hub-frost 0.8s ease-out infinite;
+}
+.hub-fx-frost i:nth-child(1) { left: 18%; top: 30%; }
+.hub-fx-frost i:nth-child(2) { left: 46%; top: 22%; animation-delay: 0.12s; }
+.hub-fx-frost i:nth-child(3) { left: 68%; top: 40%; animation-delay: 0.2s; }
+.hub-fx-frost i:nth-child(4) { left: 34%; top: 58%; animation-delay: 0.06s; }
+
+.hub-fx-drip i {
+  width: 4px;
+  height: 10px;
+  border-radius: 4px;
+  background: linear-gradient(#86efac, rgba(244, 114, 182, 0.2));
+  animation: hub-drip 0.55s ease-in infinite;
+}
+.hub-fx-drip i:nth-child(1) { left: 30%; top: 18%; }
+.hub-fx-drip i:nth-child(2) { left: 52%; top: 10%; animation-delay: 0.15s; background: #f9a8d4; }
+.hub-fx-drip i:nth-child(3) { left: 70%; top: 28%; width: 3px; height: 3px; border-radius: 50%; background: #fff; animation: hub-glint 0.4s ease-in-out infinite; }
+
+.hub-fx-chapel i:nth-child(1),
+.hub-fx-chapel i:nth-child(2) {
+  bottom: 8px;
+  width: 8px;
+  height: 16px;
+  border-radius: 40%;
+  background: radial-gradient(circle at 50% 30%, #fde68a, #f59e0b 60%, transparent 70%);
+  animation: hub-flame 0.5s ease-in-out infinite;
+}
+.hub-fx-chapel i:nth-child(1) { left: 22%; }
+.hub-fx-chapel i:nth-child(2) { left: 38%; animation-delay: 0.12s; }
+.hub-fx-chapel i:nth-child(3),
+.hub-fx-chapel i:nth-child(4) {
+  width: 8px;
+  height: 6px;
+  border-radius: 50% 0 50% 50%;
+  background: #c4b5fd;
+  animation: hub-dust 1s ease-out infinite;
+}
+.hub-fx-chapel i:nth-child(3) { left: 60%; top: 40%; }
+.hub-fx-chapel i:nth-child(4) { left: 74%; top: 55%; animation-delay: 0.2s; }
+
+.hub-fx-gold {
+  background: linear-gradient(115deg, transparent 30%, rgba(252, 211, 77, 0.35), transparent 70%);
+  animation: hub-shimmer 0.7s ease-in-out infinite;
+}
+.hub-fx-gold i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #fde68a;
+  animation: hub-glint 0.5s ease-in-out infinite;
+}
+.hub-fx-gold i:nth-child(1) { left: 20%; top: 30%; }
+.hub-fx-gold i:nth-child(2) { left: 48%; top: 50%; animation-delay: 0.1s; }
+.hub-fx-gold i:nth-child(3) { left: 70%; top: 28%; animation-delay: 0.18s; }
+.hub-fx-gold i:nth-child(4) { left: 60%; top: 68%; animation-delay: 0.06s; }
+
+.hub-fx-crt {
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(125, 255, 178, 0.14) 0px,
+    rgba(125, 255, 178, 0.14) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+  box-shadow: inset 0 0 24px rgba(52, 211, 153, 0.35);
+}
+.hub-fx-crt i {
+  inset: 0;
+  background: rgba(110, 231, 183, 0.12);
+  animation: hub-glint 0.35s ease-in-out infinite;
+}
+
+.hub-atmo-flame,
+.hub-atmo-fume,
+.hub-atmo-frost,
+.hub-atmo-dust,
+.hub-atmo-chapel,
+.hub-atmo-crt,
+.hub-atmo-debt {
+  position: absolute;
+  pointer-events: none;
+}
+
+.hub-atmo-flame {
+  left: -8%;
+  top: 30%;
+  width: 62%;
+  height: 38%;
+  animation: hub-flicker 1.5s ease-in-out infinite;
+}
+/* The glow is the same ellipse as the old 38%-tall box (farthest-corner at 18% 60%).
+   That box sliced the ellipse at the bottom while the color was still opaque.
+   Paint it on a taller layer with the radii locked, so the existing transparent
+   stop can finish. Embers stay in the original box. */
+.hub-atmo-flame::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 150%;
+  background: radial-gradient(
+    ellipse 115.9655% 56.5685% at 18% 40%,
+    rgba(255, 140, 30, 0.9),
+    rgba(234, 88, 12, 0.42) 42%,
+    transparent 72%
+  );
+}
+.hub-atmo-flame span {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(254, 215, 170, 0.75);
+  animation: hub-ember 2.8s linear infinite;
+}
+.hub-atmo-flame span:nth-child(1) { left: 18%; bottom: 18%; }
+.hub-atmo-flame span:nth-child(2) { left: 32%; bottom: 28%; animation-delay: 0.8s; }
+.hub-atmo-flame span:nth-child(3) { left: 10%; bottom: 36%; animation-delay: 1.4s; width: 5px; height: 5px; }
+
+.hub-atmo-fume {
+  left: -6%;
+  top: -4%;
+  width: 52%;
+  height: 38%;
+}
+.hub-atmo-fume span {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(167, 243, 208, 0.72), rgba(16, 185, 129, 0.2) 62%, transparent 76%);
+  animation: hub-fume 8s ease-in-out infinite;
+}
+.hub-atmo-fume span:nth-child(1) { width: 180px; height: 90px; left: 0; top: 4px; }
+.hub-atmo-fume span:nth-child(2) { width: 140px; height: 70px; left: 36px; top: 28px; animation-delay: -3s; }
+.hub-atmo-fume span:nth-child(3) { width: 110px; height: 56px; left: 12px; top: 58px; animation-delay: -5s; }
+
+.hub-atmo-frost {
+  left: -8%;
+  top: 24%;
+  width: 36%;
+  height: 28%;
+  background: radial-gradient(ellipse at 0% 50%, rgba(224, 242, 254, 0.5), transparent 72%);
+}
+.hub-atmo-frost span {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border: 1px solid rgba(224, 242, 254, 0.55);
+  transform: rotate(45deg);
+  animation: hub-frost-drift 6s linear infinite;
+}
+.hub-atmo-frost span:nth-child(1) { left: 12%; top: 20%; }
+.hub-atmo-frost span:nth-child(2) { left: 28%; top: 48%; animation-delay: -2s; }
+.hub-atmo-frost span:nth-child(3) { left: 8%; top: 70%; animation-delay: -4s; }
+.hub-atmo-frost span:nth-child(4) { left: 40%; top: 30%; animation-delay: -1s; }
+
+.hub-atmo-dust {
+  right: -4%;
+  top: 34%;
+  width: 34%;
+  height: 30%;
+}
+.hub-atmo-dust span {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(231, 229, 228, 0.7);
+  left: calc(var(--i) * 14%);
+  top: calc(20% + (var(--i) * 9%));
+  animation: hub-dust-drift 7s linear infinite;
+  animation-delay: calc(var(--i) * -0.8s);
+}
+
+.hub-atmo-chapel {
+  left: 0;
+  bottom: 18%;
+  width: 46%;
+  height: 26%;
+}
+/* Same ellipse the 26%-tall box used to clip. The bottom edge cut the gold
+   while it was still opaque, just under the computer card. Radii stay locked. */
+.hub-atmo-chapel::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 170%;
+  background: radial-gradient(
+    ellipse 113.1371% 66.5512% at 20% 47.0588%,
+    rgba(253, 230, 138, 0.22),
+    transparent 68%
+  );
+}
+.hub-candle {
+  position: absolute;
+  left: 18%;
+  bottom: 18%;
+  width: 10px;
+  height: 18px;
+  pointer-events: none;
+}
+.hub-candle-b { left: 30%; height: 14px; }
+.hub-candle-flame {
+  position: absolute;
+  inset: 0;
+  border-radius: 40%;
+  background: radial-gradient(circle at 50% 30%, #fff7d6, #fbbf24 55%, transparent 72%);
+  animation: hub-flicker 1.2s ease-in-out infinite;
+}
+.hub-candle-b .hub-candle-flame { animation-delay: 0.3s; }
+/* Wax under the flame. Top and bottom both fade, so the candle has no edge. */
+.hub-candle-wax {
+  position: absolute;
+  left: 50%;
+  bottom: -26px;
+  width: 9px;
+  height: 38px;
+  translate: -50% 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 248, 230, 0) 0%,
+    rgba(255, 244, 214, 0.46) 18%,
+    rgba(244, 214, 168, 0.2) 42%,
+    rgba(220, 180, 130, 0.05) 72%,
+    rgba(200, 160, 110, 0) 100%
+  );
+  filter: blur(0.65px);
+  mask-image: linear-gradient(to right, transparent, #000 28%, #000 72%, transparent);
+  animation: hub-candle-hover 3.8s ease-in-out infinite;
+}
+.hub-candle-b .hub-candle-wax {
+  width: 8px;
+  height: 30px;
+  bottom: -20px;
+  animation-delay: 0.45s;
+}
+@keyframes hub-candle-hover {
+  0%,
+  100% {
+    opacity: 0.78;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.hub-petal {
+  position: absolute;
+  left: 42%;
+  bottom: 40%;
+  width: 8px;
+  height: 6px;
+  border-radius: 50% 0 50% 50%;
+  background: rgba(196, 181, 253, 0.7);
+  animation: hub-dust-drift 9s linear infinite;
+}
+.hub-petal-b { left: 54%; bottom: 58%; animation-delay: -3s; }
+
+.hub-atmo-crt {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 16%;
+  background:
+    repeating-linear-gradient(0deg, rgba(125, 255, 178, 0.045) 0 1px, transparent 1px 8px),
+    radial-gradient(ellipse at 50% 130%, rgba(52, 211, 153, 0.16), transparent 68%);
+  -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent 92%);
+  mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent 92%);
+  animation: hub-flicker 2.8s ease-in-out infinite;
+}
+
+.hub-atmo-debt {
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 48%, rgba(185, 28, 28, 0.42) 100%);
+  animation: hub-debt 1.7s ease-in-out infinite;
+}
+
+.hub-spirit {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 84px;
+  height: 84px;
+  opacity: 0;
+  pointer-events: none;
+}
+.hub-spirit[data-placed='1'] {
+  opacity: var(--a, 0.62);
+}
+.hub-spirit-glow,
+.hub-spirit-core,
+.hub-spirit-mote {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.hub-spirit-glow {
+  width: 84px;
+  height: 84px;
+  margin: -42px 0 0 -42px;
+  background: radial-gradient(
+    circle,
+    hsl(var(--spirit-h) 92% 78% / 0.9) 0%,
+    hsl(var(--spirit-h) 84% 62% / 0.38) 36%,
+    transparent 70%
+  );
+  mix-blend-mode: screen;
+  animation: hub-spirit-pulse 2.8s ease-in-out infinite;
+}
+.hub-spirit-core {
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  background: radial-gradient(circle, #fff 0%, hsl(var(--spirit-h) 90% 72%) 55%, transparent 78%);
+}
+.hub-spirit-mote {
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  background: hsl(var(--spirit-h) 95% 82% / 0.85);
+  transform: translate(
+    calc(var(--trail-x, 0px) * var(--m, 0.6)),
+    calc(var(--trail-y, 0px) * var(--m, 0.6))
+  );
+  opacity: 0.7;
+}
+.hub-spirit-mote:nth-child(4) {
+  width: 3px;
+  height: 3px;
+  opacity: 0.45;
+}
+.hub-spirit-mote:nth-child(5) {
+  width: 3px;
+  height: 3px;
+  opacity: 0.3;
+}
+
+.hub-spirit.hub-roam {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  pointer-events: none;
+  will-change: transform;
+}
+.hub-spirit.hub-roam > .hub-clash-tint {
+  position: absolute;
+  inset: -20%;
+  width: auto;
+  height: auto;
+  margin: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  opacity: 0;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation: none;
+  transform: none;
+}
+.hub-clash-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.hub-clash {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 40px;
+  height: 40px;
+  margin-left: -20px;
+  margin-top: -20px;
+  border-radius: 50%;
+  opacity: 0;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+@keyframes hub-flame {
+  0%, 100% { transform: scaleY(0.85) scaleX(1); opacity: 0.75; }
+  50% { transform: scaleY(1.15) scaleX(0.9); opacity: 1; }
+}
+@keyframes hub-ember {
+  0% { transform: translateY(0); opacity: 0.9; }
+  100% { transform: translateY(-36px); opacity: 0; }
+}
+@keyframes hub-dust {
+  0% { transform: translateY(8px); opacity: 0; }
+  30% { opacity: 0.85; }
+  100% { transform: translateY(-22px); opacity: 0; }
+}
+@keyframes hub-frost {
+  0% { opacity: 0; transform: rotate(45deg) scale(0.6); }
+  40% { opacity: 0.9; }
+  100% { opacity: 0; transform: rotate(45deg) translateY(-10px) scale(1); }
+}
+@keyframes hub-drip {
+  0% { transform: translateY(0); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateY(36px); opacity: 0; }
+}
+@keyframes hub-glint {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+@keyframes hub-shimmer {
+  0% { transform: translateX(-30%); }
+  100% { transform: translateX(30%); }
+}
+@keyframes hub-flicker {
+  0%, 100% { opacity: 0.72; }
+  40% { opacity: 1; }
+  62% { opacity: 0.55; }
+  80% { opacity: 0.9; }
+}
+@keyframes hub-fume {
+  0%, 100% { transform: translate(0, 0); opacity: 0.45; }
+  50% { transform: translate(18px, 10px); opacity: 0.85; }
+}
+@keyframes hub-frost-drift {
+  0% { transform: rotate(45deg) translate(0, 0); opacity: 0; }
+  20% { opacity: 0.7; }
+  100% { transform: rotate(45deg) translate(12px, 18px); opacity: 0; }
+}
+@keyframes hub-dust-drift {
+  0% { transform: translate(0, 0); opacity: 0; }
+  15% { opacity: 0.75; }
+  100% { transform: translate(-16px, -28px); opacity: 0; }
+}
+@keyframes hub-debt {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.9; }
+}
+@keyframes hub-spirit-pulse {
+  0%, 100% { opacity: 0.62; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+
+/* Tutorial Spirit. Same glow, core, and motes as the house spirits. */
+.tutorial-spirit {
+  position: fixed;
+  z-index: 86;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  touch-action: none;
+}
+.tutorial-spirit-flight {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.tutorial-spirit-art {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 84px;
+  height: 84px;
+  margin: -42px 0 0 -42px;
+  animation: tutorial-mood-calm 4.4s ease-in-out infinite;
+  pointer-events: none;
+  transform-origin: 50% 60%;
+}
+.tutorial-spirit-art[data-mood='warm'] { animation-name: tutorial-mood-warm; }
+.tutorial-spirit-art[data-mood='playful'] { animation-name: tutorial-mood-playful; }
+.tutorial-spirit-art[data-mood='earnest'] { animation-name: tutorial-mood-earnest; }
+.tutorial-spirit-art[data-mood='excited'] { animation-name: tutorial-mood-excited; }
+.tutorial-spirit-art[data-intensity='1'] { animation-duration: 4.6s; }
+.tutorial-spirit-art[data-intensity='2'] { animation-duration: 2.15s; }
+.tutorial-spirit-art[data-intensity='3'] { animation-duration: 0.7s; }
+/* The house spirits use screen blend and fade into the room.
+   The Tutorial Spirit is a control, so the same art stays solid. */
+.tutorial-spirit-art .hub-spirit-glow {
+  mix-blend-mode: normal;
+  opacity: 1;
+}
+.tutorial-spirit-art .hub-spirit-core {
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+}
+@keyframes tutorial-mood-calm {
+  0%, 100% { transform: translateY(0) rotate(0deg) scale(1, 1); }
+  50% { transform: translateY(-4px) rotate(-2deg) scale(1.02, 0.98); }
+}
+@keyframes tutorial-mood-warm {
+  0%, 100% { transform: translateY(0) rotate(0deg) scale(1, 1); }
+  40% { transform: translateY(-8px) rotate(4deg) scale(0.96, 1.07); }
+  72% { transform: translateY(-2px) rotate(-3deg) scale(1.04, 0.97); }
+}
+@keyframes tutorial-mood-playful {
+  0%, 100% { transform: translateY(0) rotate(-5deg) scale(1.08, 0.92); }
+  45% { transform: translateY(-14px) rotate(6deg) scale(0.9, 1.14); }
+  68% { transform: translateY(-4px) rotate(-3deg) scale(1.06, 0.94); }
+}
+@keyframes tutorial-mood-earnest {
+  0%, 100% { transform: translateY(0) rotate(-1deg) scale(1, 1); }
+  50% { transform: translateY(-3px) rotate(2deg) scale(1.015, 0.985); }
+}
+@keyframes tutorial-mood-excited {
+  0%, 100% { transform: translateY(0) rotate(-7deg) scale(1.16, 0.82); }
+  30% { transform: translateY(-18px) rotate(8deg) scale(0.82, 1.22); }
+  55% { transform: translateY(-3px) rotate(-5deg) scale(1.14, 0.86); }
+  78% { transform: translateY(-14px) rotate(4deg) scale(0.9, 1.12); }
+}
+.tutorial-dim {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(6, 4, 3, 0.72);
+  pointer-events: auto;
+  animation: tutorial-dim-in 0.22s ease;
+}
+@keyframes tutorial-dim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.tutorial-dialogue,
+.tutorial-lesson {
+  position: fixed;
+  z-index: 84;
+  border-radius: 1rem;
+  border: 1px solid rgba(217, 164, 65, 0.55);
+  background: rgba(14, 11, 9, 0.96);
+  padding: 0.85rem 0.9rem 0.75rem;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+.tutorial-lesson { pointer-events: none; }
+.tutorial-lesson button,
+.tutorial-dialogue button { pointer-events: auto; }
+.tutorial-spirit-tickle {
+  position: absolute;
+  left: 0;
+  top: -2.1rem;
+  z-index: 2;
+  max-width: 11rem;
+  padding: 0.28rem 0.5rem;
+  border-radius: 0.7rem;
+  border: 1px solid hsl(36 70% 62% / 0.7);
+  background: rgba(18, 14, 10, 0.94);
+  color: #f3e6c8;
+  font-size: 11px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+html[data-page-hidden='1'] .hub-bob,
+html[data-page-hidden='1'] .hub-fx i,
+html[data-page-hidden='1'] .hub-fx-gold,
+html[data-page-hidden='1'] .hub-fx-crt i,
+html[data-page-hidden='1'] .hub-atmo-flame,
+html[data-page-hidden='1'] .hub-atmo-fume span,
+html[data-page-hidden='1'] .hub-atmo-frost span,
+html[data-page-hidden='1'] .hub-atmo-dust span,
+html[data-page-hidden='1'] .hub-candle,
+html[data-page-hidden='1'] .hub-candle-flame,
+html[data-page-hidden='1'] .hub-candle-wax,
+html[data-page-hidden='1'] .hub-petal,
+html[data-page-hidden='1'] .chapel-mourner,
+html[data-page-hidden='1'] .chapel-mourner-settle,
+html[data-page-hidden='1'] .chapel-mourner-head,
+html[data-page-hidden='1'] .chapel-service-glow,
+html[data-page-hidden='1'] .hub-chapel-live-glow,
+html[data-page-hidden='1'] .hub-atmo-crt,
+html[data-page-hidden='1'] .hub-atmo-debt,
+html[data-page-hidden='1'] .hub-spirit,
+html[data-page-hidden='1'] .hub-spirit-glow,
+html[data-page-hidden='1'] .hub-spirit-core,
+html[data-page-hidden='1'] .hub-spirit-mote,
+html[data-page-hidden='1'] .tutorial-spirit-art,
+html[data-page-hidden='1'] .tutorial-dim,
+html[data-page-hidden='1'] .crt-flicker {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-bob,
+  .hub-fx i,
+  .hub-fx-gold,
+  .hub-fx-crt i,
+  .hub-atmo-flame,
+  .hub-atmo-fume span,
+  .hub-atmo-frost span,
+  .hub-atmo-dust span,
+  .hub-candle,
+  .hub-candle-flame,
+  .hub-candle-wax,
+  .hub-petal,
+  .chapel-mourner,
+  .chapel-mourner-settle,
+  .chapel-mourner-head,
+  .chapel-service-glow,
+  .hub-chapel-live-glow,
+  .hub-atmo-crt,
+  .hub-atmo-debt,
+  .hub-spirit,
+  .hub-spirit-glow,
+  .hub-spirit-core,
+  .hub-spirit-mote,
+  .tutorial-spirit-art,
+  .tutorial-dim {
+    animation: none;
+  }
+  .hub-spirit[data-placed='1'] { opacity: var(--a, 0.55); }
+  .hub-spirit:not([data-placed='1']) { opacity: 0; }
+  .hub-atmo-debt { opacity: 0.7; }
+  .chapel-mourner { opacity: 0.92; }
+  .chapel-mourner-sprite { opacity: 1; }
+  .chapel-mourner-head { animation: none; }
+  .chapel-service-glow,
+  .hub-chapel-live-glow { opacity: 0.85; }
+}
+
+@media (pointer: coarse) {
+  .crt-overlay::before {
+    opacity: 0.22;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.1) 0px,
+      rgba(0, 0, 0, 0.1) 1px,
+      transparent 1px,
+      transparent 4px
+    );
+  }
+  .crt-overlay::after {
+    background: radial-gradient(
+      ellipse at center,
+      transparent 58%,
+      rgba(0, 0, 0, 0.28) 100%
+    );
+  }
+}
+
+.retort-brick::after,
+.equip-wear::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 36;
+  background:
+    radial-gradient(ellipse at 0% 100%, rgba(28, 18, 10, 0.55), transparent 46%),
+    radial-gradient(ellipse at 100% 0%, rgba(0, 0, 0, 0.32), transparent 40%),
+    repeating-linear-gradient(128deg, transparent 0 16px, rgba(255, 255, 255, 0.05) 16px 17px);
+}
+
+.paper-sheet {
+  background-color: #f3e6cf;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(90, 62, 28, 0.06) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(90deg, rgba(90, 62, 28, 0.045) 0 1px, transparent 1px 5px);
+  color: #3a2e22;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28), inset 0 0 0 1px rgba(90, 60, 20, 0.18);
+}
+.paper-sheet p,
+.paper-sheet label,
+.paper-sheet div,
+.paper-sheet span,
+.paper-sheet h2,
+.paper-sheet h3,
+.paper-sheet strong {
+  color: #3a2e22;
+}
+.paper-sheet input,
+.paper-sheet select,
+.paper-sheet textarea {
+  background: #fffaf3;
+  color: #2a2118;
+  border-color: #c4b49a;
+}
+/* Dark fee chips sit inside the sheet. Their own color has to beat the
+   brown ink rule above. The case-file permit status is plain black ink. */
+.paper-sheet .bg-amber-950\/50.text-amber-100 { color: #fef3c7; }
+.paper-sheet .bg-red-950\/50.text-red-200 { color: #fecaca; }
+.paper-sheet strong.case-permit-ink { color: #111111; }
+.paper-sheet p.text-red-300\/90 { color: rgb(252 165 165 / 0.9); }
+
+.bone-hit {
+  animation: bone-fracture 0.28s ease-out;
+}
+@keyframes bone-fracture {
+  0% { transform: translate(-50%, -50%) scale(1.08) rotate(var(--rot, 0deg)); }
+  40% { transform: translate(-50%, -50%) scale(0.86) rotate(calc(var(--rot, 0deg) + 8deg)); }
+  100% { transform: translate(-50%, -50%) scale(1) rotate(var(--rot, 0deg)); }
+}
+.bone-mote {
+  position: absolute;
+  border-radius: 50%;
+  background: #f5f5f4;
+  box-shadow: 0 0 4px rgba(231, 229, 228, 0.8);
+  pointer-events: none;
+  animation: bone-mote 0.62s ease-out forwards;
+}
+@keyframes bone-mote {
+  from { opacity: 0.95; transform: translate(-50%, -50%) scale(1); }
+  to {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, -16px))) scale(0.35);
+  }
+}
+
+@keyframes news-swap {
+  from { transform: translateY(70%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.news-swap {
+  animation: news-swap 0.45s ease;
+}
+.news-track {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(251, 191, 36, 0.85), transparent);
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  animation: news-track 2.8s linear infinite;
+}
+@keyframes news-track {
+  from { background-position: -40% 0; }
+  to { background-position: 140% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .news-swap,
+  .news-track,
+  .toast-rise,
+  .cooler-tag {
+    animation: none;
+  }
+}
+
+/* Front-on stainless cooler. One face per capacity. */
+.cooler-shell {
+  border-radius: 12px;
+  padding: 0.55rem 0.5rem 0;
+  background:
+    linear-gradient(108deg, rgba(255, 255, 255, 0.55), transparent 22%, rgba(255, 255, 255, 0.16) 42%, transparent 58%, rgba(255, 255, 255, 0.22) 78%, transparent 90%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 4px),
+    linear-gradient(180deg, #f2f5f6 0%, #c5ced3 22%, #8f9aa1 55%, #d5dee3 78%, #a8b3b9 100%);
+  border: 1px solid #5e696f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -10px 18px rgba(20, 28, 34, 0.18),
+    0 14px 28px rgba(0, 0, 0, 0.38);
+}
+.cooler-crown {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  margin: 0 0.35rem 0.5rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, #14191d, #0c1013 70%);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.65),
+    0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.cooler-readout {
+  min-width: 4.2rem;
+  text-align: center;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: #b6f7c4;
+  text-shadow: 0 0 6px rgba(120, 240, 160, 0.45);
+}
+.cooler-crown-label {
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  color: #8ea0aa;
+}
+.cooler-grid {
+  display: grid;
+  gap: 0.42rem;
+  padding: 0 0.15rem 0.55rem;
+}
+.cooler-door {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 7.75rem;
+  border-radius: 5px;
+  overflow: visible;
+  background:
+    linear-gradient(118deg, rgba(255, 255, 255, 0.72), transparent 18%, rgba(255, 255, 255, 0.2) 46%, transparent 64%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, #f7fafb 0%, #d5dee3 38%, #b4c0c6 100%);
+  box-shadow:
+    inset 0 0 0 3px #1a2126,
+    inset 0 0 0 4px #9aa6ac,
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.cooler-door.is-selected {
+  box-shadow:
+    inset 0 0 0 3px #f5b942,
+    inset 0 0 0 5px #1a2126,
+    0 0 0 1px rgba(245, 185, 66, 0.7);
+}
+.cooler-hinge {
+  position: absolute;
+  left: 4px;
+  top: 16%;
+  width: 7px;
+  height: 16px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #6d767c, #f4f7f8 45%, #8b959b);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+.cooler-hinge.is-lower {
+  top: auto;
+  bottom: 16%;
+}
+.cooler-latch {
+  position: absolute;
+  right: 6px;
+  top: 22%;
+  bottom: 22%;
+  width: 9px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #8d969c, #f8fbfc 42%, #c5ced3 58%, #6e787e);
+  box-shadow:
+    -1px 0 0 rgba(255, 255, 255, 0.8),
+    1px 0 1px rgba(0, 0, 0, 0.35);
+}
+.cooler-latch::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 7px;
+  transform: translate(-20%, -50%);
+  border-radius: 2px;
+  background: linear-gradient(180deg, #f7fafb, #9aa4aa);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+}
+.cooler-lamp {
+  position: absolute;
+  top: 6px;
+  right: 20px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3a4248;
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.6);
+}
+.cooler-lamp.is-power {
+  position: static;
+  background: #3dff7a;
+  box-shadow: 0 0 6px rgba(61, 255, 122, 0.85);
+}
+.cooler-lamp.is-waiting {
+  background: #ffbf3c;
+  box-shadow: 0 0 6px rgba(255, 191, 60, 0.9);
+}
+.cooler-lamp.is-tagged {
+  background: #3dff7a;
+  box-shadow: 0 0 6px rgba(61, 255, 122, 0.9);
+}
+.cooler-lamp.is-expired {
+  background: #ff4d4d;
+  box-shadow: 0 0 6px rgba(255, 77, 77, 0.9);
+}
+.cooler-etch {
+  margin: auto;
+  text-align: center;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: rgba(40, 52, 60, 0.72);
+}
+.cooler-etch span {
+  display: block;
+  margin-top: 2px;
+  letter-spacing: 0.22em;
+}
+.cooler-plate {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  margin: 1.15rem 1.35rem 0.4rem 0.85rem;
+  padding: 0.35rem 0.4rem 0.4rem;
+  border-radius: 4px;
+  background: rgba(7, 11, 14, 0.78);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.cooler-door.is-occupied {
+  display: flex;
+  flex-direction: column;
+}
+.cooler-shell[data-cooler-rows='5'] .cooler-door {
+  min-height: 5.35rem;
+}
+.cooler-shell[data-cooler-cols='3'] .cooler-door {
+  overflow: hidden;
+}
+.cooler-shell[data-cooler-cols='3'] .cooler-actions {
+  flex-direction: column;
+}
+.cooler-shell[data-cooler-cols='3'] .cooler-plate {
+  margin: 0.3rem 0.95rem 0.3rem 0.4rem;
+  padding: 0.25rem 0.28rem 0.3rem;
+  overflow: hidden;
+  min-width: 0;
+}
+.cooler-shell[data-cooler-cols='3'] .cooler-bayhead {
+  flex-direction: column;
+  align-items: flex-start;
+}
+.cooler-shell[data-cooler-cols='3'] .cooler-name {
+  font-size: 11px;
+  line-height: 1.15;
+}
+.cooler-actions button {
+  min-height: 2.75rem;
+  font-size: 12px;
+}
+
+.cooler-kick {
+  height: 0.85rem;
+  margin: 0 -0.5rem;
+  border-radius: 0 0 11px 11px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.35), transparent 40%),
+    linear-gradient(90deg, #6a747a, #c5cfd4 18%, #8b969c 50%, #d5dee3 82%, #5e686e);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.brush-bristles {
+  transition: transform 0.18s cubic-bezier(0.2, 1.45, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brush-bristles {
+    transition: none;
+  }
 }
