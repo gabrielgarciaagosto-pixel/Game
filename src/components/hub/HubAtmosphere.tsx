@@ -138,12 +138,13 @@ export const HubAtmosphere: React.FC = () => {
 
   useEffect(() => {
     const root = rootRef.current;
-    if (!root) return;
+    if (!root || !spiritKey) return;
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
     const bodies = new Map<string, Body>();
     const pairs = new Map<string, number>();
     let raf = 0;
     let last = performance.now();
+    let els = [...root.querySelectorAll<HTMLElement>('.hub-spirit[data-roam]')];
 
     const frame = (now: number) => {
       const reduce = mq.matches;
@@ -156,7 +157,9 @@ export const HubAtmosphere: React.FC = () => {
       const dt = Math.min(0.034, (now - last) / 1000);
       last = now;
 
-      const els = [...root.querySelectorAll<HTMLElement>('.hub-spirit[data-roam]')];
+      if (els.length === 0) {
+        els = [...root.querySelectorAll<HTMLElement>('.hub-spirit[data-roam]')];
+      }
       const seen = new Set<string>();
       for (const el of els) {
         const id = el.dataset.roam;

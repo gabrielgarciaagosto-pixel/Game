@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
 declare global {
   interface Window {
@@ -154,7 +155,26 @@ function PlayApp() {
     intakeToast,
     clearLegalAlert,
     clearIntakeToast,
-  } = useGameStore();
+  } = useGameStore(
+    useShallow((s) => ({
+      hasStartedGame: s.hasStartedGame,
+      titleGate: s.titleGate,
+      startGame: s.startGame,
+      resumeGame: s.resumeGame,
+      cash: s.cash,
+      reputation: s.reputation,
+      intermentScore: s.intermentScore,
+      ossilegiumCommuneGrams: s.ossilegiumCommuneGrams,
+      cases: s.cases,
+      activeCaseId: s.activeCaseId,
+      activeStation: s.activeStation,
+      computerOpenApp: s.computerOpenApp,
+      legalAlert: s.legalAlert,
+      intakeToast: s.intakeToast,
+      clearLegalAlert: s.clearLegalAlert,
+      clearIntakeToast: s.clearIntakeToast,
+    }))
+  );
 
   const activeCase =
     cases.find((c) => c.id === activeCaseId) ?? cases[0] ?? null;
@@ -363,7 +383,7 @@ function PlayApp() {
       {intakeToast && (!onHub || hubToastTop != null) && (
         <div
           data-intake-toast
-          className="toast-rise fixed z-[10000]"
+          className="toast-rise pointer-events-none fixed z-[10000]"
           style={
             onHub
               ? { top: hubToastTop ?? 0, left: '0.75rem', right: '0.75rem' }
@@ -380,13 +400,13 @@ function PlayApp() {
                   }
           }
         >
-          <div className="flex items-center justify-between gap-2 rounded-lg border border-cyan-400 bg-cyan-950 px-2.5 py-1.5 text-cyan-50 shadow-xl">
+          <div className="pointer-events-none flex items-center justify-between gap-2 rounded-lg border border-cyan-400 bg-cyan-950 px-2.5 py-1.5 text-cyan-50 shadow-xl">
             <span className="line-clamp-2 text-[11px] font-semibold leading-snug">{intakeToast}</span>
             <button
               type="button"
               onPointerDown={clearIntakeToast}
               onClick={clearIntakeToast}
-              className="inline-flex min-h-11 shrink-0 items-center rounded bg-cyan-700 px-3 text-[12px] font-bold active:bg-cyan-600"
+              className="pointer-events-auto inline-flex min-h-11 shrink-0 items-center rounded bg-cyan-700 px-3 text-[12px] font-bold active:bg-cyan-600"
             >
               Dismiss
             </button>

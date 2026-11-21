@@ -58,6 +58,7 @@ export function App() {
   useEffect(() => {
     if (SAMPLE || !signedIn) return;
     let stop = false;
+    let id = 0;
     const pull = () => {
       void loadPlayers()
         .then((next) => {
@@ -75,11 +76,24 @@ export function App() {
           setNote('The parlor could not be reached.');
         });
     };
-    pull();
-    const id = window.setInterval(pull, 45_000);
+    const stopTimer = () => {
+      if (!id) return;
+      window.clearInterval(id);
+      id = 0;
+    };
+    const arm = () => {
+      stopTimer();
+      if (document.hidden) return;
+      pull();
+      id = window.setInterval(pull, 45_000);
+    };
+    const onVis = () => arm();
+    document.addEventListener('visibilitychange', onVis);
+    arm();
     return () => {
       stop = true;
-      window.clearInterval(id);
+      stopTimer();
+      document.removeEventListener('visibilitychange', onVis);
     };
   }, [signedIn]);
 
