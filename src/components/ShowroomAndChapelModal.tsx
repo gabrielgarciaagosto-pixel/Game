@@ -257,7 +257,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 mt-3 pb-4">
           <div
-            className="relative w-full rounded-xl border-2 border-violet-700 overflow-hidden bg-[#c4a574] touch-none"
+            className="relative w-full shrink-0 rounded-xl border-2 border-violet-700 overflow-hidden bg-[#c4a574] touch-none"
             style={{ aspectRatio: String(CHAPEL_ART_ASPECT) }}
             data-chapel-floor
           >
@@ -367,7 +367,7 @@ export const ShowroomAndChapelModal: React.FC = () => {
         <FamilyPreferenceCard prefs={currentCase.familyChapelPrefs} />
         {/* Floor */}
         <div
-          className="relative w-full rounded-xl border-2 border-violet-700 overflow-hidden bg-[#c4a574] touch-none"
+          className="relative w-full shrink-0 rounded-xl border-2 border-violet-700 overflow-hidden bg-[#c4a574] touch-none"
           style={{ aspectRatio: String(CHAPEL_ART_ASPECT) }}
           data-chapel-floor
           data-chapel-service={serviceLive ? '1' : undefined}
